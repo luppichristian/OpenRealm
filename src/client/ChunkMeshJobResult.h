@@ -1,15 +1,12 @@
 #pragma once
 
-#include "../world/WorldConfig.h"
+#include "../Utils.h"
 
-class ChunkMeshJobResult
+class ChunkMeshJobResult : public NonCopyable
 {
  public:
   ChunkMeshJobResult() = default;
   ~ChunkMeshJobResult();
-
-  ChunkMeshJobResult(const ChunkMeshJobResult&) = delete;
-  ChunkMeshJobResult& operator=(const ChunkMeshJobResult&) = delete;
 
   ChunkMeshJobResult(ChunkMeshJobResult&& other) noexcept;
   ChunkMeshJobResult& operator=(ChunkMeshJobResult&& other) noexcept;

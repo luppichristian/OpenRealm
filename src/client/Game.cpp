@@ -2,19 +2,24 @@
 
 #include "PlayerController.h"
 
-void Game::Initialize()
+void Game::Initialize(TaskManager& taskManager)
 {
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
   InitWindow(kScreenWidth, kScreenHeight, "openrealm");
   InitAudioDevice();
+  if (!taskManager.Start(MESH_WORKER_COUNT))
+  {
+    TraceLog(LOG_WARNING, "Failed to start global task manager; background tasks will be disabled.");
+  }
   world.Initialize();
-  clientWorld.Initialize();
+  clientWorld.Initialize(taskManager);
   DisableCursor();
   SendSpawnEvent(world);
 }
 
-void Game::Shutdown()
+void Game::Shutdown(TaskManager& taskManager)
 {
+  taskManager.Stop();
   clientWorld.Shutdown();
   world.Shutdown();
   CloseAudioDevice();
@@ -34,9 +39,9 @@ void Game::ToggleColorMenu()
   }
 }
 
-int Game::Run()
+int Game::Run(TaskManager& taskManager)
 {
-  Initialize();
+  Initialize(taskManager);
 
   while (!WindowShouldClose())
   {
@@ -54,6 +59,6 @@ int Game::Run()
     EndDrawing();
   }
 
-  Shutdown();
+  Shutdown(taskManager);
   return 0;
 }

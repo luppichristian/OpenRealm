@@ -1,9 +1,9 @@
+#include "TaskManager.h"
 #include "client/Game.h"
-
-#include <memory>
 
 int main()
 {
-  auto game = std::make_unique<Game>();
-  return game->Run();
+  TaskManager taskManager = {};
+  Game game = {};
+  return game.Run(taskManager);
 }

@@ -1,21 +1,20 @@
 #pragma once
 
+#include "../TaskManager.h"
+#include "../Utils.h"
 #include "../world/World.h"
 #include "AssetManager.h"
 #include "SoundPlayer.h"
 #include "WorldClientData.h"
 #include "WorldMeshSystem.h"
 
-class ClientWorld
+class ClientWorld : public NonCopyable
 {
  public:
   ClientWorld() = default;
   ~ClientWorld();
 
-  ClientWorld(const ClientWorld&) = delete;
-  ClientWorld& operator=(const ClientWorld&) = delete;
-
-  void Initialize();
+  void Initialize(TaskManager& taskManager);
   void Shutdown();
   void Update(World& world);
   void Render(const World& world, int playerId);

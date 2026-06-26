@@ -10,7 +10,7 @@ void World::Initialize()
   Shutdown();
   voxelWorld.Initialize();
   playerSystem.Initialize();
-  eventQueue.Clear();
+  eventQueue = {};
   voxelWorld.Seed();
   initialized = true;
 }
@@ -20,7 +20,7 @@ void World::Shutdown()
   if (!initialized) return;
 
   voxelWorld.Shutdown();
-  eventQueue.Clear();
+  eventQueue = {};
   playerSystem.Initialize();
   initialized = false;
 }
@@ -28,7 +28,8 @@ void World::Shutdown()
 void World::SendEvent(const WorldEvent& event)
 {
   if (!initialized) return;
-  eventQueue.Enqueue(event);
+  if (eventQueue.size() >= MAX_WORLD_EVENTS) return;
+  eventQueue.push(event);
 }
 
 void World::Update(float frameTime)
@@ -36,11 +37,11 @@ void World::Update(float frameTime)
   if (!initialized) return;
   playerSystem.ResetFrameInputs();
 
-  for (int i = 0; i < eventQueue.Count(); i++)
+  while (!eventQueue.empty())
   {
-    playerSystem.ProcessEvent(eventQueue.Get(i));
+    playerSystem.ProcessEvent(eventQueue.front());
+    eventQueue.pop();
   }
-  eventQueue.Clear();
 
   playerSystem.Update(frameTime, voxelWorld);
 }

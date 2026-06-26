@@ -8,15 +8,15 @@ ClientWorld::~ClientWorld()
   Shutdown();
 }
 
-void ClientWorld::Initialize()
+void ClientWorld::Initialize(TaskManager& taskManager)
 {
   if (initialized) return;
 
   soundPlayer.Initialize(assetManager);
 
-  if (!meshSystem.Start())
+  if (!meshSystem.Start(taskManager))
   {
-    TraceLog(LOG_WARNING, "Failed to start mesh worker threads; voxel mesh updates will be disabled.");
+    TraceLog(LOG_WARNING, "Failed to start mesh task handling; voxel mesh updates will be disabled.");
   }
 
   initialized = true;

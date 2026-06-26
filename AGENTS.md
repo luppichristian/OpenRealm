@@ -32,14 +32,16 @@ Do not describe this repo as if it already contains distributed networking or co
 ## Repository Layout
 
 - `src/Main.cpp`
-  - Minimal entrypoint. Creates `Game` and calls `Run()`.
+  - Minimal entrypoint. Owns the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
 - `src/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
   - Owns the top-level `World`, `ClientWorld`, and `ColorMenu`.
+  - Receives the shared `TaskManager` from the entrypoint instead of owning it.
 - `src/client/ClientWorld.*`
   - Client-only composition root.
-  - Owns asset/audio caches, chunk mesh workers, GPU upload state, and render orchestration for a `World`.
+  - Owns asset/audio caches, GPU upload state, and render orchestration for a `World`.
+  - Receives the shared `TaskManager` from `Game` instead of owning worker threads directly.
 - `src/client/PlayerController.*`
   - Free-function input layer.
   - Converts mouse/keyboard input into `WorldEvent`s.
@@ -55,8 +57,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Keeps `Model`, bounds, and queued/uploaded flags out of simulation data.
 - `src/client/WorldMeshSystem.*`
   - Client-side mesh job capture, queueing, and GPU upload application.
-- `src/client/ChunkMeshWorkerPool.*`
-  - Background worker threads for chunk meshing.
+  - Submits chunk mesh jobs into the shared `TaskManager` and owns only the completed-result queue.
 - `src/client/ChunkMesher.*`
   - Actual chunk mesh generation implementation.
 - `src/client/ChunkMeshBuilder.*`
@@ -67,8 +68,12 @@ Do not describe this repo as if it already contains distributed networking or co
   - Free-function world rendering path.
 - `src/Utils.h`
   - Header-only utilities used across world/render/gameplay code.
+  - Defines the shared `NonCopyable` base used by resource-owning/client/world coordinator types.
 - `src/Base.h`
   - Central low-level include hub for raylib, raymath, and C headers.
+- `src/TaskManager.*`
+  - Global worker-thread task queue for generic background jobs.
+  - Owns thread startup, shutdown, and pending-task dispatch independent of client systems.
 - `src/world/World.*`
   - Top-level world coordinator.
   - Headless simulation coordinator.
@@ -79,8 +84,6 @@ Do not describe this repo as if it already contains distributed networking or co
   - Player state management and movement/look/edit simulation.
 - `src/world/WorldEvent.h`
   - World event enum and payload struct.
-- `src/world/WorldEventQueue.*`
-  - Fixed-capacity local event queue.
 - `src/world/WorldConfig.h`
   - Global compile-time constants.
 - `src/world/WorldData.h`
@@ -98,8 +101,10 @@ Do not describe this repo as if it already contains distributed networking or co
   - client/app shell in `src/client/`
   - world/simulation systems in `src/world/`
 - `World` is the main composition root for world-side systems.
+- World event buffering uses `std::queue<WorldEvent>` semantics with an explicit `MAX_WORLD_EVENTS` cap enforced by `World::SendEvent()`.
 - `ClientWorld` is the main composition root for client-only systems that consume `World`.
 - The code favors direct ownership and explicit orchestration over abstract interfaces.
+- Background task execution is centralized in `TaskManager`, owned outside both `Game` and `World` at the entrypoint layer; client mesh jobs submit directly into it from `WorldMeshSystem`, and other systems can reuse the same manager.
 - Voxel data is chunked and sectioned. Meshing is asynchronous and client-owned, while gameplay/world mutation remains local and immediate.
 - Rendering is a mix of:
   - shader-driven fullscreen floor rendering
@@ -158,7 +163,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - Do not introduce smart pointers by default.
 - Prefer direct ownership, stack allocation, plain members, or explicit raw-pointer/non-owning pointer usage consistent with the existing codebase.
 - If a heap allocation is genuinely necessary, justify it with a concrete ownership/lifetime need instead of reaching for `std::unique_ptr` or `std::shared_ptr` automatically.
-- Copy is often explicitly deleted for resource-owning types.
+- Copy is often explicitly deleted for resource-owning types (use NonCopyable).
 - Destructors commonly call `Shutdown()` or `Reset()` to centralize cleanup.
 - Avoid adding inheritance-heavy abstractions unless there is a strong repo-local reason.
 

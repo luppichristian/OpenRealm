@@ -3,16 +3,13 @@
 #include <string>
 #include <unordered_map>
 
-#include "../world/WorldConfig.h"
+#include "../Utils.h"
 
-class AssetManager
+class AssetManager : public NonCopyable
 {
  public:
   AssetManager() = default;
   ~AssetManager();
-
-  AssetManager(const AssetManager&) = delete;
-  AssetManager& operator=(const AssetManager&) = delete;
 
   void Shutdown();
   Texture2D FetchTexture(const char* name);

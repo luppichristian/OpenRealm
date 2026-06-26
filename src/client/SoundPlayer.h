@@ -1,15 +1,13 @@
 #pragma once
 
+#include "../Utils.h"
 #include "AssetManager.h"
 
-class SoundPlayer
+class SoundPlayer : public NonCopyable
 {
  public:
   SoundPlayer() = default;
   ~SoundPlayer();
-
-  SoundPlayer(const SoundPlayer&) = delete;
-  SoundPlayer& operator=(const SoundPlayer&) = delete;
 
   void Initialize(AssetManager& assetManager);
   void Shutdown();

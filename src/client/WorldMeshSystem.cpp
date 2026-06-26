@@ -22,14 +22,24 @@ static int FindChunkIndexByCoords(const VoxelWorld& voxelWorld, int chunkX, int 
   return -1;
 }
 
-bool WorldMeshSystem::Start()
+bool WorldMeshSystem::Start(TaskManager& taskManager)
 {
-  return workerPool.Start();
+  this->taskManager = &taskManager;
+
+  std::lock_guard<std::mutex> lock(completedMutex);
+  completedJobs.clear();
+  return true;
 }
 
 void WorldMeshSystem::Stop(WorldClientData& clientData)
 {
-  workerPool.Stop();
+  taskManager = nullptr;
+
+  {
+    std::lock_guard<std::mutex> lock(completedMutex);
+    completedJobs.clear();
+  }
+
   ResetClientData(clientData);
 }
 
@@ -82,7 +92,17 @@ ChunkMeshJob WorldMeshSystem::CaptureChunkSectionMeshJob(const VoxelWorld& voxel
 
 bool WorldMeshSystem::EnqueueChunkMeshJob(const VoxelWorld& voxelWorld, const VoxelChunk& chunk, int sectionIndex)
 {
-  return workerPool.Enqueue(CaptureChunkSectionMeshJob(voxelWorld, chunk, sectionIndex));
+  if (taskManager == nullptr) return false;
+
+  ChunkMeshJob job = CaptureChunkSectionMeshJob(voxelWorld, chunk, sectionIndex);
+  return taskManager->Enqueue(
+      [this, job]
+      {
+        ChunkMeshJobResult result = BuildChunkMesh(job);
+        std::lock_guard<std::mutex> lock(completedMutex);
+        completedJobs.push_back(std::move(result));
+      },
+      MAX_MESH_JOBS);
 }
 
 void WorldMeshSystem::QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, WorldClientData& clientData, int maxSectionsToQueue)
@@ -148,7 +168,14 @@ void WorldMeshSystem::ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, WorldC
   for (int uploadIndex = 0; uploadIndex < maxUploads; uploadIndex++)
   {
     ChunkMeshJobResult result = {};
-    if (!workerPool.PopCompleted(&result)) break;
+
+    {
+      std::lock_guard<std::mutex> lock(completedMutex);
+      if (completedJobs.empty()) break;
+      result = std::move(completedJobs.front());
+      completedJobs.pop_front();
+    }
+
     ApplyCompletedChunkMesh(voxelWorld, clientData, assetManager, &result);
   }
 }

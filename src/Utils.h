@@ -4,6 +4,13 @@
 
 #include "world/WorldConfig.h"
 
+struct NonCopyable
+{
+  NonCopyable() = default;
+  NonCopyable(const NonCopyable&) = delete;
+  NonCopyable& operator=(const NonCopyable&) = delete;
+};
+
 inline std::string BuildAssetPath(const char* folder, const char* name)
 {
   std::string path = "assets/";

@@ -1,18 +1,16 @@
 #pragma once
 
+#include <queue>
+#include "../Utils.h"
 #include "PlayerSystem.h"
 #include "VoxelWorld.h"
 #include "WorldEvent.h"
-#include "WorldEventQueue.h"
 
-class World
+class World : public NonCopyable
 {
  public:
   World() = default;
   ~World();
-
-  World(const World&) = delete;
-  World& operator=(const World&) = delete;
 
   void Initialize();
   void Shutdown();
@@ -28,5 +26,5 @@ class World
   bool initialized = false;
   VoxelWorld voxelWorld;
   PlayerSystem playerSystem;
-  WorldEventQueue eventQueue;
+  std::queue<WorldEvent> eventQueue;
 };
