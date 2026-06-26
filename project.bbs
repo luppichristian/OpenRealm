@@ -15,10 +15,25 @@ targets(
     cmake_target(raylib)
   )
 
+  static_lib(
+    id(tracy)
+    name("Tracy")
+    repo(
+      link("https://github.com/wolfpld/tracy.git")
+      tag("v0.13.1")
+    )
+    cmake_target(TracyClient)
+  )
+
   console(
     output(openrealm)
-    lang(c)
-    dependencies(raylib)
-    units(src/*.c)
+    lang(cpp)
+    stdver(c++20)
+    additional_compile_args("/FS")
+    dependencies(raylib tracy)
+    units(
+      src/*.cpp
+      src/world/*.cpp
+    )
   )
 )
