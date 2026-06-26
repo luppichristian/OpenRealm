@@ -92,7 +92,7 @@ void ChunkMeshWorkerPool::WorkerMain()
       pendingJobs.pop_front();
     }
 
-    ChunkMeshJobResult result = ChunkMesher::Build(job);
+    ChunkMeshJobResult result = BuildChunkMesh(job);
 
     std::lock_guard<std::mutex> lock(mutex);
     completedJobs.push_back(std::move(result));

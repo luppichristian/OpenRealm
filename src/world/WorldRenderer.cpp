@@ -1,6 +1,6 @@
 #include "WorldRenderer.h"
 
-bool WorldRenderer::IsChunkVisible(const BoundingBox* bounds, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight, Vector3 cameraUp, float aspectRatio) const
+static bool IsChunkVisible(const BoundingBox* bounds, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight, Vector3 cameraUp, float aspectRatio)
 {
   if (bounds->min.x == bounds->max.x && bounds->min.y == bounds->max.y && bounds->min.z == bounds->max.z) return false;
 
@@ -32,7 +32,7 @@ bool WorldRenderer::IsChunkVisible(const BoundingBox* bounds, Vector3 cameraPosi
   return true;
 }
 
-void WorldRenderer::DrawVoxelWorld(const VoxelWorld& voxelWorld, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight, Vector3 cameraUp) const
+static void DrawVoxelWorld(const VoxelWorld& voxelWorld, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight, Vector3 cameraUp)
 {
   float aspectRatio = (float)GetScreenWidth() / (float)GetScreenHeight();
 
@@ -49,7 +49,7 @@ void WorldRenderer::DrawVoxelWorld(const VoxelWorld& voxelWorld, Vector3 cameraP
   }
 }
 
-void WorldRenderer::Render(const VoxelWorld& voxelWorld, const PlayerSystem& playerSystem, const WorldAssets& assets, int playerId) const
+void RenderWorld(const VoxelWorld& voxelWorld, const PlayerSystem& playerSystem, AssetManager& assetManager, int playerId)
 {
   const PlayerState* player = playerSystem.FindPlayer(playerId);
   if (player == nullptr) return;
@@ -59,10 +59,43 @@ void WorldRenderer::Render(const VoxelWorld& voxelWorld, const PlayerSystem& pla
   Vector3 cameraRight;
   Vector3 cameraUp;
   playerSystem.GetCameraVectors(player, &cameraPosition, &cameraForward, &cameraRight, &cameraUp);
-  assets.UpdateShaders(cameraPosition, cameraForward, cameraRight, cameraUp);
+  Shader floorShader = assetManager.FetchShader("infinite_floor.fs");
+  Shader voxelShader = assetManager.FetchShader("voxel_chunk.vs", "voxel_chunk.fs");
+  Vector2 resolution = {(float)GetScreenWidth(), (float)GetScreenHeight()};
+  float aspectRatio = resolution.x / resolution.y;
+  float timeSeconds = (float)GetTime();
+  float chunkGridSize = BLOCK_GRID_SIZE * (float)CHUNK_SIZE_XZ;
+  float verticalFovRadians = VERTICAL_FOV_RADIANS;
+  float blockGridSize = BLOCK_GRID_SIZE;
+  int floorCameraPositionLoc = assetManager.FetchShaderLocation(floorShader, "cameraPosition");
+  int floorCameraForwardLoc = assetManager.FetchShaderLocation(floorShader, "cameraForward");
+  int floorCameraRightLoc = assetManager.FetchShaderLocation(floorShader, "cameraRight");
+  int floorCameraUpLoc = assetManager.FetchShaderLocation(floorShader, "cameraUp");
+  int floorResolutionLoc = assetManager.FetchShaderLocation(floorShader, "resolution");
+  int floorVerticalFovLoc = assetManager.FetchShaderLocation(floorShader, "verticalFovRadians");
+  int floorAspectRatioLoc = assetManager.FetchShaderLocation(floorShader, "aspectRatio");
+  int floorTimeSecondsLoc = assetManager.FetchShaderLocation(floorShader, "timeSeconds");
+  int floorBlockGridSizeLoc = assetManager.FetchShaderLocation(floorShader, "blockGridSize");
+  int floorChunkGridSizeLoc = assetManager.FetchShaderLocation(floorShader, "chunkGridSize");
+  int voxelCameraPositionLoc = assetManager.FetchShaderLocation(voxelShader, "cameraPosition");
+  int voxelBlockGridSizeLoc = assetManager.FetchShaderLocation(voxelShader, "blockGridSize");
+  int voxelTimeSecondsLoc = assetManager.FetchShaderLocation(voxelShader, "timeSeconds");
+  SetShaderValue(floorShader, floorCameraPositionLoc, &cameraPosition, SHADER_UNIFORM_VEC3);
+  SetShaderValue(floorShader, floorCameraForwardLoc, &cameraForward, SHADER_UNIFORM_VEC3);
+  SetShaderValue(floorShader, floorCameraRightLoc, &cameraRight, SHADER_UNIFORM_VEC3);
+  SetShaderValue(floorShader, floorCameraUpLoc, &cameraUp, SHADER_UNIFORM_VEC3);
+  SetShaderValue(floorShader, floorResolutionLoc, &resolution, SHADER_UNIFORM_VEC2);
+  SetShaderValue(floorShader, floorVerticalFovLoc, &verticalFovRadians, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(floorShader, floorAspectRatioLoc, &aspectRatio, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(floorShader, floorTimeSecondsLoc, &timeSeconds, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(floorShader, floorBlockGridSizeLoc, &blockGridSize, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(floorShader, floorChunkGridSizeLoc, &chunkGridSize, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(voxelShader, voxelCameraPositionLoc, &cameraPosition, SHADER_UNIFORM_VEC3);
+  SetShaderValue(voxelShader, voxelBlockGridSizeLoc, &blockGridSize, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(voxelShader, voxelTimeSecondsLoc, &timeSeconds, SHADER_UNIFORM_FLOAT);
 
   ClearBackground(BLACK);
-  BeginShaderMode(assets.GetFloorShader());
+  BeginShaderMode(floorShader);
   DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
   EndShaderMode();
 

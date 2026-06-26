@@ -121,7 +121,7 @@ void PlayerSystem::UpdatePlayerLook(PlayerState* player) const
   player->pitch = Clamp(player->pitch, -MAX_ABS_PITCH, MAX_ABS_PITCH);
 }
 
-void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld, WorldAssets& assets) const
+void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer) const
 {
   bool wasGrounded = player->isGrounded;
   bool wasWalkingOnGround = wasGrounded && (fabsf(player->frameInput.moveX) > 0.0f || fabsf(player->frameInput.moveY) > 0.0f);
@@ -157,7 +157,7 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
     player->footstepTimer -= frameTime;
     if (player->footstepTimer <= 0.0f)
     {
-      assets.PlayFootstep();
+      soundPlayer.PlayFootstep();
       player->footstepTimer = FOOTSTEP_INTERVAL_SECONDS;
     }
   }
@@ -168,7 +168,7 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
 
   if (player->id == 0 && !wasGrounded && player->isGrounded && player->jumpedSinceGrounded)
   {
-    assets.PlayLanding();
+    soundPlayer.PlayLanding();
     player->jumpedSinceGrounded = false;
     player->footstepTimer = FOOTSTEP_INTERVAL_SECONDS;
   }
@@ -214,13 +214,13 @@ void PlayerSystem::HandlePlayerVoxelAction(PlayerState* player, VoxelWorld& voxe
   }
 }
 
-void PlayerSystem::Update(float frameTime, VoxelWorld& voxelWorld, WorldAssets& assets)
+void PlayerSystem::Update(float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer)
 {
   for (PlayerState& player : players)
   {
     if (!player.active) continue;
     UpdatePlayerLook(&player);
-    UpdatePlayerMovement(&player, frameTime, voxelWorld, assets);
+    UpdatePlayerMovement(&player, frameTime, voxelWorld, soundPlayer);
     HandlePlayerVoxelAction(&player, voxelWorld);
   }
 }

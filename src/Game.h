@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ColorMenu.h"
-#include "PlayerController.h"
 #include "world/World.h"
 
 class Game
@@ -19,5 +18,4 @@ class Game
 
   World world;
   ColorMenu colorMenu;
-  PlayerController playerController;
 };

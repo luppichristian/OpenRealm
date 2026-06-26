@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../AssetManager.h"
 #include "ChunkMeshWorkerPool.h"
 #include "VoxelWorld.h"
-#include "WorldAssets.h"
 
 class WorldMeshSystem
 {
@@ -12,13 +12,13 @@ class WorldMeshSystem
   bool Start();
   void Stop();
   void QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, int maxSectionsToQueue);
-  void ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, const WorldAssets& assets, int maxUploads);
+  void ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, AssetManager& assetManager, int maxUploads);
 
  private:
   void UnloadChunkRenderData(VoxelChunkSection* section) const;
   ChunkMeshJob CaptureChunkSectionMeshJob(const VoxelWorld& voxelWorld, const VoxelChunk& chunk, int sectionIndex) const;
   bool EnqueueChunkMeshJob(const VoxelWorld& voxelWorld, const VoxelChunk& chunk, int sectionIndex);
-  void ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, const WorldAssets& assets, ChunkMeshJobResult* result);
+  void ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, AssetManager& assetManager, ChunkMeshJobResult* result);
 
   ChunkMeshWorkerPool workerPool;
 };

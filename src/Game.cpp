@@ -1,5 +1,7 @@
 #include "Game.h"
 
+#include "PlayerController.h"
+
 void Game::Initialize()
 {
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
@@ -7,7 +9,7 @@ void Game::Initialize()
   InitAudioDevice();
   world.Initialize();
   DisableCursor();
-  playerController.SendSpawnEvent(world);
+  SendSpawnEvent(world);
 }
 
 void Game::Shutdown()
@@ -38,13 +40,13 @@ int Game::Run()
   {
     if (IsKeyPressed(KEY_TAB)) ToggleColorMenu();
 
-    playerController.HandleFrameInput(world, colorMenu);
+    HandleFrameInput(world, colorMenu);
     world.Update();
 
     BeginDrawing();
-    world.Render(PlayerController::kLocalPlayerId);
+    world.Render(LOCAL_PLAYER_ID);
     DrawFPS(GetScreenWidth() - 200, 16);
-    playerController.DrawHud(colorMenu);
+    DrawHud(colorMenu);
     colorMenu.Draw();
     EndDrawing();
   }

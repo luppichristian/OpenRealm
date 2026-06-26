@@ -14,7 +14,6 @@ class VoxelWorld
   uint8_t GetVoxel(int voxelX, int voxelY, int voxelZ) const;
   void SetVoxel(int voxelX, int voxelY, int voxelZ, uint8_t voxelValue);
   bool IsVoxelFilled(int voxelX, int voxelY, int voxelZ) const;
-  Color GetVoxelDisplayColor(uint8_t voxelValue) const;
 
   bool IsAabbCollidingWithVoxels(Vector3 minBounds, Vector3 maxBounds) const;
   bool IsPlayerColliding(Vector3 playerPosition) const;
@@ -29,16 +28,7 @@ class VoxelWorld
   VoxelChunkSection* FindChunkSectionByCoords(int chunkX, int chunkY, int sectionIndex);
   const VoxelChunkSection* FindChunkSectionByCoords(int chunkX, int chunkY, int sectionIndex) const;
 
-  static int GetChunkSectionBaseVoxelZ(int sectionIndex);
-  static int GetChunkSectionVoxelHeight(int sectionIndex);
-  static bool TryGetChunkSectionCoords(int voxelZ, int* sectionIndex, int* localZ);
-  static void GetPlayerBounds(Vector3 playerPosition, Vector3* minBounds, Vector3* maxBounds);
-
  private:
-  static int FloorDiv(int value, int divisor);
-  static int PositiveModulo(int value, int divisor);
-  static unsigned int HashChunkCoords(int chunkX, int chunkY);
-
   void ResetChunkLookup();
   int FindChunkIndex(int chunkX, int chunkY) const;
   bool InsertChunkLookup(int chunkIndex);

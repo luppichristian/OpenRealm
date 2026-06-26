@@ -1,44 +1,5 @@
 #include "VoxelWorld.h"
-
-int VoxelWorld::GetChunkSectionBaseVoxelZ(int sectionIndex)
-{
-  return sectionIndex * CHUNK_SECTION_HEIGHT;
-}
-
-int VoxelWorld::GetChunkSectionVoxelHeight(int sectionIndex)
-{
-  int remainingHeight = CHUNK_MAX_HEIGHT - GetChunkSectionBaseVoxelZ(sectionIndex);
-  return remainingHeight > CHUNK_SECTION_HEIGHT ? CHUNK_SECTION_HEIGHT : remainingHeight;
-}
-
-bool VoxelWorld::TryGetChunkSectionCoords(int voxelZ, int* sectionIndex, int* localZ)
-{
-  if (voxelZ < 0 || voxelZ >= CHUNK_MAX_HEIGHT) return false;
-  if (sectionIndex != nullptr) *sectionIndex = voxelZ / CHUNK_SECTION_HEIGHT;
-  if (localZ != nullptr) *localZ = voxelZ % CHUNK_SECTION_HEIGHT;
-  return true;
-}
-
-int VoxelWorld::FloorDiv(int value, int divisor)
-{
-  int quotient = value / divisor;
-  int remainder = value % divisor;
-  if (remainder != 0 && ((remainder < 0) != (divisor < 0))) quotient -= 1;
-  return quotient;
-}
-
-int VoxelWorld::PositiveModulo(int value, int divisor)
-{
-  int result = value % divisor;
-  return result < 0 ? result + divisor : result;
-}
-
-unsigned int VoxelWorld::HashChunkCoords(int chunkX, int chunkY)
-{
-  unsigned int x = (unsigned int)chunkX * 73856093u;
-  unsigned int y = (unsigned int)chunkY * 19349663u;
-  return (x ^ y) % CHUNK_LOOKUP_CAPACITY;
-}
+#include "../Utils.h"
 
 void VoxelWorld::Initialize()
 {
@@ -228,21 +189,6 @@ void VoxelWorld::SetVoxel(int voxelX, int voxelY, int voxelZ, uint8_t voxelValue
 bool VoxelWorld::IsVoxelFilled(int voxelX, int voxelY, int voxelZ) const
 {
   return GetVoxel(voxelX, voxelY, voxelZ) != 0;
-}
-
-Color VoxelWorld::GetVoxelDisplayColor(uint8_t voxelValue) const
-{
-  if (voxelValue == 0) return BLANK;
-  if (voxelValue == 255) return WHITE;
-
-  float hue = ((float)(voxelValue - 1) / 254.0f) * 360.0f;
-  return ColorFromHSV(hue, 0.85f, 1.0f);
-}
-
-void VoxelWorld::GetPlayerBounds(Vector3 playerPosition, Vector3* minBounds, Vector3* maxBounds)
-{
-  *minBounds = {playerPosition.x - PLAYER_RADIUS, playerPosition.y - PLAYER_RADIUS, playerPosition.z};
-  *maxBounds = {playerPosition.x + PLAYER_RADIUS, playerPosition.y + PLAYER_RADIUS, playerPosition.z + PLAYER_HEIGHT};
 }
 
 bool VoxelWorld::IsAabbCollidingWithVoxels(Vector3 minBounds, Vector3 maxBounds) const

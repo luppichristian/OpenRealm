@@ -1,5 +1,7 @@
 #include "World.h"
 
+#include "WorldRenderer.h"
+
 World::~World()
 {
   Shutdown();
@@ -11,7 +13,7 @@ void World::Initialize()
   voxelWorld.Initialize();
   playerSystem.Initialize();
   eventQueue.Clear();
-  assets.Initialize();
+  soundPlayer.Initialize(assetManager);
 
   if (!meshSystem.Start())
   {
@@ -19,30 +21,31 @@ void World::Initialize()
   }
 
   voxelWorld.Seed();
-  initialized_ = true;
+  initialized = true;
 }
 
 void World::Shutdown()
 {
-  if (!initialized_) return;
+  if (!initialized) return;
 
   meshSystem.Stop();
   voxelWorld.Shutdown();
-  assets.Shutdown();
+  soundPlayer.Shutdown();
+  assetManager.Shutdown();
   eventQueue.Clear();
   playerSystem.Initialize();
-  initialized_ = false;
+  initialized = false;
 }
 
 void World::SendEvent(const WorldEvent& event)
 {
-  if (!initialized_) return;
+  if (!initialized) return;
   eventQueue.Enqueue(event);
 }
 
 void World::Update()
 {
-  if (!initialized_) return;
+  if (!initialized) return;
 
   float frameTime = GetFrameTime();
   playerSystem.ResetFrameInputs();
@@ -53,14 +56,13 @@ void World::Update()
   }
   eventQueue.Clear();
 
-  playerSystem.Update(frameTime, voxelWorld, assets);
+  playerSystem.Update(frameTime, voxelWorld, soundPlayer);
   meshSystem.QueueDirtyChunkSectionMeshes(voxelWorld, CHUNK_MESH_QUEUE_BUDGET);
-  meshSystem.ProcessCompletedChunkMeshes(voxelWorld, assets, CHUNK_MESH_UPLOAD_BUDGET);
+  meshSystem.ProcessCompletedChunkMeshes(voxelWorld, assetManager, CHUNK_MESH_UPLOAD_BUDGET);
 }
 
 void World::Render(int playerId)
 {
-  if (!initialized_) return;
-  assets.Initialize();
-  renderer.Render(voxelWorld, playerSystem, assets, playerId);
+  if (!initialized) return;
+  RenderWorld(voxelWorld, playerSystem, assetManager, playerId);
 }

@@ -7,7 +7,6 @@ class ColorMenu
  public:
   ColorMenu() = default;
 
-  static Color GetVoxelDisplayColor(uint8_t voxelValue);
   void Toggle();
   bool IsOpen() const;
   uint8_t GetSelectedVoxelValue() const;

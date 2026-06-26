@@ -1,12 +1,5 @@
 #include "ColorMenu.h"
-
-Color ColorMenu::GetVoxelDisplayColor(uint8_t voxelValue)
-{
-  if (voxelValue == 0) return BLANK;
-  if (voxelValue == 255) return WHITE;
-  float hue = ((float)(voxelValue - 1) / 254.0f) * 360.0f;
-  return ColorFromHSV(hue, 0.85f, 1.0f);
-}
+#include "Utils.h"
 
 void ColorMenu::Toggle()
 {

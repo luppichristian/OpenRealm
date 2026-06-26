@@ -1,5 +1,7 @@
 #include "WorldMeshSystem.h"
 
+#include "../Utils.h"
+
 WorldMeshSystem::~WorldMeshSystem()
 {
   Stop();
@@ -26,8 +28,8 @@ ChunkMeshJob WorldMeshSystem::CaptureChunkSectionMeshJob(const VoxelWorld& voxel
 {
   int chunkBaseX = chunk.chunkX * CHUNK_SIZE_XZ;
   int chunkBaseY = chunk.chunkY * CHUNK_SIZE_XZ;
-  int baseVoxelZ = VoxelWorld::GetChunkSectionBaseVoxelZ(sectionIndex);
-  int sectionHeight = VoxelWorld::GetChunkSectionVoxelHeight(sectionIndex);
+  int baseVoxelZ = GetChunkSectionBaseVoxelZ(sectionIndex);
+  int sectionHeight = GetChunkSectionVoxelHeight(sectionIndex);
 
   ChunkMeshJob job = {};
   job.chunkX = chunk.chunkX;
@@ -76,7 +78,7 @@ void WorldMeshSystem::QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, int m
   }
 }
 
-void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, const WorldAssets& assets, ChunkMeshJobResult* result)
+void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, AssetManager& assetManager, ChunkMeshJobResult* result)
 {
   VoxelChunkSection* section = voxelWorld.FindChunkSectionByCoords(result->chunkX, result->chunkY, result->sectionIndex);
   if (section == nullptr) return;
@@ -104,18 +106,18 @@ void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, const Worl
   mesh.colors = result->colors;
   UploadMesh(&mesh, false);
   section->model = LoadModelFromMesh(mesh);
-  section->model.materials[0].shader = assets.GetVoxelShader();
+  section->model.materials[0].shader = assetManager.FetchShader("voxel_chunk.vs", "voxel_chunk.fs");
   section->uploaded = true;
   section->dirty = false;
   result->ReleaseMeshData();
 }
 
-void WorldMeshSystem::ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, const WorldAssets& assets, int maxUploads)
+void WorldMeshSystem::ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, AssetManager& assetManager, int maxUploads)
 {
   for (int uploadIndex = 0; uploadIndex < maxUploads; uploadIndex++)
   {
     ChunkMeshJobResult result = {};
     if (!workerPool.PopCompleted(&result)) break;
-    ApplyCompletedChunkMesh(voxelWorld, assets, &result);
+    ApplyCompletedChunkMesh(voxelWorld, assetManager, &result);
   }
 }

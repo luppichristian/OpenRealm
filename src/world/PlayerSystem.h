@@ -2,8 +2,8 @@
 
 #include <array>
 
+#include "../SoundPlayer.h"
 #include "VoxelWorld.h"
-#include "WorldAssets.h"
 #include "WorldEvent.h"
 
 class PlayerSystem
@@ -12,7 +12,7 @@ class PlayerSystem
   void Initialize();
   void ResetFrameInputs();
   void ProcessEvent(const WorldEvent& event);
-  void Update(float frameTime, VoxelWorld& voxelWorld, WorldAssets& assets);
+  void Update(float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer);
 
   PlayerState* FindPlayer(int playerId);
   const PlayerState* FindPlayer(int playerId) const;
@@ -23,7 +23,7 @@ class PlayerSystem
   PlayerState* SpawnPlayer(int playerId, Vector3 position, float yaw, float pitch);
   void DespawnPlayer(int playerId);
   void UpdatePlayerLook(PlayerState* player) const;
-  void UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld, WorldAssets& assets) const;
+  void UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer) const;
   void HandlePlayerVoxelAction(PlayerState* player, VoxelWorld& voxelWorld) const;
 
   std::array<PlayerState, MAX_PLAYERS> players = {};

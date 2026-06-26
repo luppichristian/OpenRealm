@@ -3,8 +3,4 @@
 #include "ChunkMeshJobResult.h"
 #include "ChunkMeshWorkerPool.h"
 
-class ChunkMesher
-{
- public:
-  static ChunkMeshJobResult Build(const ChunkMeshJob& job);
-};
+ChunkMeshJobResult BuildChunkMesh(const ChunkMeshJob& job);

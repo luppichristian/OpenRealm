@@ -3,12 +3,8 @@
 #include "ColorMenu.h"
 #include "world/World.h"
 
-class PlayerController
-{
- public:
-  static constexpr int kLocalPlayerId = 0;
+inline constexpr int LOCAL_PLAYER_ID = 0;
 
-  void SendSpawnEvent(World& world) const;
-  void HandleFrameInput(World& world, ColorMenu& colorMenu) const;
-  void DrawHud(const ColorMenu& colorMenu) const;
-};
+void SendSpawnEvent(World& world);
+void HandleFrameInput(World& world, ColorMenu& colorMenu);
+void DrawHud(const ColorMenu& colorMenu);

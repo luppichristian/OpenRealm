@@ -1,12 +1,12 @@
 #pragma once
 
+#include "../AssetManager.h"
+#include "../SoundPlayer.h"
 #include "PlayerSystem.h"
 #include "VoxelWorld.h"
-#include "WorldAssets.h"
 #include "WorldEvent.h"
 #include "WorldEventQueue.h"
 #include "WorldMeshSystem.h"
-#include "WorldRenderer.h"
 
 class World
 {
@@ -24,11 +24,11 @@ class World
   void Render(int playerId);
 
  private:
-  bool initialized_ = false;
+  bool initialized = false;
   VoxelWorld voxelWorld;
   PlayerSystem playerSystem;
-  WorldAssets assets;
+  AssetManager assetManager;
+  SoundPlayer soundPlayer;
   WorldEventQueue eventQueue;
   WorldMeshSystem meshSystem;
-  WorldRenderer renderer;
 };

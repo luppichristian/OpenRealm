@@ -1,10 +1,12 @@
 #include "PlayerController.h"
 
-void PlayerController::SendSpawnEvent(World& world) const
+#include "Utils.h"
+
+void SendSpawnEvent(World& world)
 {
   WorldEvent spawnLocalPlayerEvent = {
       .type = WorldEventType::Spawn,
-      .playerId = kLocalPlayerId,
+      .playerId = LOCAL_PLAYER_ID,
       .playerX = 0.0f,
       .playerY = 0.0f,
       .playerZ = 0.0f,
@@ -14,7 +16,7 @@ void PlayerController::SendSpawnEvent(World& world) const
   world.SendEvent(spawnLocalPlayerEvent);
 }
 
-void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) const
+void HandleFrameInput(World& world, ColorMenu& colorMenu)
 {
   if (!colorMenu.IsOpen())
   {
@@ -23,7 +25,7 @@ void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) cons
     {
       WorldEvent event = {
           .type = WorldEventType::Look,
-          .playerId = kLocalPlayerId,
+          .playerId = LOCAL_PLAYER_ID,
           .lookDeltaX = mouseDelta.x,
           .lookDeltaY = mouseDelta.y,
       };
@@ -37,7 +39,7 @@ void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) cons
 
   WorldEvent moveEvent = {
       .type = WorldEventType::Move,
-      .playerId = kLocalPlayerId,
+      .playerId = LOCAL_PLAYER_ID,
       .moveX = colorMenu.IsOpen() ? 0.0f : (float)((IsKeyDown(KEY_D) ? 1 : 0) - (IsKeyDown(KEY_A) ? 1 : 0)),
       .moveY = colorMenu.IsOpen() ? 0.0f : (float)((IsKeyDown(KEY_W) ? 1 : 0) - (IsKeyDown(KEY_S) ? 1 : 0)),
   };
@@ -45,7 +47,7 @@ void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) cons
 
   if (!colorMenu.IsOpen() && IsKeyPressed(KEY_SPACE))
   {
-    WorldEvent event = {.type = WorldEventType::Jump, .playerId = kLocalPlayerId};
+    WorldEvent event = {.type = WorldEventType::Jump, .playerId = LOCAL_PLAYER_ID};
     world.SendEvent(event);
   }
 
@@ -57,7 +59,7 @@ void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) cons
   {
     WorldEvent event = {
         .type = WorldEventType::Place,
-        .playerId = kLocalPlayerId,
+        .playerId = LOCAL_PLAYER_ID,
         .voxelValue = 0,
     };
     world.SendEvent(event);
@@ -67,14 +69,14 @@ void PlayerController::HandleFrameInput(World& world, ColorMenu& colorMenu) cons
   {
     WorldEvent event = {
         .type = WorldEventType::Place,
-        .playerId = kLocalPlayerId,
+        .playerId = LOCAL_PLAYER_ID,
         .voxelValue = colorMenu.GetSelectedVoxelValue(),
     };
     world.SendEvent(event);
   }
 }
 
-void PlayerController::DrawHud(const ColorMenu& colorMenu) const
+void DrawHud(const ColorMenu& colorMenu)
 {
   int screenCenterX = GetScreenWidth() / 2;
   int screenCenterY = GetScreenHeight() / 2;
@@ -82,7 +84,7 @@ void PlayerController::DrawHud(const ColorMenu& colorMenu) const
   DrawLine(screenCenterX - 8, screenCenterY, screenCenterX + 8, screenCenterY, {120, 220, 255, 220});
   DrawLine(screenCenterX, screenCenterY - 8, screenCenterX, screenCenterY + 8, {120, 220, 255, 220});
 
-  Color selectedColor = ColorMenu::GetVoxelDisplayColor(colorMenu.GetSelectedVoxelValue());
+  Color selectedColor = GetVoxelDisplayColor(colorMenu.GetSelectedVoxelValue());
   DrawRectangle(16, 16, 52, 52, Fade(BLACK, 0.55f));
   DrawRectangle(24, 24, 36, 36, selectedColor);
   DrawRectangleLines(23, 23, 38, 38, RAYWHITE);
