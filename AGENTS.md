@@ -97,6 +97,12 @@ Do not describe this repo as if it already contains distributed networking or co
   - Local build artifacts.
 - `dist/`
   - Output/distribution artifacts.
+- `blockchain/`
+  - Root for the orchestration-layer work separate from the C++ runtime/client code.
+  - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
+  - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
+  - Current key files include `contracts/OpenRealmPlayerRegistry.sol`, `contracts/OpenRealmChunkClaims.sol`, `contracts/OpenRealmMarketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
+  - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
 
 ## Architecture Notes
 
@@ -107,6 +113,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - orchestration layer: blockchain/smart-contract systems for chunk claims, user registration/unregistration, wallet-linked identity, and chunk marketplace/business logic
   - runtime layer: decentralized node network in C/C++ that simulates world state and exchanges world events peer-to-peer
   - local client layer: rendering, input, audio, and UX on top of the runtime/world simulation
+- The `blockchain/` directory is the repository root for orchestration-layer implementation and documentation; it should stay focused on low-frequency ownership/economic concerns and not absorb real-time simulation responsibilities.
 - Smart-contract usage is intended for low-frequency, ownership/economic operations rather than moment-to-moment gameplay synchronization.
 - Chunk ownership/claiming is expected to be blockchain-backed; chunks are intended to be purchasable/tradable, with marketplace transactions taking a project-controlled fee.
 - Wallet connection is expected to be part of user identity/authentication because registration and ownership operations are tied to Ethereum-based smart contracts.
@@ -135,6 +142,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
+- The current concrete orchestration-layer implementation is NFT-backed: `OpenRealmPlayerRegistry` manages one active player identity per wallet + unique handles, `OpenRealmChunkClaims` mints one ERC721-like ownership token per claimed chunk and resets delegated-editor state on transfer, and `OpenRealmMarketplace` supports fixed-price listings plus English auctions with protocol-fee retention.
 - Claimed chunks are expected to be economically meaningful even when voxel state is volatile; chunks nearer world origin `(0, 0)` are expected to be more valuable because they are more likely to stay alive due to denser node activity.
 - Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, add peer discovery/jump-node flow, implement region-of-interest topology + relay behavior, implement chunk responsibility/authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
 - `World` is the main composition root for world-side systems.
@@ -168,6 +176,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - No practical line-length limit; `ColumnLimit: 0`.
 - Pointer alignment is `Type* name`.
 - Includes are not auto-sorted.
+- `.clang-format` is for the native C/C++ codebase; do not treat it as the Solidity formatter. If Solidity formatting is added later, use a Solidity-aware formatter such as `forge fmt` or Prettier with a Solidity plugin.
 
 ### Naming
 
@@ -235,12 +244,16 @@ These are not generic C++ preferences. They reflect the code that is already in 
 
 - Keep gameplay/world logic in `src/world/` unless it is clearly client glue.
 - Keep app startup, window lifecycle, rendering, meshing, audio, and high-level input flow in `src/client/`.
+- The repository root `README.md` is the main onboarding document and should describe both the native voxel engine/client foundation and the separate `blockchain/` orchestration workspace.
+- The root `README.md` may use Mermaid diagrams for architecture explanations; keep them aligned with the current repo state and avoid depicting the future decentralized runtime as already implemented.
 - When adding source files, check whether they belong under `src/client/` or `src/world/`; the current `project.bbs` glob picks up:
   - `src/*.cpp`
   - `src/client/*.cpp`
   - `src/world/*.cpp`
 - New subdirectories under `src/` are not automatically part of the build unless `project.bbs` is updated.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
+- For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` / `npm run deploy:local` deploy the registry + claims + marketplace stack and write `deployments/<network>.json`.
+- Root `.gitignore` should ignore native build outputs (`build/`, `dist/`, `gen/`), machine-local `bbs` files (`config.bbs`, `toolchain.bbs`), and generated blockchain workspace directories such as `blockchain/node_modules/`, `blockchain/artifacts/`, and `blockchain/deployments/`.
 
 ## Behavior To Preserve
 

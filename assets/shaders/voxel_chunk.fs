@@ -10,15 +10,21 @@ uniform vec3 cameraPosition;
 uniform float blockGridSize;
 uniform float timeSeconds;
 
-float EdgeMask(vec3 worldPosition, vec3 normal) {
+float EdgeMask(vec3 worldPosition, vec3 normal)
+{
   vec3 absNormal = abs(normal);
   vec2 uv;
 
-  if (absNormal.x > absNormal.y && absNormal.x > absNormal.z) {
+  if (absNormal.x > absNormal.y && absNormal.x > absNormal.z)
+  {
     uv = worldPosition.yz / blockGridSize;
-  } else if (absNormal.y > absNormal.z) {
+  }
+  else if (absNormal.y > absNormal.z)
+  {
     uv = worldPosition.xz / blockGridSize;
-  } else {
+  }
+  else
+  {
     uv = worldPosition.xy / blockGridSize;
   }
 
@@ -30,7 +36,8 @@ float EdgeMask(vec3 worldPosition, vec3 normal) {
   return 1.0 - smoothstep(edgeWidth, edgeWidth + aa * 2.0, distanceToEdge);
 }
 
-void main() {
+void main()
+{
   vec3 normal = normalize(fragWorldNormal);
   vec3 viewDirection = normalize(cameraPosition - fragWorldPosition);
   vec3 baseColor = fragColor.rgb;

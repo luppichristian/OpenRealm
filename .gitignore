@@ -1,30 +1,31 @@
-build/
-dist/
-gen/
+# Root build outputs
+/build/
+/dist/
+/gen/
 
-# bbs local overrides
-config.bbs
-toolchain.bbs
+# bbs machine-local/generated state
+/config.bbs
+/toolchain.bbs
 
 # CMake-generated files
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-CTestTestfile.cmake
-cmake_install.cmake
-compile_commands.json
-install_manifest.txt
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/CTestTestfile.cmake
+/cmake_install.cmake
+/compile_commands.json
+/install_manifest.txt
 
-# Visual Studio and IDE state
-.vs/
-.vscode/
-.idea/
+# Visual Studio / editors
+/.vs/
+/.vscode/
+/.idea/
 *.sln
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
 
-# Native build outputs
+# Native build products
 *.o
 *.obj
 *.a
@@ -38,7 +39,24 @@ install_manifest.txt
 *.out
 *.pdb
 
-# Logs and OS metadata
+# Logs / temp / OS noise
 *.log
+*.tmp
+*.temp
 Thumbs.db
 .DS_Store
+
+# Blockchain workspace generated artifacts
+/blockchain/node_modules/
+/blockchain/artifacts/
+/blockchain/deployments/
+
+# Blockchain local env / caches
+/blockchain/.env
+/blockchain/.env.*
+!/blockchain/.env.example
+/blockchain/.cache/
+/blockchain/coverage/
+
+# Prevent accidental nested workspace debris
+/blockchain/blockchain/

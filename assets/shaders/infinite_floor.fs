@@ -13,18 +13,21 @@ uniform float timeSeconds;
 uniform float blockGridSize;
 uniform float chunkGridSize;
 
-float Hash12(vec2 p) {
+float Hash12(vec2 p)
+{
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
 }
 
-float SoftDot(vec2 localPosition, vec2 derivatives, float radius) {
+float SoftDot(vec2 localPosition, vec2 derivatives, float radius)
+{
   float dist = length(localPosition / derivatives);
   return 1.0 - smoothstep(radius, radius + 1.35, dist);
 }
 
-float DotLayer(vec2 worldPosition, float cellSize, float radius, float motionSpeed) {
+float DotLayer(vec2 worldPosition, float cellSize, float radius, float motionSpeed)
+{
   vec2 cell = worldPosition / cellSize;
   vec2 cellId = floor(cell);
   float hash = Hash12(cellId);
@@ -37,7 +40,8 @@ float DotLayer(vec2 worldPosition, float cellSize, float radius, float motionSpe
   return SoftDot(local, derivatives, radius) * mix(0.45, 1.0, twinkle);
 }
 
-float GridLineLayer(vec2 worldPosition, float cellSize, float lineWidth) {
+float GridLineLayer(vec2 worldPosition, float cellSize, float lineWidth)
+{
   vec2 cell = worldPosition / cellSize;
   vec2 local = min(fract(cell), 1.0 - fract(cell));
   vec2 derivatives = max(fwidth(cell), vec2(0.0001));
@@ -47,7 +51,8 @@ float GridLineLayer(vec2 worldPosition, float cellSize, float lineWidth) {
   return max(lineX, lineY);
 }
 
-float ParticleLayer(vec2 worldPosition, float cellSize) {
+float ParticleLayer(vec2 worldPosition, float cellSize)
+{
   vec2 cell = worldPosition / cellSize;
   vec2 cellId = floor(cell);
   vec2 local = fract(cell) - 0.5;
@@ -67,7 +72,8 @@ float ParticleLayer(vec2 worldPosition, float cellSize) {
   return presence * SoftDot(local - offset - drift, derivatives, 0.72) * twinkle;
 }
 
-float SkyParticleLayer(vec2 skyPosition, float cellSize) {
+float SkyParticleLayer(vec2 skyPosition, float cellSize)
+{
   vec2 cell = skyPosition / cellSize;
   vec2 cellId = floor(cell);
   vec2 local = fract(cell) - 0.5;
@@ -87,13 +93,15 @@ float SkyParticleLayer(vec2 skyPosition, float cellSize) {
   return presence * SoftDot(local - offset - drift, derivatives, 0.68) * twinkle;
 }
 
-void main() {
+void main()
+{
   vec2 uv = gl_FragCoord.xy / resolution;
   vec2 ndc = vec2(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0);
   float tanHalfFov = tan(verticalFovRadians * 0.5);
   vec3 rayDirection = normalize(cameraForward + ndc.x * aspectRatio * tanHalfFov * cameraRight + ndc.y * tanHalfFov * cameraUp);
 
-  if (rayDirection.z >= 0.0) {
+  if (rayDirection.z >= 0.0)
+  {
     vec2 skyUv = rayDirection.xy / max(rayDirection.z + 0.35, 0.1);
     float skyParticles = SkyParticleLayer(skyUv * 10.0, 0.9);
     float skyParticlesWide = SkyParticleLayer(skyUv * 5.5 + vec2(11.0, -7.0), 1.35);
@@ -107,7 +115,8 @@ void main() {
   }
 
   float t = -cameraPosition.z / rayDirection.z;
-  if (t <= 0.0) {
+  if (t <= 0.0)
+  {
     finalColor = vec4(0.0, 0.0, 0.0, 1.0);
     return;
   }

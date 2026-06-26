@@ -13,7 +13,8 @@ out vec3 fragWorldNormal;
 out vec4 fragColor;
 out vec2 fragTexCoord;
 
-void main() {
+void main()
+{
   vec4 worldPosition = matModel * vec4(vertexPosition, 1.0);
   fragWorldPosition = worldPosition.xyz;
   fragWorldNormal = normalize(mat3(matModel) * vertexNormal);

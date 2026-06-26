@@ -1,0 +1,18 @@
+{
+  "name": "openrealm-blockchain",
+  "version": "0.2.0",
+  "private": true,
+  "description": "OpenRealm orchestration-layer contracts, build scripts, deployment scripts, and tests",
+  "scripts": {
+    "build": "node scripts/compile.js",
+    "test": "mocha --recursive --reporter spec test/**/*.test.js",
+    "deploy": "node scripts/deploy.js",
+    "deploy:local": "node scripts/deploy.js --rpc http://127.0.0.1:8545 --network local"
+  },
+  "devDependencies": {
+    "ethers": "^6.15.0",
+    "ganache": "^7.9.2",
+    "mocha": "^10.8.2",
+    "solc": "^0.8.30"
+  }
+}
