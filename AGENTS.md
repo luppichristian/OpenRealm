@@ -12,6 +12,8 @@ Treat this file as the agent's working memory for the repository.
 
 OpenRealm is a C++20 voxel game prototype aimed at a serverless, decentralized voxel world.
 
+The intended product direction is a multiplayer voxel multiverse with no single authoritative gameplay server: a decentralized runtime layer of nodes in C/C++ plus an orchestration layer on Ethereum-compatible chains for ownership, registration, and market mechanics.
+
 What exists in this repository today is the local engine/client foundation:
 
 - real-time game loop
@@ -101,6 +103,40 @@ Do not describe this repo as if it already contains distributed networking or co
 - The codebase is mostly split into two layers:
   - client/app shell in `src/client/`
   - world/simulation systems in `src/world/`
+- The long-term product architecture is expected to become three concerns that should stay conceptually separate:
+  - orchestration layer: blockchain/smart-contract systems for chunk claims, user registration/unregistration, wallet-linked identity, and chunk marketplace/business logic
+  - runtime layer: decentralized node network in C/C++ that simulates world state and exchanges world events peer-to-peer
+  - local client layer: rendering, input, audio, and UX on top of the runtime/world simulation
+- Smart-contract usage is intended for low-frequency, ownership/economic operations rather than moment-to-moment gameplay synchronization.
+- Chunk ownership/claiming is expected to be blockchain-backed; chunks are intended to be purchasable/tradable, with marketplace transactions taking a project-controlled fee.
+- Wallet connection is expected to be part of user identity/authentication because registration and ownership operations are tied to Ethereum-based smart contracts.
+- The world is intended to be runtime-resident rather than disk-persistent by default: the shared world/network exists only while some nodes continue running it.
+- If all simulation-bearing nodes responsible for a region go offline, voxel chunk contents for that region are expected to disappear; ownership metadata remains preserved through the orchestration/blockchain layer.
+- World continuity/fidelity is expected to scale with active node coverage: fewer nodes means thinner replication and lower continuity, while more nodes means stronger continuity and resilience.
+- Non-client nodes are expected to stay cheap/lightweight to run so world continuity can emerge from many active participants rather than a few heavy hosts.
+- Runtime nodes are expected to join the wider network through one or more known "jump nodes" that act as discoverable entry points; project-hosted jump nodes are acceptable, but player-hosted jump nodes should also remain possible.
+- A jump node is a public entry/discovery role layered on top of a known node address; it should provide first contact, peer-list sharing, handshake/compatibility checks, and optional relay fallback, but should not imply gameplay authority.
+- The decentralized node graph should preserve reachability across the same world/network even when peers do not all connect directly.
+- Peer neighborhood design should prefer locality-aware connectivity: nodes responsible for nearby world regions should connect more directly, while distant regions do not need dense direct links.
+- The network topology should be locality-biased rather than a full mesh: nearby nodes cluster more densely, distant communication normally traverses graph hops, and sparse long-range links/relay assistance preserve resilience.
+- Region-of-interest should be a first-class runtime concept and may be centered around the local player, claimed/hosted chunks, settlements, or manually configured sim areas.
+- Current node-role vocabulary:
+  - sim node: simulates world state without rendering
+  - relay node: forwards/relays network traffic to help connectivity without simulating gameplay locally
+  - client node: simulates, renders, and communicates as a player-facing node
+  - jump node: discoverable entrypoint label for a known node; conceptually a public-facing relay/discovery role rather than a gameplay authority
+- Client nodes are inherently simulation-capable for the regions they participate in; dedicated sim nodes should stay headless, and relay nodes should remain relay-only/lightweight by default.
+- Chunk liveness currently assumes no mandatory minimum replication factor for MVP: a single active sim-bearing node can keep a chunk alive, nearby nodes may inherit responsibility, and relay-only nodes do not keep chunks alive.
+- Runtime authority for chunks should be local and dynamic: nearby active simulation-capable nodes are the intended basis for authority, and ownership should not automatically equal simulation authority.
+- Runtime edit propagation should flow from client action to relevant sim-bearing authority, which validates against ownership/permission rules and then rebroadcasts accepted edits to neighboring peers.
+- Early conflict resolution should prefer authority-local deterministic ordering / first-valid-edit-seen semantics instead of timestamp-trusting or CRDT-heavy designs.
+- Chunk ownership is expected to grant at least build rights, allow/deny/delegate permission control, and transfer/sale rights; claims should not expire by default, voluntary abandonment should remain possible, and chunk subdivision is deferred.
+- Runtime permission enforcement is expected to cache ownership/permission state from the orchestration layer, reject unauthorized edits, and bind important actions to runtime identities linked to wallet-backed ownership where relevant.
+- Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
+- Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
+- Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
+- Claimed chunks are expected to be economically meaningful even when voxel state is volatile; chunks nearer world origin `(0, 0)` are expected to be more valuable because they are more likely to stay alive due to denser node activity.
+- Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, add peer discovery/jump-node flow, implement region-of-interest topology + relay behavior, implement chunk responsibility/authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
 - `World` is the main composition root for world-side systems.
 - World event buffering uses `std::queue<WorldEvent>` semantics with an explicit `MAX_WORLD_EVENTS` cap enforced by `World::SendEvent()`.
 - `ClientWorld` is the main composition root for client-only systems that consume `World`.
