@@ -4,7 +4,22 @@
 
 WorldMeshSystem::~WorldMeshSystem()
 {
-  Stop();
+}
+
+static ClientChunkSectionState* GetClientChunkSectionState(WorldClientData& clientData, int chunkIndex, int sectionIndex)
+{
+  return &clientData.chunkSections[chunkIndex][sectionIndex];
+}
+
+static int FindChunkIndexByCoords(const VoxelWorld& voxelWorld, int chunkX, int chunkY)
+{
+  for (int chunkIndex = 0; chunkIndex < voxelWorld.GetChunkCount(); chunkIndex++)
+  {
+    const VoxelChunk* chunk = voxelWorld.GetChunkByIndex(chunkIndex);
+    if (chunk->chunkX == chunkX && chunk->chunkY == chunkY) return chunkIndex;
+  }
+
+  return -1;
 }
 
 bool WorldMeshSystem::Start()
@@ -12,16 +27,28 @@ bool WorldMeshSystem::Start()
   return workerPool.Start();
 }
 
-void WorldMeshSystem::Stop()
+void WorldMeshSystem::Stop(WorldClientData& clientData)
 {
   workerPool.Stop();
+  ResetClientData(clientData);
 }
 
-void WorldMeshSystem::UnloadChunkRenderData(VoxelChunkSection* section) const
+void WorldMeshSystem::UnloadChunkRenderData(ClientChunkSectionState* sectionState)
 {
-  if (!section->uploaded) return;
-  UnloadModel(section->model);
-  section->uploaded = false;
+  if (!sectionState->uploaded) return;
+  UnloadModel(sectionState->model);
+  *sectionState = {};
+}
+
+void WorldMeshSystem::ResetClientData(WorldClientData& clientData)
+{
+  for (auto& chunkSections : clientData.chunkSections)
+  {
+    for (ClientChunkSectionState& sectionState : chunkSections)
+    {
+      UnloadChunkRenderData(&sectionState);
+    }
+  }
 }
 
 ChunkMeshJob WorldMeshSystem::CaptureChunkSectionMeshJob(const VoxelWorld& voxelWorld, const VoxelChunk& chunk, int sectionIndex) const
@@ -58,7 +85,7 @@ bool WorldMeshSystem::EnqueueChunkMeshJob(const VoxelWorld& voxelWorld, const Vo
   return workerPool.Enqueue(CaptureChunkSectionMeshJob(voxelWorld, chunk, sectionIndex));
 }
 
-void WorldMeshSystem::QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, int maxSectionsToQueue)
+void WorldMeshSystem::QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, WorldClientData& clientData, int maxSectionsToQueue)
 {
   int queuedSections = 0;
 
@@ -68,28 +95,32 @@ void WorldMeshSystem::QueueDirtyChunkSectionMeshes(VoxelWorld& voxelWorld, int m
     for (int sectionIndex = 0; sectionIndex < CHUNK_SECTION_COUNT; sectionIndex++)
     {
       VoxelChunkSection* section = &chunk->sections[sectionIndex];
-      if (!section->dirty || section->queued) continue;
+      ClientChunkSectionState* sectionState = GetClientChunkSectionState(clientData, chunkIndex, sectionIndex);
+      if (!section->dirty || sectionState->queued) continue;
       if (queuedSections >= maxSectionsToQueue) return;
       if (!EnqueueChunkMeshJob(voxelWorld, *chunk, sectionIndex)) return;
 
-      section->queued = true;
+      sectionState->queued = true;
       queuedSections += 1;
     }
   }
 }
 
-void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, AssetManager& assetManager, ChunkMeshJobResult* result)
+void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, WorldClientData& clientData, AssetManager& assetManager, ChunkMeshJobResult* result)
 {
   VoxelChunkSection* section = voxelWorld.FindChunkSectionByCoords(result->chunkX, result->chunkY, result->sectionIndex);
   if (section == nullptr) return;
+  int chunkIndex = FindChunkIndexByCoords(voxelWorld, result->chunkX, result->chunkY);
+  if (chunkIndex < 0) return;
+  ClientChunkSectionState* sectionState = GetClientChunkSectionState(clientData, chunkIndex, result->sectionIndex);
 
-  section->queued = false;
+  sectionState->queued = false;
 
   if (!result->success) return;
   if (result->revision != section->revision) return;
 
-  UnloadChunkRenderData(section);
-  section->bounds = result->bounds;
+  UnloadChunkRenderData(sectionState);
+  sectionState->bounds = result->bounds;
 
   if (result->faceCount <= 0)
   {
@@ -105,19 +136,19 @@ void WorldMeshSystem::ApplyCompletedChunkMesh(VoxelWorld& voxelWorld, AssetManag
   mesh.texcoords = result->texcoords;
   mesh.colors = result->colors;
   UploadMesh(&mesh, false);
-  section->model = LoadModelFromMesh(mesh);
-  section->model.materials[0].shader = assetManager.FetchShader("voxel_chunk.vs", "voxel_chunk.fs");
-  section->uploaded = true;
+  sectionState->model = LoadModelFromMesh(mesh);
+  sectionState->model.materials[0].shader = assetManager.FetchShader("voxel_chunk.vs", "voxel_chunk.fs");
+  sectionState->uploaded = true;
   section->dirty = false;
   result->ReleaseMeshData();
 }
 
-void WorldMeshSystem::ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, AssetManager& assetManager, int maxUploads)
+void WorldMeshSystem::ProcessCompletedChunkMeshes(VoxelWorld& voxelWorld, WorldClientData& clientData, AssetManager& assetManager, int maxUploads)
 {
   for (int uploadIndex = 0; uploadIndex < maxUploads; uploadIndex++)
   {
     ChunkMeshJobResult result = {};
     if (!workerPool.PopCompleted(&result)) break;
-    ApplyCompletedChunkMesh(voxelWorld, assetManager, &result);
+    ApplyCompletedChunkMesh(voxelWorld, clientData, assetManager, &result);
   }
 }

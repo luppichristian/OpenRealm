@@ -33,6 +33,7 @@ targets(
     dependencies(raylib tracy)
     units(
       src/*.cpp
+      src/client/*.cpp
       src/world/*.cpp
     )
   )

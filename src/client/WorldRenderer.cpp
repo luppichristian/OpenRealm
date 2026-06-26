@@ -32,7 +32,8 @@ static bool IsChunkVisible(const BoundingBox* bounds, Vector3 cameraPosition, Ve
   return true;
 }
 
-static void DrawVoxelWorld(const VoxelWorld& voxelWorld, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight, Vector3 cameraUp)
+static void DrawVoxelWorld(const VoxelWorld& voxelWorld, const WorldClientData& clientData, Vector3 cameraPosition, Vector3 cameraForward, Vector3 cameraRight,
+                           Vector3 cameraUp)
 {
   float aspectRatio = (float)GetScreenWidth() / (float)GetScreenHeight();
 
@@ -41,15 +42,28 @@ static void DrawVoxelWorld(const VoxelWorld& voxelWorld, Vector3 cameraPosition,
     const VoxelChunk* chunk = voxelWorld.GetChunkByIndex(chunkIndex);
     for (int sectionIndex = 0; sectionIndex < CHUNK_SECTION_COUNT; sectionIndex++)
     {
-      const VoxelChunkSection* section = &chunk->sections[sectionIndex];
-      if (!section->uploaded) continue;
-      if (!IsChunkVisible(&section->bounds, cameraPosition, cameraForward, cameraRight, cameraUp, aspectRatio)) continue;
-      DrawModel(section->model, Vector3Zero(), 1.0f, WHITE);
+      const ClientChunkSectionState& sectionState = clientData.chunkSections[chunkIndex][sectionIndex];
+      if (!sectionState.uploaded) continue;
+      if (!IsChunkVisible(&sectionState.bounds, cameraPosition, cameraForward, cameraRight, cameraUp, aspectRatio)) continue;
+      DrawModel(sectionState.model, Vector3Zero(), 1.0f, WHITE);
     }
   }
 }
 
-void RenderWorld(const VoxelWorld& voxelWorld, const PlayerSystem& playerSystem, AssetManager& assetManager, int playerId)
+static void DrawOtherPlayers(const PlayerSystem& playerSystem, int cameraPlayerId)
+{
+  for (const PlayerState& player : playerSystem.GetPlayers())
+  {
+    if (!player.active || player.id == cameraPlayerId) continue;
+
+    Vector3 center = player.position;
+    center.z += PLAYER_HEIGHT * 0.5f;
+    DrawCubeV(center, Vector3 {PLAYER_RADIUS * 2.0f, PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT}, Color {120, 220, 255, 180});
+    DrawCubeWiresV(center, {PLAYER_RADIUS * 2.0f, PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT}, RAYWHITE);
+  }
+}
+
+void RenderWorld(const VoxelWorld& voxelWorld, const PlayerSystem& playerSystem, const WorldClientData& clientData, AssetManager& assetManager, int playerId)
 {
   const PlayerState* player = playerSystem.FindPlayer(playerId);
   if (player == nullptr) return;
@@ -107,7 +121,7 @@ void RenderWorld(const VoxelWorld& voxelWorld, const PlayerSystem& playerSystem,
   camera.projection = CAMERA_PERSPECTIVE;
 
   BeginMode3D(camera);
-  DrawVoxelWorld(voxelWorld, cameraPosition, cameraForward, cameraRight, cameraUp);
-  playerSystem.DrawOtherPlayers(playerId);
+  DrawVoxelWorld(voxelWorld, clientData, cameraPosition, cameraForward, cameraRight, cameraUp);
+  DrawOtherPlayers(playerSystem, playerId);
   EndMode3D();
 }

@@ -33,43 +33,50 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - `src/Main.cpp`
   - Minimal entrypoint. Creates `Game` and calls `Run()`.
-- `src/Game.*`
+- `src/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
-  - Owns the top-level `World` instance and `ColorMenu`.
-- `src/PlayerController.*`
+  - Owns the top-level `World`, `ClientWorld`, and `ColorMenu`.
+- `src/client/ClientWorld.*`
+  - Client-only composition root.
+  - Owns asset/audio caches, chunk mesh workers, GPU upload state, and render orchestration for a `World`.
+- `src/client/PlayerController.*`
   - Free-function input layer.
   - Converts mouse/keyboard input into `WorldEvent`s.
   - Draws HUD elements.
-- `src/ColorMenu.*`
+- `src/client/ColorMenu.*`
   - In-game voxel color picker UI.
-- `src/AssetManager.*`
+- `src/client/AssetManager.*`
   - Lazy asset cache for textures, shaders, shader locations, and sounds.
-- `src/SoundPlayer.*`
+- `src/client/SoundPlayer.*`
   - Local sound playback helper with pooled alias voices.
+- `src/client/WorldClientData.h`
+  - Client-owned per-chunk-section render state.
+  - Keeps `Model`, bounds, and queued/uploaded flags out of simulation data.
+- `src/client/WorldMeshSystem.*`
+  - Client-side mesh job capture, queueing, and GPU upload application.
+- `src/client/ChunkMeshWorkerPool.*`
+  - Background worker threads for chunk meshing.
+- `src/client/ChunkMesher.*`
+  - Actual chunk mesh generation implementation.
+- `src/client/ChunkMeshBuilder.*`
+  - Raw mesh buffer builder.
+- `src/client/ChunkMeshJobResult.*`
+  - Move-only mesh job result container.
+- `src/client/WorldRenderer.*`
+  - Free-function world rendering path.
 - `src/Utils.h`
   - Header-only utilities used across world/render/gameplay code.
 - `src/Base.h`
   - Central low-level include hub for raylib, raymath, and C headers.
 - `src/world/World.*`
   - Top-level world coordinator.
-  - Owns voxel data, player system, event queue, asset/audio integration, and mesh system.
+  - Headless simulation coordinator.
+  - Owns voxel data, player system, and event queue only.
 - `src/world/VoxelWorld.*`
   - Authoritative local voxel/chunk storage and collision/raycast logic.
 - `src/world/PlayerSystem.*`
   - Player state management and movement/look/edit simulation.
-- `src/world/WorldMeshSystem.*`
-  - Mesh job capture, queueing, and GPU upload application.
-- `src/world/ChunkMeshWorkerPool.*`
-  - Background worker threads for chunk meshing.
-- `src/world/ChunkMesher.*`
-  - Actual chunk mesh generation implementation.
-- `src/world/ChunkMeshBuilder.*`
-  - Raw mesh buffer builder.
-- `src/world/ChunkMeshJobResult.*`
-  - Move-only mesh job result container.
-- `src/world/WorldRenderer.*`
-  - Free-function world rendering path.
 - `src/world/WorldEvent.h`
   - World event enum and payload struct.
 - `src/world/WorldEventQueue.*`
@@ -88,15 +95,22 @@ Do not describe this repo as if it already contains distributed networking or co
 ## Architecture Notes
 
 - The codebase is mostly split into two layers:
-  - app shell in `src/`
-  - world/simulation/render systems in `src/world/`
+  - client/app shell in `src/client/`
+  - world/simulation systems in `src/world/`
 - `World` is the main composition root for world-side systems.
+- `ClientWorld` is the main composition root for client-only systems that consume `World`.
 - The code favors direct ownership and explicit orchestration over abstract interfaces.
-- Voxel data is chunked and sectioned. Meshing is asynchronous, while gameplay/world mutation remains local and immediate.
+- Voxel data is chunked and sectioned. Meshing is asynchronous and client-owned, while gameplay/world mutation remains local and immediate.
 - Rendering is a mix of:
   - shader-driven fullscreen floor rendering
   - uploaded chunk meshes rendered in 3D
 - Input and some rendering helpers are implemented as free functions rather than class methods.
+- `World` should stay usable as a headless node runtime:
+  - no asset ownership
+  - no audio playback
+  - no GPU/model lifetime management
+  - no direct frame-time polling from raylib; frame time is passed in by the caller
+- Client render state lives outside `VoxelWorld`; `WorldData.h` should not regain `Model`, uploaded, or bounds fields.
 
 ## Style And Conventions
 
@@ -176,10 +190,11 @@ These are not generic C++ preferences. They reflect the code that is already in 
 
 ## Implementation Guidance
 
-- Keep gameplay/world logic in `src/world/` unless it is clearly app-shell/UI glue.
-- Keep app startup, window lifecycle, and high-level input flow in `src/`.
-- When adding source files, check whether they belong under `src/` or `src/world/`; the current `project.bbs` glob picks up:
+- Keep gameplay/world logic in `src/world/` unless it is clearly client glue.
+- Keep app startup, window lifecycle, rendering, meshing, audio, and high-level input flow in `src/client/`.
+- When adding source files, check whether they belong under `src/client/` or `src/world/`; the current `project.bbs` glob picks up:
   - `src/*.cpp`
+  - `src/client/*.cpp`
   - `src/world/*.cpp`
 - New subdirectories under `src/` are not automatically part of the build unless `project.bbs` is updated.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.

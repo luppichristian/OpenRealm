@@ -8,12 +8,14 @@ void Game::Initialize()
   InitWindow(kScreenWidth, kScreenHeight, "openrealm");
   InitAudioDevice();
   world.Initialize();
+  clientWorld.Initialize();
   DisableCursor();
   SendSpawnEvent(world);
 }
 
 void Game::Shutdown()
 {
+  clientWorld.Shutdown();
   world.Shutdown();
   CloseAudioDevice();
   CloseWindow();
@@ -41,10 +43,11 @@ int Game::Run()
     if (IsKeyPressed(KEY_TAB)) ToggleColorMenu();
 
     HandleFrameInput(world, colorMenu);
-    world.Update();
+    world.Update(GetFrameTime());
+    clientWorld.Update(world);
 
     BeginDrawing();
-    world.Render(LOCAL_PLAYER_ID);
+    clientWorld.Render(world, LOCAL_PLAYER_ID);
     DrawFPS(GetScreenWidth() - 200, 16);
     DrawHud(colorMenu);
     colorMenu.Draw();

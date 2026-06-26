@@ -9,19 +9,6 @@ void VoxelWorld::Initialize()
 
 void VoxelWorld::Shutdown()
 {
-  for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
-  {
-    for (int sectionIndex = 0; sectionIndex < CHUNK_SECTION_COUNT; sectionIndex++)
-    {
-      VoxelChunkSection& section = chunks[chunkIndex].sections[sectionIndex];
-      if (section.uploaded)
-      {
-        UnloadModel(section.model);
-        section.uploaded = false;
-      }
-    }
-  }
-
   chunks.fill({});
   chunkLookup.fill(-1);
   chunkCount = 0;

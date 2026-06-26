@@ -1,5 +1,6 @@
 #include "ColorMenu.h"
-#include "Utils.h"
+
+#include "../Utils.h"
 
 void ColorMenu::Toggle()
 {
@@ -83,7 +84,7 @@ void ColorMenu::Draw() const
   for (int cellIndex = 0; cellIndex < kCells; cellIndex++)
   {
     Cell cell = cells[cellIndex];
-    Color cellColor = GetVoxelDisplayColor(cell.voxelValue);
+    Color cellColor = GetColorFromUint8(cell.voxelValue);
     bool isHovered = CheckCollisionPointRec(mousePosition, cell.bounds);
     bool isSelected = cell.voxelValue == selectedVoxelValue;
 

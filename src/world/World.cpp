@@ -1,7 +1,5 @@
 #include "World.h"
 
-#include "WorldRenderer.h"
-
 World::~World()
 {
   Shutdown();
@@ -13,13 +11,6 @@ void World::Initialize()
   voxelWorld.Initialize();
   playerSystem.Initialize();
   eventQueue.Clear();
-  soundPlayer.Initialize(assetManager);
-
-  if (!meshSystem.Start())
-  {
-    TraceLog(LOG_WARNING, "Failed to start mesh worker threads; voxel mesh updates will be disabled.");
-  }
-
   voxelWorld.Seed();
   initialized = true;
 }
@@ -28,10 +19,7 @@ void World::Shutdown()
 {
   if (!initialized) return;
 
-  meshSystem.Stop();
   voxelWorld.Shutdown();
-  soundPlayer.Shutdown();
-  assetManager.Shutdown();
   eventQueue.Clear();
   playerSystem.Initialize();
   initialized = false;
@@ -43,11 +31,9 @@ void World::SendEvent(const WorldEvent& event)
   eventQueue.Enqueue(event);
 }
 
-void World::Update()
+void World::Update(float frameTime)
 {
   if (!initialized) return;
-
-  float frameTime = GetFrameTime();
   playerSystem.ResetFrameInputs();
 
   for (int i = 0; i < eventQueue.Count(); i++)
@@ -56,13 +42,25 @@ void World::Update()
   }
   eventQueue.Clear();
 
-  playerSystem.Update(frameTime, voxelWorld, soundPlayer);
-  meshSystem.QueueDirtyChunkSectionMeshes(voxelWorld, CHUNK_MESH_QUEUE_BUDGET);
-  meshSystem.ProcessCompletedChunkMeshes(voxelWorld, assetManager, CHUNK_MESH_UPLOAD_BUDGET);
+  playerSystem.Update(frameTime, voxelWorld);
 }
 
-void World::Render(int playerId)
+VoxelWorld& World::GetVoxelWorld()
 {
-  if (!initialized) return;
-  RenderWorld(voxelWorld, playerSystem, assetManager, playerId);
+  return voxelWorld;
+}
+
+const VoxelWorld& World::GetVoxelWorld() const
+{
+  return voxelWorld;
+}
+
+PlayerSystem& World::GetPlayerSystem()
+{
+  return playerSystem;
+}
+
+const PlayerSystem& World::GetPlayerSystem() const
+{
+  return playerSystem;
 }

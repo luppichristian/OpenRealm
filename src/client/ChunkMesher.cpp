@@ -313,7 +313,7 @@ ChunkMeshJobResult BuildChunkMesh(const ChunkMeshJob& job)
           int normalZ = axisIndex == 2 ? normalSign : 0;
           float shade = ComputeSnapshotFaceAmbientOcclusion(job, voxelX, voxelY, voxelZ, normalX, normalY, normalZ);
           shade *= GetFaceLightFactor(normalX, normalY, normalZ);
-          Color baseColor = GetVoxelDisplayColor(voxelValue);
+          Color baseColor = GetColorFromUint8(voxelValue);
 
           mask[row * cellsWide + column] = GreedyFaceCell {
               .valid = true,

@@ -1,6 +1,6 @@
 #include "PlayerController.h"
 
-#include "Utils.h"
+#include "../Utils.h"
 
 void SendSpawnEvent(World& world)
 {
@@ -84,7 +84,7 @@ void DrawHud(const ColorMenu& colorMenu)
   DrawLine(screenCenterX - 8, screenCenterY, screenCenterX + 8, screenCenterY, {120, 220, 255, 220});
   DrawLine(screenCenterX, screenCenterY - 8, screenCenterX, screenCenterY + 8, {120, 220, 255, 220});
 
-  Color selectedColor = GetVoxelDisplayColor(colorMenu.GetSelectedVoxelValue());
+  Color selectedColor = GetColorFromUint8(colorMenu.GetSelectedVoxelValue());
   DrawRectangle(16, 16, 52, 52, Fade(BLACK, 0.55f));
   DrawRectangle(24, 24, 36, 36, selectedColor);
   DrawRectangleLines(23, 23, 38, 38, RAYWHITE);

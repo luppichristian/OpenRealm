@@ -1,6 +1,6 @@
 #pragma once
 
-#include "WorldConfig.h"
+#include "../world/WorldConfig.h"
 
 class ChunkMeshJobResult
 {

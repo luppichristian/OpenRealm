@@ -25,6 +25,11 @@ const PlayerState* PlayerSystem::FindPlayer(int playerId) const
   return nullptr;
 }
 
+const std::array<PlayerState, MAX_PLAYERS>& PlayerSystem::GetPlayers() const
+{
+  return players;
+}
+
 PlayerState* PlayerSystem::SpawnPlayer(int playerId, Vector3 position, float yaw, float pitch)
 {
   PlayerState* existingPlayer = FindPlayer(playerId);
@@ -121,10 +126,12 @@ void PlayerSystem::UpdatePlayerLook(PlayerState* player) const
   player->pitch = Clamp(player->pitch, -MAX_ABS_PITCH, MAX_ABS_PITCH);
 }
 
-void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer) const
+void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, VoxelWorld& voxelWorld) const
 {
   bool wasGrounded = player->isGrounded;
   bool wasWalkingOnGround = wasGrounded && (fabsf(player->frameInput.moveX) > 0.0f || fabsf(player->frameInput.moveY) > 0.0f);
+  player->playFootstepSound = false;
+  player->playLandingSound = false;
 
   if (player->isGrounded && player->verticalVelocity < 0.0f) player->verticalVelocity = 0.0f;
 
@@ -157,7 +164,7 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
     player->footstepTimer -= frameTime;
     if (player->footstepTimer <= 0.0f)
     {
-      soundPlayer.PlayFootstep();
+      player->playFootstepSound = true;
       player->footstepTimer = FOOTSTEP_INTERVAL_SECONDS;
     }
   }
@@ -168,7 +175,7 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
 
   if (player->id == 0 && !wasGrounded && player->isGrounded && player->jumpedSinceGrounded)
   {
-    soundPlayer.PlayLanding();
+    player->playLandingSound = true;
     player->jumpedSinceGrounded = false;
     player->footstepTimer = FOOTSTEP_INTERVAL_SECONDS;
   }
@@ -214,26 +221,13 @@ void PlayerSystem::HandlePlayerVoxelAction(PlayerState* player, VoxelWorld& voxe
   }
 }
 
-void PlayerSystem::Update(float frameTime, VoxelWorld& voxelWorld, SoundPlayer& soundPlayer)
+void PlayerSystem::Update(float frameTime, VoxelWorld& voxelWorld)
 {
   for (PlayerState& player : players)
   {
     if (!player.active) continue;
     UpdatePlayerLook(&player);
-    UpdatePlayerMovement(&player, frameTime, voxelWorld, soundPlayer);
+    UpdatePlayerMovement(&player, frameTime, voxelWorld);
     HandlePlayerVoxelAction(&player, voxelWorld);
-  }
-}
-
-void PlayerSystem::DrawOtherPlayers(int cameraPlayerId) const
-{
-  for (const PlayerState& player : players)
-  {
-    if (!player.active || player.id == cameraPlayerId) continue;
-
-    Vector3 center = player.position;
-    center.z += PLAYER_HEIGHT * 0.5f;
-    DrawCubeV(center, Vector3 {PLAYER_RADIUS * 2.0f, PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT}, Color {120, 220, 255, 180});
-    DrawCubeWiresV(center, {PLAYER_RADIUS * 2.0f, PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT}, RAYWHITE);
   }
 }

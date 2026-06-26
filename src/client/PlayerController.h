@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ColorMenu.h"
-#include "world/World.h"
+#include "../world/World.h"
 
 inline constexpr int LOCAL_PLAYER_ID = 0;
 

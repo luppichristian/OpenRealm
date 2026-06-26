@@ -1,12 +1,9 @@
 #pragma once
 
-#include "../AssetManager.h"
-#include "../SoundPlayer.h"
 #include "PlayerSystem.h"
 #include "VoxelWorld.h"
 #include "WorldEvent.h"
 #include "WorldEventQueue.h"
-#include "WorldMeshSystem.h"
 
 class World
 {
@@ -20,15 +17,16 @@ class World
   void Initialize();
   void Shutdown();
   void SendEvent(const WorldEvent& event);
-  void Update();
-  void Render(int playerId);
+  void Update(float frameTime);
+
+  VoxelWorld& GetVoxelWorld();
+  const VoxelWorld& GetVoxelWorld() const;
+  PlayerSystem& GetPlayerSystem();
+  const PlayerSystem& GetPlayerSystem() const;
 
  private:
   bool initialized = false;
   VoxelWorld voxelWorld;
   PlayerSystem playerSystem;
-  AssetManager assetManager;
-  SoundPlayer soundPlayer;
   WorldEventQueue eventQueue;
-  WorldMeshSystem meshSystem;
 };

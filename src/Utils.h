@@ -13,12 +13,11 @@ inline std::string BuildAssetPath(const char* folder, const char* name)
   return path;
 }
 
-inline Color GetVoxelDisplayColor(uint8_t voxelValue)
+inline Color GetColorFromUint8(uint8_t value)
 {
-  if (voxelValue == 0) return BLANK;
-  if (voxelValue == 255) return WHITE;
-
-  float hue = ((float)(voxelValue - 1) / 254.0f) * 360.0f;
+  if (value == 0) return BLANK;
+  if (value == 255) return WHITE;
+  float hue = ((float)(value - 1) / 254.0f) * 360.0f;
   return ColorFromHSV(hue, 0.85f, 1.0f);
 }
 

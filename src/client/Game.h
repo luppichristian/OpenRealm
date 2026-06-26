@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ColorMenu.h"
-#include "world/World.h"
+#include "ClientWorld.h"
 
 class Game
 {
@@ -17,5 +17,6 @@ class Game
   void ToggleColorMenu();
 
   World world;
+  ClientWorld clientWorld;
   ColorMenu colorMenu;
 };

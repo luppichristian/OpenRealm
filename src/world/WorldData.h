@@ -4,12 +4,8 @@
 
 struct VoxelChunkSection
 {
-  bool uploaded = false;
   bool dirty = false;
-  bool queued = false;
   unsigned int revision = 0;
-  BoundingBox bounds = {};
-  Model model = {};
   uint8_t voxels[CHUNK_SECTION_HEIGHT][CHUNK_SIZE_XZ][CHUNK_SIZE_XZ] = {};
 };
 
@@ -61,5 +57,7 @@ struct PlayerState
   float footstepTimer = 0.0f;
   float verticalVelocity = 0.0f;
   bool jumpedSinceGrounded = false;
+  bool playFootstepSound = false;
+  bool playLandingSound = false;
   PlayerFrameInput frameInput = {};
 };

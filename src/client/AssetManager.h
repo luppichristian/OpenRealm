@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "world/WorldConfig.h"
+#include "../world/WorldConfig.h"
 
 class AssetManager
 {

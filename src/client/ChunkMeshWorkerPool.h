@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "ChunkMeshJobResult.h"
-#include "WorldConfig.h"
+#include "../world/WorldConfig.h"
 
 struct ChunkMeshJob
 {
