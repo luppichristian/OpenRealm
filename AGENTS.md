@@ -86,6 +86,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - World event enum and payload struct.
 - `src/world/WorldConfig.h`
   - Global compile-time constants.
+  - Chunk X/Y coordinates are clamped to the inclusive range `[-30000, 30000]` via `MIN_CHUNK_COORD` and `MAX_CHUNK_COORD`.
 - `src/world/WorldData.h`
   - Shared POD data structures for chunks, players, ray hits, and movement results.
 - `assets/`
@@ -106,6 +107,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - The code favors direct ownership and explicit orchestration over abstract interfaces.
 - Background task execution is centralized in `TaskManager`, owned outside both `Game` and `World` at the entrypoint layer; client mesh jobs submit directly into it from `WorldMeshSystem`, and other systems can reuse the same manager.
 - Voxel data is chunked and sectioned. Meshing is asynchronous and client-owned, while gameplay/world mutation remains local and immediate.
+- Chunk storage/lookup ignores any chunk coordinates outside the inclusive X/Y bounds `[-30000, 30000]`.
 - Rendering is a mix of:
   - shader-driven fullscreen floor rendering
   - uploaded chunk meshes rendered in 3D

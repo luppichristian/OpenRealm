@@ -29,6 +29,7 @@ class VoxelWorld
   const VoxelChunkSection* FindChunkSectionByCoords(int chunkX, int chunkY, int sectionIndex) const;
 
  private:
+  static bool AreChunkCoordsInBounds(int chunkX, int chunkY);
   void ResetChunkLookup();
   int FindChunkIndex(int chunkX, int chunkY) const;
   bool InsertChunkLookup(int chunkIndex);

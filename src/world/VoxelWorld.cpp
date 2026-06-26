@@ -1,6 +1,11 @@
 #include "VoxelWorld.h"
 #include "../Utils.h"
 
+bool VoxelWorld::AreChunkCoordsInBounds(int chunkX, int chunkY)
+{
+  return chunkX >= MIN_CHUNK_COORD && chunkX <= MAX_CHUNK_COORD && chunkY >= MIN_CHUNK_COORD && chunkY <= MAX_CHUNK_COORD;
+}
+
 void VoxelWorld::Initialize()
 {
   Shutdown();
@@ -25,6 +30,7 @@ void VoxelWorld::ResetChunkLookup()
 
 int VoxelWorld::FindChunkIndex(int chunkX, int chunkY) const
 {
+  if (!AreChunkCoordsInBounds(chunkX, chunkY)) return -1;
   unsigned int slot = HashChunkCoords(chunkX, chunkY);
   for (int probe = 0; probe < CHUNK_LOOKUP_CAPACITY; probe++)
   {
@@ -96,6 +102,7 @@ void VoxelWorld::MarkChunkSectionDirtyByCoords(int chunkX, int chunkY, int secti
 
 VoxelChunk* VoxelWorld::GetOrCreateChunk(int chunkX, int chunkY)
 {
+  if (!AreChunkCoordsInBounds(chunkX, chunkY)) return nullptr;
   VoxelChunk* chunk = FindChunk(chunkX, chunkY);
   if (chunk != nullptr) return chunk;
   if (chunkCount >= MAX_VOXEL_CHUNKS) return nullptr;
