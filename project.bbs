@@ -32,9 +32,9 @@ targets(
     additional_compile_args("/FS")
     dependencies(raylib tracy)
     units(
-      src/*.cpp
-      src/client/*.cpp
-      src/world/*.cpp
+      node/*.cpp
+      node/client/*.cpp
+      node/world/*.cpp
     )
   )
 )

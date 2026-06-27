@@ -55,7 +55,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  Main[src/Main.cpp] --> TaskManager[TaskManager]
+  Main[node/Main.cpp] --> TaskManager[TaskManager]
   Main --> Game[client/Game]
   Game --> ClientWorld[client/ClientWorld]
   Game --> World[world/World]
@@ -93,10 +93,10 @@ flowchart LR
 ## Repository layout
 
 ### Root engine/client code
-- `src/Main.cpp` — minimal entrypoint; creates the shared `TaskManager` and starts `Game`
-- `src/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
-- `src/world/` — headless simulation-side world systems, voxel data, player system, world events
-- `src/TaskManager.*` — generic background worker queue
+- `node/Main.cpp` — minimal entrypoint; creates the shared `TaskManager` and starts `Game`
+- `node/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
+- `node/world/` — headless simulation-side world systems, voxel data, player system, world events
+- `node/TaskManager.*` — generic background worker queue
 - `assets/` — shaders and sounds used at runtime
 
 ### Blockchain orchestration workspace
@@ -109,7 +109,7 @@ flowchart LR
 ## Design principles
 
 - **Local playability first** — the current code should stay easy to run and iterate on locally
-- **World logic stays headless-friendly** — `src/world/` should remain usable without graphics/audio ownership
+- **World logic stays headless-friendly** — `node/world/` should remain usable without graphics/audio ownership
 - **Client state stays client-side** — render/upload state should not leak back into world simulation POD data
 - **Asynchronous chunk meshing stays intact** — world edits are immediate; mesh generation remains backgrounded
 - **Blockchain stays low-frequency** — ownership, registration, and market operations belong there; real-time gameplay does not

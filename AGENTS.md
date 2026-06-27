@@ -33,63 +33,63 @@ Do not describe this repo as if it already contains distributed networking or co
 
 ## Repository Layout
 
-- `src/Main.cpp`
+- `node/Main.cpp`
   - Minimal entrypoint. Owns the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
-- `src/client/Game.*`
+- `node/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
   - Owns the top-level `World`, `ClientWorld`, and `ColorMenu`.
   - Receives the shared `TaskManager` from the entrypoint instead of owning it.
-- `src/client/ClientWorld.*`
+- `node/client/ClientWorld.*`
   - Client-only composition root.
   - Owns asset/audio caches, GPU upload state, and render orchestration for a `World`.
   - Receives the shared `TaskManager` from `Game` instead of owning worker threads directly.
-- `src/client/PlayerController.*`
+- `node/client/PlayerController.*`
   - Free-function input layer.
   - Converts mouse/keyboard input into `WorldEvent`s.
   - Draws HUD elements.
-- `src/client/ColorMenu.*`
+- `node/client/ColorMenu.*`
   - In-game voxel color picker UI.
-- `src/client/AssetManager.*`
+- `node/client/AssetManager.*`
   - Lazy asset cache for textures, shaders, shader locations, and sounds.
-- `src/client/SoundPlayer.*`
+- `node/client/SoundPlayer.*`
   - Local sound playback helper with pooled alias voices.
-- `src/client/WorldClientData.h`
+- `node/client/WorldClientData.h`
   - Client-owned per-chunk-section render state.
   - Keeps `Model`, bounds, and queued/uploaded flags out of simulation data.
-- `src/client/WorldMeshSystem.*`
+- `node/client/WorldMeshSystem.*`
   - Client-side mesh job capture, queueing, and GPU upload application.
   - Submits chunk mesh jobs into the shared `TaskManager` and owns only the completed-result queue.
-- `src/client/ChunkMesher.*`
+- `node/client/ChunkMesher.*`
   - Actual chunk mesh generation implementation.
-- `src/client/ChunkMeshBuilder.*`
+- `node/client/ChunkMeshBuilder.*`
   - Raw mesh buffer builder.
-- `src/client/ChunkMeshJobResult.*`
+- `node/client/ChunkMeshJobResult.*`
   - Move-only mesh job result container.
-- `src/client/WorldRenderer.*`
+- `node/client/WorldRenderer.*`
   - Free-function world rendering path.
-- `src/Utils.h`
+- `node/Utils.h`
   - Header-only utilities used across world/render/gameplay code.
   - Defines the shared `NonCopyable` base used by resource-owning/client/world coordinator types.
-- `src/Base.h`
+- `node/Base.h`
   - Central low-level include hub for raylib, raymath, and C headers.
-- `src/TaskManager.*`
+- `node/TaskManager.*`
   - Global worker-thread task queue for generic background jobs.
   - Owns thread startup, shutdown, and pending-task dispatch independent of client systems.
-- `src/world/World.*`
+- `node/world/World.*`
   - Top-level world coordinator.
   - Headless simulation coordinator.
   - Owns voxel data, player system, and event queue only.
-- `src/world/VoxelWorld.*`
+- `node/world/VoxelWorld.*`
   - Authoritative local voxel/chunk storage and collision/raycast logic.
-- `src/world/PlayerSystem.*`
+- `node/world/PlayerSystem.*`
   - Player state management and movement/look/edit simulation.
-- `src/world/WorldEvent.h`
+- `node/world/WorldEvent.h`
   - World event enum and payload struct.
-- `src/world/WorldConfig.h`
+- `node/world/WorldConfig.h`
   - Global compile-time constants.
   - Chunk X/Y coordinates are clamped to the inclusive range `[-30000, 30000]` via `MIN_CHUNK_COORD` and `MAX_CHUNK_COORD`.
-- `src/world/WorldData.h`
+- `node/world/WorldData.h`
   - Shared POD data structures for chunks, players, ray hits, and movement results.
 - `assets/`
   - Runtime shaders and sounds.
@@ -115,8 +115,8 @@ Do not describe this repo as if it already contains distributed networking or co
 ## Architecture Notes
 
 - The codebase is mostly split into two layers:
-  - client/app shell in `src/client/`
-  - world/simulation systems in `src/world/`
+  - client/app shell in `node/client/`
+  - world/simulation systems in `node/world/`
 - The long-term product architecture is expected to become three concerns that should stay conceptually separate:
   - orchestration layer: blockchain/smart-contract systems for chunk claims, user registration/unregistration, wallet-linked identity, and chunk marketplace/business logic
   - runtime layer: decentralized node network in C/C++ that simulates world state and exchanges world events peer-to-peer
@@ -254,15 +254,15 @@ These are not generic C++ preferences. They reflect the code that is already in 
 
 ## Implementation Guidance
 
-- Keep gameplay/world logic in `src/world/` unless it is clearly client glue.
-- Keep app startup, window lifecycle, rendering, meshing, audio, and high-level input flow in `src/client/`.
+- Keep gameplay/world logic in `node/world/` unless it is clearly client glue.
+- Keep app startup, window lifecycle, rendering, meshing, audio, and high-level input flow in `node/client/`.
 - The repository root `README.md` is the main onboarding document and should describe both the native voxel engine/client foundation and the separate `blockchain/` orchestration workspace.
 - The root `README.md` may use Mermaid diagrams for architecture explanations; keep them aligned with the current repo state and avoid depicting the future decentralized runtime as already implemented.
-- When adding source files, check whether they belong under `src/client/` or `src/world/`; the current `project.bbs` glob picks up:
-  - `src/*.cpp`
-  - `src/client/*.cpp`
-  - `src/world/*.cpp`
-- New subdirectories under `src/` are not automatically part of the build unless `project.bbs` is updated.
+- When adding source files, check whether they belong under `node/client/` or `node/world/`; the current `project.bbs` glob picks up:
+  - `node/*.cpp`
+  - `node/client/*.cpp`
+  - `node/world/*.cpp`
+- New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
 - For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` / `npm run deploy:local` deploy the registry + claims + marketplace stack and write `deployments/<network>.json`.
 - Root `.gitignore` should ignore native build outputs (`build/`, `dist/`, `gen/`), machine-local `bbs` files (`config.bbs`, `toolchain.bbs`), and generated blockchain workspace directories such as `blockchain/node_modules/`, `blockchain/artifacts/`, and `blockchain/deployments/`.
