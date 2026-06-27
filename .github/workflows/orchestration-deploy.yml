@@ -1,6 +1,12 @@
 name: Deploy Orchestration Layer
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - blockchain/**
+      - .github/workflows/orchestration-deploy.yml
   workflow_dispatch:
     inputs:
       environment:
@@ -31,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: orchestration-deploy-${{ github.event.inputs.environment }}
+  group: orchestration-deploy-${{ github.event.inputs.environment || 'local' }}
   cancel-in-progress: false
 
 jobs:
@@ -89,7 +95,7 @@ jobs:
           --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 
       - name: Upload smoke deployment artifacts
-        if: ${{ github.event.inputs.upload_artifacts == 'true' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.upload_artifacts == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: orchestration-local-smoke-deployment
@@ -103,7 +109,7 @@ jobs:
     name: Deploy to configured network
     runs-on: ubuntu-latest
     needs: local-smoke-deploy
-    if: ${{ github.event.inputs.network != 'local' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.network != 'local' }}
     environment: ${{ github.event.inputs.environment }}
     defaults:
       run:
