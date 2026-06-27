@@ -1,0 +1,169 @@
+name: Deploy Orchestration Layer
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment name for deployment tracking
+        required: true
+        default: local
+        type: string
+      network:
+        description: Deployment record network name
+        required: true
+        default: local
+        type: string
+      rpc_url:
+        description: JSON-RPC URL. Leave empty to use ORCHESTRATION_RPC_URL secret.
+        required: false
+        type: string
+      owner_address:
+        description: Optional owner address. Leave empty to use deployer wallet.
+        required: false
+        type: string
+      upload_artifacts:
+        description: Upload generated artifacts and deployment record
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchestration-deploy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  local-smoke-deploy:
+    name: Smoke deploy to ephemeral Ganache
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blockchain
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: blockchain/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build contract artifacts
+        run: npm run build
+
+      - name: Start local Ganache
+        run: |
+          npx ganache \
+            --wallet.mnemonic "test test test test test test test test test test test junk" \
+            --wallet.totalAccounts 10 \
+            --chain.chainId 31337 \
+            --server.host 127.0.0.1 \
+            --server.port 8545 \
+            > ganache.log 2>&1 &
+          echo $! > ganache.pid
+
+          for attempt in $(seq 1 30); do
+            if node -e "fetch('http://127.0.0.1:8545', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) }).then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"; then
+              echo "Ganache is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Ganache did not become ready."
+          cat ganache.log
+          exit 1
+
+      - name: Deploy to local Ganache
+        run: >-
+          npm run deploy:local --
+          --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+          --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
+
+      - name: Upload smoke deployment artifacts
+        if: ${{ github.event.inputs.upload_artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestration-local-smoke-deployment
+          path: |
+            blockchain/artifacts
+            blockchain/deployments/local.json
+            blockchain/ganache.log
+          if-no-files-found: error
+
+  external-deploy:
+    name: Deploy to configured network
+    runs-on: ubuntu-latest
+    needs: local-smoke-deploy
+    if: ${{ github.event.inputs.network != 'local' }}
+    environment: ${{ github.event.inputs.environment }}
+    defaults:
+      run:
+        working-directory: blockchain
+    env:
+      INPUT_RPC_URL: ${{ github.event.inputs.rpc_url }}
+      SECRET_RPC_URL: ${{ secrets.ORCHESTRATION_RPC_URL }}
+      DEPLOY_PRIVATE_KEY: ${{ secrets.ORCHESTRATION_DEPLOY_PRIVATE_KEY }}
+      OWNER_ADDRESS: ${{ github.event.inputs.owner_address }}
+      NETWORK_NAME: ${{ github.event.inputs.network }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: blockchain/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build contract artifacts
+        run: npm run build
+
+      - name: Validate deployment configuration
+        run: |
+          RPC_URL="${INPUT_RPC_URL:-$SECRET_RPC_URL}"
+          if [ -z "$RPC_URL" ]; then
+            echo "Missing RPC URL. Provide workflow input rpc_url or secret ORCHESTRATION_RPC_URL."
+            exit 1
+          fi
+          if [ -z "$DEPLOY_PRIVATE_KEY" ]; then
+            echo "Missing secret ORCHESTRATION_DEPLOY_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: Deploy contracts
+        run: |
+          RPC_URL="${INPUT_RPC_URL:-$SECRET_RPC_URL}"
+          OWNER_ARGS=""
+          if [ -n "$OWNER_ADDRESS" ]; then
+            OWNER_ARGS="--owner $OWNER_ADDRESS"
+          fi
+
+          npm run deploy -- \
+            --rpc "$RPC_URL" \
+            --network "$NETWORK_NAME" \
+            --private-key "$DEPLOY_PRIVATE_KEY" \
+            $OWNER_ARGS
+
+      - name: Upload deployment artifacts
+        if: ${{ github.event.inputs.upload_artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestration-${{ github.event.inputs.network }}-deployment
+          path: |
+            blockchain/artifacts
+            blockchain/deployments/${{ github.event.inputs.network }}.json
+          if-no-files-found: error

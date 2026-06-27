@@ -1,0 +1,60 @@
+name: Test Orchestration Layer
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - blockchain/**
+      - .github/workflows/orchestration-test.yml
+      - .github/workflows/orchestration-deploy.yml
+  pull_request:
+    branches:
+      - master
+    paths:
+      - blockchain/**
+      - .github/workflows/orchestration-test.yml
+      - .github/workflows/orchestration-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchestration-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test Solidity contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blockchain
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: blockchain/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build contract artifacts
+        run: npm run build
+
+      - name: Run contract tests
+        run: npm test
+
+      - name: Upload contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestration-contract-artifacts
+          path: blockchain/artifacts
+          if-no-files-found: error

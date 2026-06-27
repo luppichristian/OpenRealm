@@ -108,6 +108,9 @@ Do not describe this repo as if it already contains distributed networking or co
   - `ChunkClaims` now exposes `GetChunkRuntimeState(...)`, `CanEditWithRuntimeSigner(...)`, and `EditorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
   - `Marketplace` now exposes unified sale-state reads (`GetSaleStateForChunk`, `GetSaleStateForToken`) for runtime/UI integration.
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
+- `.github/workflows/`
+  - `orchestration-test.yml` runs the blockchain workspace build/tests on pushes and pull requests that touch orchestration-layer files.
+  - `orchestration-deploy.yml` provides a manual workflow that first smoke-deploys the contracts to ephemeral Ganache, then can deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
 
 ## Architecture Notes
 
