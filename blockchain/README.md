@@ -60,39 +60,39 @@ blockchain/
 
 ### `PlayerRegistry`
 Responsibilities:
-- register/unregister one active player identity per wallet
+- Register/Unregister one active player identity per wallet
 - enforce unique active handles
 - store a metadata URI per registered player
 - support handle updates and metadata updates
-- preserve a stable `playerId` across unregister/re-register cycles
+- preserve a stable `playerId` across Unregister/re-Register cycles
 - authorize expiring runtime-session keys for runtime/off-chain message signing
 - resolve a signer address into a direct registered wallet account or an authorized runtime session owner
 - emit handle-hash-friendly events for indexers
 
 Primary runtime-facing reads:
-- `playerIdOf(account)`
-- `resolveRuntimeAccount(actor)`
-- `getRuntimeSession(session)`
+- `PlayerIdOf(account)`
+- `ResolveRuntimeAccount(actor)`
+- `GetRuntimeSession(session)`
 
 ### `ChunkClaims`
 Responsibilities:
 - enforce chunk coordinate bounds `[-30000, 30000]`
 - allow only registered players to claim chunks
 - mint one NFT-backed ownership token per claimed chunk
-- expose `tokenIdOfChunk(x, y)` for off-chain indexing and marketplace integration
+- expose `TokenIdOfChunk(x, y)` for off-chain indexing and marketplace integration
 - support voluntary abandonment and direct owner transfer
 - support delegated editor permissions that reset on ownership transfer
 - expose an official marketplace transfer hook
 - expose one-call runtime-facing permission/state reads for the next runtime layer
 
 Primary runtime-facing reads:
-- `canEdit(x, y, account)`
-- `canEditWithRuntimeSigner(x, y, actor)`
-- `editorEpochOfChunk(x, y)`
-- `getChunkRuntimeState(x, y, actor)`
-- `getClaim(x, y)` / `getClaimByTokenId(tokenId)`
+- `CanEdit(x, y, account)`
+- `CanEditWithRuntimeSigner(x, y, actor)`
+- `EditorEpochOfChunk(x, y)`
+- `GetChunkRuntimeState(x, y, actor)`
+- `GetClaim(x, y)` / `GetClaimByTokenId(tokenId)`
 
-`getChunkRuntimeState(...)` is intended to be the main runtime integration surface. It returns:
+`GetChunkRuntimeState(...)` is intended to be the main runtime integration surface. It returns:
 - claim presence
 - token id and coordinates
 - owner address and stable `ownerPlayerId`
@@ -115,8 +115,8 @@ Responsibilities:
 - expose unified sale-state reads for runtime/UI code
 
 Primary runtime-facing reads:
-- `getSaleStateForChunk(x, y)`
-- `getSaleStateForToken(tokenId)`
+- `GetSaleStateForChunk(x, y)`
+- `GetSaleStateForToken(tokenId)`
 
 These unified sale-state views expose whether a chunk currently has:
 - no active sale
@@ -144,10 +144,22 @@ All commands below are run from `blockchain/`.
 npm install
 ```
 
+Windows shortcut:
+
+```bat
+install-deps.bat
+```
+
 ### 2. Build artifacts
 
 ```bash
 npm run build
+```
+
+Windows shortcut:
+
+```bat
+build-contracts.bat
 ```
 
 This compiles every Solidity source and writes JSON artifacts under `artifacts/`.
@@ -156,6 +168,12 @@ This compiles every Solidity source and writes JSON artifacts under `artifacts/`
 
 ```bash
 npm test
+```
+
+Windows shortcut:
+
+```bat
+test-blockchain.bat
 ```
 
 Expected result today:
@@ -170,11 +188,25 @@ Start a local JSON-RPC chain in another shell, for example:
 npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
 ```
 
+Windows shortcut:
+
+```bat
+start-ganache-local.bat
+```
+
 Then deploy from this directory:
 
 ```bash
 npm run deploy:local -- --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
 ```
+
+Windows shortcut:
+
+```bat
+deploy-local.bat [privateKey] [ownerAddress]
+```
+
+If you omit both arguments, `deploy-local.bat` uses the first account from the default local Ganache mnemonic.
 
 Notes:
 - `--owner` is optional; if omitted, the deployer wallet becomes the contract owner
@@ -208,11 +240,23 @@ Deployment output:
 - deployed contract addresses in stdout
 - `deployments/<network>.json` written locally
 
+### Quick local verification
+
+If you just want the normal beginner loop for local work:
+
+```bat
+verify-local.bat
+```
+
+That runs:
+- `npm run build`
+- `npm test`
+
 ## Main tested flows
 
 The current test suite covers:
 
-1. player registration, handle uniqueness, and handle release on unregister
+1. player registration, handle uniqueness, and handle release on Unregister
 2. runtime-session authorization and runtime-facing chunk permission resolution
 3. NFT-backed chunk claims and registered-only ownership transfer behavior
 4. fixed-price marketplace purchase flow, fee retention, and sale-state queries
@@ -225,10 +269,10 @@ The current test suite covers:
 The upcoming runtime layer should treat this workspace as the source of **ownership/identity/market facts**, not real-time gameplay authority.
 
 Practical runtime reads now available:
-- resolve an incoming signer/session key through `PlayerRegistry.resolveRuntimeAccount(actor)`
-- read one-call chunk permission state through `ChunkClaims.getChunkRuntimeState(x, y, actor)`
-- cheaply invalidate permission caches through `ChunkClaims.editorEpochOfChunk(x, y)`
-- inspect sale state through `Marketplace.getSaleStateForChunk(x, y)`
+- resolve an incoming signer/session key through `PlayerRegistry.ResolveRuntimeAccount(actor)`
+- read one-call chunk permission state through `ChunkClaims.GetChunkRuntimeState(x, y, actor)`
+- cheaply invalidate permission caches through `ChunkClaims.EditorEpochOfChunk(x, y)`
+- inspect sale state through `Marketplace.GetSaleStateForChunk(x, y)`
 
 Recommended runtime usage pattern:
 1. runtime receives an action signed by wallet or runtime-session key

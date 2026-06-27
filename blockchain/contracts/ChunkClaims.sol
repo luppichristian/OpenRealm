@@ -105,7 +105,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     registry = IPlayerRegistry(registryAddress);
   }
 
-  function setMarketplace(address marketplaceAddress) external onlyOwner
+  function SetMarketplace(address marketplaceAddress) external onlyOwner
   {
     if (marketplaceAddress == address(0))
     {
@@ -116,7 +116,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit MarketplaceUpdated(marketplaceAddress);
   }
 
-  function claimChunk(int32 x, int32 y) external returns (uint256 tokenId)
+  function ClaimChunk(int32 x, int32 y) external returns (uint256 tokenId)
   {
     _requireRegistered(msg.sender);
     _requireValidChunk(x, y);
@@ -139,7 +139,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit ChunkClaimed(msg.sender, tokenId, chunkKey, x, y, claimedAt);
   }
 
-  function abandonChunk(int32 x, int32 y) external
+  function AbandonChunk(int32 x, int32 y) external
   {
     bytes32 chunkKey = _requireChunkOwner(msg.sender, x, y);
     uint256 tokenId = chunkTokenIds[chunkKey];
@@ -153,14 +153,14 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit ChunkAbandoned(previousOwner, tokenId, chunkKey, x, y);
   }
 
-  function transferChunk(int32 x, int32 y, address newOwner) external
+  function TransferChunk(int32 x, int32 y, address newOwner) external
   {
     bytes32 chunkKey = _requireChunkOwner(msg.sender, x, y);
     _requireRegistered(newOwner);
     _transfer(msg.sender, newOwner, chunkTokenIds[chunkKey]);
   }
 
-  function setChunkEditor(int32 x, int32 y, address editor, bool allowed) external
+  function SetChunkEditor(int32 x, int32 y, address editor, bool allowed) external
   {
     if (editor == address(0))
     {
@@ -176,7 +176,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit ChunkEditorUpdated(tokenId, chunkKey, editor, x, y, allowed, editorEpoch);
   }
 
-  function marketplaceTransferChunk(int32 x, int32 y, address from, address to) external
+  function MarketplaceTransferChunk(int32 x, int32 y, address from, address to) external
   {
     if (msg.sender != marketplace)
     {
@@ -198,7 +198,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     _transfer(from, to, tokenId);
   }
 
-  function ownerOf(int32 x, int32 y) external view returns (address)
+  function OwnerOf(int32 x, int32 y) external view returns (address)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
     if (tokenId == 0)
@@ -209,12 +209,12 @@ contract ChunkClaims is Ownable, ERC721Lite
     return ownerOfToken(tokenId);
   }
 
-  function tokenIdOfChunk(int32 x, int32 y) external view returns (uint256)
+  function TokenIdOfChunk(int32 x, int32 y) external view returns (uint256)
   {
     return chunkTokenIds[_chunkKey(x, y)];
   }
 
-  function getClaim(int32 x, int32 y) external view returns (ChunkClaim memory)
+  function GetClaim(int32 x, int32 y) external view returns (ChunkClaim memory)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
     if (tokenId == 0)
@@ -225,7 +225,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     return claimsByTokenId[tokenId];
   }
 
-  function getClaimByTokenId(uint256 tokenId) external view returns (ChunkClaim memory)
+  function GetClaimByTokenId(uint256 tokenId) external view returns (ChunkClaim memory)
   {
     ChunkClaim memory claim = claimsByTokenId[tokenId];
     if (claim.tokenId == 0)
@@ -236,7 +236,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     return claim;
   }
 
-  function canEdit(int32 x, int32 y, address account) public view returns (bool)
+  function CanEdit(int32 x, int32 y, address account) public view returns (bool)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
     if (tokenId == 0)
@@ -249,7 +249,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     return chunkOwner == account || delegatedEditors[tokenId][editorEpoch][account];
   }
 
-  function canEditWithRuntimeSigner(
+  function CanEditWithRuntimeSigner(
     int32 x,
     int32 y,
     address actor
@@ -259,16 +259,16 @@ contract ChunkClaims is Ownable, ERC721Lite
     returns (bool allowed, address resolvedActor, bool actorUsesRuntimeSession)
   {
     // Resolve the incoming signer first, because runtime code may use a delegated session key.
-    (resolvedActor, , actorUsesRuntimeSession) = registry.resolveRuntimeAccount(actor);
+    (resolvedActor, , actorUsesRuntimeSession) = registry.ResolveRuntimeAccount(actor);
     if (resolvedActor == address(0))
     {
       return (false, address(0), actorUsesRuntimeSession);
     }
 
-    return (canEdit(x, y, resolvedActor), resolvedActor, actorUsesRuntimeSession);
+    return (CanEdit(x, y, resolvedActor), resolvedActor, actorUsesRuntimeSession);
   }
 
-  function editorEpochOfChunk(int32 x, int32 y) external view returns (uint64)
+  function EditorEpochOfChunk(int32 x, int32 y) external view returns (uint64)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
     if (tokenId == 0)
@@ -279,14 +279,14 @@ contract ChunkClaims is Ownable, ERC721Lite
     return editorEpochs[tokenId];
   }
 
-  function getChunkRuntimeState(int32 x, int32 y, address actor) external view returns (RuntimeChunkState memory state)
+  function GetChunkRuntimeState(int32 x, int32 y, address actor) external view returns (RuntimeChunkState memory state)
   {
     _requireValidChunk(x, y);
 
     bytes32 chunkKey = _chunkKey(x, y);
     uint256 tokenId = chunkTokenIds[chunkKey];
     // The runtime may pass either a wallet or a temporary session signer here.
-    (address resolvedActor, , bool actorUsesRuntimeSession) = registry.resolveRuntimeAccount(actor);
+    (address resolvedActor, , bool actorUsesRuntimeSession) = registry.ResolveRuntimeAccount(actor);
 
     state.x = x;
     state.y = y;
@@ -306,7 +306,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     state.claimed = true;
     state.tokenId = tokenId;
     state.owner = chunkOwner;
-    state.ownerPlayerId = registry.playerIdOf(chunkOwner);
+    state.ownerPlayerId = registry.PlayerIdOf(chunkOwner);
     state.claimedAt = claim.claimedAt;
     state.editorEpoch = editorEpoch;
     // This is the core permission answer the runtime cares about for edit authorization.
@@ -315,12 +315,12 @@ contract ChunkClaims is Ownable, ERC721Lite
     );
   }
 
-  function isRegisteredPlayer(address account) external view returns (bool)
+  function IsRegisteredPlayer(address account) external view returns (bool)
   {
-    return registry.isRegistered(account);
+    return registry.IsRegistered(account);
   }
 
-  function encodeChunkKey(int32 x, int32 y) external pure returns (bytes32)
+  function EncodeChunkKey(int32 x, int32 y) external pure returns (bytes32)
   {
     return _chunkKey(x, y);
   }
@@ -366,7 +366,7 @@ contract ChunkClaims is Ownable, ERC721Lite
 
   function _requireRegistered(address account) private view
   {
-    if (!registry.isRegistered(account))
+    if (!registry.IsRegistered(account))
     {
       revert NotRegisteredPlayer(account);
     }

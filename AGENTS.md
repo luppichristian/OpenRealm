@@ -100,12 +100,13 @@ Do not describe this repo as if it already contains distributed networking or co
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
+  - Includes Windows helper batch scripts at the `blockchain/` root for common local flows: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, `start-ganache-local.bat`, `deploy-local.bat`, and `verify-local.bat`.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
   - Current key files include `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
   - Blockchain contract/interface/file names intentionally omit the redundant `OpenRealm` prefix; prefer concise names like `PlayerRegistry`, `ChunkClaims`, `Marketplace`, `IPlayerRegistry`, and `IChunkClaims`.
   - `PlayerRegistry` now also owns expiring runtime-session authorizations so the upcoming runtime layer can resolve gameplay/session signers back to registered wallet accounts.
-  - `ChunkClaims` now exposes `getChunkRuntimeState(...)`, `canEditWithRuntimeSigner(...)`, and `editorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
-  - `Marketplace` now exposes unified sale-state reads (`getSaleStateForChunk`, `getSaleStateForToken`) for runtime/UI integration.
+  - `ChunkClaims` now exposes `GetChunkRuntimeState(...)`, `CanEditWithRuntimeSigner(...)`, and `EditorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
+  - `Marketplace` now exposes unified sale-state reads (`GetSaleStateForChunk`, `GetSaleStateForToken`) for runtime/UI integration.
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
 
 ## Architecture Notes
@@ -148,7 +149,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
 - The current concrete orchestration-layer implementation is NFT-backed: `PlayerRegistry` manages one active player identity per wallet + unique handles, `ChunkClaims` mints one ERC721-like ownership token per claimed chunk and resets delegated-editor state on transfer, and `Marketplace` supports fixed-price listings plus English auctions with protocol-fee retention.
-- The current runtime-facing blockchain read model is: resolve signer/session via `PlayerRegistry`, read chunk ownership/permission state via `ChunkClaims.getChunkRuntimeState(...)`, and read active sale state via `Marketplace.getSaleStateForChunk(...)`.
+- The current runtime-facing blockchain read model is: resolve signer/session via `PlayerRegistry`, read chunk ownership/permission state via `ChunkClaims.GetChunkRuntimeState(...)`, and read active sale state via `Marketplace.GetSaleStateForChunk(...)`.
 - Claimed chunks are expected to be economically meaningful even when voxel state is volatile; chunks nearer world origin `(0, 0)` are expected to be more valuable because they are more likely to stay alive due to denser node activity.
 - Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, add peer discovery/jump-node flow, implement region-of-interest topology + relay behavior, implement chunk responsibility/authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
 - `World` is the main composition root for world-side systems.
@@ -187,6 +188,8 @@ These are not generic C++ preferences. They reflect the code that is already in 
 ### Naming
 
 - Classes, structs, enums, functions, and methods use `PascalCase`.
+- For the blockchain/Solidity workspace too, prefer `PascalCase` for public/external function names so contract APIs stay aligned with the native C++ naming style.
+- When Solidity code inherits standardized APIs (for example ERC721-style methods like `tokenURI`, `balanceOf`, or `transferFrom`), keep the standard spellings for compatibility instead of force-renaming them.
 - Constants use `kPascalCase` when they are scoped constants in classes or files.
 - Regular variables and member fields use plain `camelCase`.
 - Member fields do not use `m_`, `_`, or `s_` prefixes.

@@ -61,7 +61,7 @@ contract PlayerRegistry is Ownable
   {
   }
 
-  function register(string calldata handle, string calldata metadataURI) external
+  function Register(string calldata handle, string calldata metadataURI) external
   {
     PlayerProfile storage profile = profiles[msg.sender];
 
@@ -96,7 +96,7 @@ contract PlayerRegistry is Ownable
     emit PlayerRegistered(msg.sender, playerId, handleHash, handle, metadataURI);
   }
 
-  function unregister() external
+  function Unregister() external
   {
     PlayerProfile storage profile = _requireActiveProfile(msg.sender);
     bytes32 handleHash = _handleHash(profile.handle);
@@ -106,7 +106,7 @@ contract PlayerRegistry is Ownable
     emit PlayerUnregistered(msg.sender, profile.playerId, handleHash, profile.handle);
   }
 
-  function updateMetadataURI(string calldata metadataURI) external
+  function UpdateMetadataURI(string calldata metadataURI) external
   {
     PlayerProfile storage profile = _requireActiveProfile(msg.sender);
     profile.metadataURI = metadataURI;
@@ -114,7 +114,7 @@ contract PlayerRegistry is Ownable
     emit PlayerMetadataUpdated(msg.sender, profile.playerId, metadataURI);
   }
 
-  function updateHandle(string calldata newHandle) external
+  function UpdateHandle(string calldata newHandle) external
   {
     PlayerProfile storage profile = _requireActiveProfile(msg.sender);
     _requireValidHandle(newHandle);
@@ -134,7 +134,7 @@ contract PlayerRegistry is Ownable
     emit PlayerHandleUpdated(msg.sender, profile.playerId, newHandleHash, newHandle);
   }
 
-  function authorizeRuntimeSession(address session, uint64 expiresAt) external
+  function AuthorizeRuntimeSession(address session, uint64 expiresAt) external
   {
     _requireActiveProfile(msg.sender);
 
@@ -158,7 +158,7 @@ contract PlayerRegistry is Ownable
     emit RuntimeSessionAuthorized(msg.sender, session, expiresAt);
   }
 
-  function revokeRuntimeSession(address session) external
+  function RevokeRuntimeSession(address session) external
   {
     RuntimeSession storage runtimeSession = runtimeSessions[session];
     if (!runtimeSession.active || runtimeSession.account != msg.sender)
@@ -170,7 +170,7 @@ contract PlayerRegistry is Ownable
     emit RuntimeSessionRevoked(msg.sender, session);
   }
 
-  function getProfile(
+  function GetProfile(
     address account
   )
     external
@@ -181,33 +181,33 @@ contract PlayerRegistry is Ownable
     return (profile.playerId, profile.handle, profile.metadataURI, profile.active);
   }
 
-  function getRuntimeSession(address session) external view returns (address account, uint64 expiresAt, bool active)
+  function GetRuntimeSession(address session) external view returns (address account, uint64 expiresAt, bool active)
   {
     RuntimeSession storage runtimeSession = runtimeSessions[session];
     return (runtimeSession.account, runtimeSession.expiresAt, runtimeSession.active);
   }
 
-  function playerIdOf(address account) external view returns (uint256)
+  function PlayerIdOf(address account) external view returns (uint256)
   {
     return profiles[account].playerId;
   }
 
-  function isRegistered(address account) external view returns (bool)
+  function IsRegistered(address account) external view returns (bool)
   {
     return profiles[account].active;
   }
 
-  function accountForHandle(string calldata handle) external view returns (address)
+  function AccountForHandle(string calldata handle) external view returns (address)
   {
     return handleOwners[_handleHash(handle)];
   }
 
-  function handleHashAvailable(bytes32 handleHash) external view returns (bool)
+  function HandleHashAvailable(bytes32 handleHash) external view returns (bool)
   {
     return handleOwners[handleHash] == address(0);
   }
 
-  function resolveRuntimeAccount(address actor) external view returns (address account, bool isDirect, bool isRuntimeSession)
+  function ResolveRuntimeAccount(address actor) external view returns (address account, bool isDirect, bool isRuntimeSession)
   {
     // First treat the signer as a normal registered wallet address.
     PlayerProfile storage directProfile = profiles[actor];

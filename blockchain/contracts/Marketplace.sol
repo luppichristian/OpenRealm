@@ -153,7 +153,7 @@ contract Marketplace is Ownable
     feeBps = initialFeeBps;
   }
 
-  function setFeeBps(uint96 newFeeBps) external onlyOwner
+  function SetFeeBps(uint96 newFeeBps) external onlyOwner
   {
     if (newFeeBps > MAX_FEE_BPS)
     {
@@ -164,7 +164,7 @@ contract Marketplace is Ownable
     emit FeeBpsUpdated(newFeeBps);
   }
 
-  function createListing(int32 x, int32 y, uint256 price) external returns (uint256 listingId)
+  function CreateListing(int32 x, int32 y, uint256 price) external returns (uint256 listingId)
   {
     if (price == 0)
     {
@@ -191,7 +191,7 @@ contract Marketplace is Ownable
     emit ListingCreated(listingId, tokenId, _chunkKey(x, y), msg.sender, x, y, price);
   }
 
-  function cancelListing(uint256 listingId) external
+  function CancelListing(uint256 listingId) external
   {
     Listing storage listing = _requireActiveListing(listingId);
     if (listing.seller != msg.sender)
@@ -203,10 +203,10 @@ contract Marketplace is Ownable
     emit ListingCancelled(listingId, listing.tokenId, _chunkKey(listing.x, listing.y), "SELLER_CANCELLED");
   }
 
-  function invalidateStaleListing(uint256 listingId) external
+  function InvalidateStaleListing(uint256 listingId) external
   {
     Listing storage listing = _requireActiveListing(listingId);
-    if (chunkClaims.ownerOf(listing.x, listing.y) == listing.seller)
+    if (chunkClaims.OwnerOf(listing.x, listing.y) == listing.seller)
     {
       revert SellerNoLongerOwnsChunk(0);
     }
@@ -215,10 +215,10 @@ contract Marketplace is Ownable
     emit ListingCancelled(listingId, listing.tokenId, _chunkKey(listing.x, listing.y), "STALE_OWNER");
   }
 
-  function purchaseListing(uint256 listingId) external payable
+  function PurchaseListing(uint256 listingId) external payable
   {
     Listing storage listing = _requireActiveListing(listingId);
-    if (!chunkClaims.isRegisteredPlayer(msg.sender))
+    if (!chunkClaims.IsRegisteredPlayer(msg.sender))
     {
       revert NotRegisteredBuyer(msg.sender);
     }
@@ -234,7 +234,7 @@ contract Marketplace is Ownable
     uint256 feePaid = (listing.price * feeBps) / 10_000;
     uint256 sellerPayout = listing.price - feePaid;
 
-    chunkClaims.marketplaceTransferChunk(listing.x, listing.y, listing.seller, msg.sender);
+    chunkClaims.MarketplaceTransferChunk(listing.x, listing.y, listing.seller, msg.sender);
 
     (bool payoutOk, ) = payable(listing.seller).call{value: sellerPayout}("");
     if (!payoutOk)
@@ -255,7 +255,7 @@ contract Marketplace is Ownable
     );
   }
 
-  function createAuction(
+  function CreateAuction(
     int32 x,
     int32 y,
     uint256 reservePrice,
@@ -300,10 +300,10 @@ contract Marketplace is Ownable
     emit AuctionCreated(auctionId, tokenId, _chunkKey(x, y), msg.sender, x, y, reservePrice, minBidIncrement, endTime);
   }
 
-  function placeAuctionBid(uint256 auctionId) external payable
+  function PlaceAuctionBid(uint256 auctionId) external payable
   {
     Auction storage auction = _requireActiveAuction(auctionId);
-    if (!chunkClaims.isRegisteredPlayer(msg.sender))
+    if (!chunkClaims.IsRegisteredPlayer(msg.sender))
     {
       revert NotRegisteredBuyer(msg.sender);
     }
@@ -339,7 +339,7 @@ contract Marketplace is Ownable
     emit AuctionBidPlaced(auctionId, auction.tokenId, _chunkKey(auction.x, auction.y), msg.sender, msg.value, auction.endTime);
   }
 
-  function cancelAuction(uint256 auctionId) external
+  function CancelAuction(uint256 auctionId) external
   {
     Auction storage auction = _requireActiveAuction(auctionId);
     if (auction.seller != msg.sender)
@@ -355,10 +355,10 @@ contract Marketplace is Ownable
     emit AuctionCancelled(auctionId, auction.tokenId, _chunkKey(auction.x, auction.y), "SELLER_CANCELLED");
   }
 
-  function invalidateStaleAuction(uint256 auctionId) external
+  function InvalidateStaleAuction(uint256 auctionId) external
   {
     Auction storage auction = _requireActiveAuction(auctionId);
-    if (chunkClaims.ownerOf(auction.x, auction.y) == auction.seller)
+    if (chunkClaims.OwnerOf(auction.x, auction.y) == auction.seller)
     {
       revert SellerNoLongerOwnsChunk(0);
     }
@@ -379,7 +379,7 @@ contract Marketplace is Ownable
     emit AuctionCancelled(auctionId, auction.tokenId, _chunkKey(auction.x, auction.y), "STALE_OWNER");
   }
 
-  function settleAuction(uint256 auctionId) external
+  function SettleAuction(uint256 auctionId) external
   {
     Auction storage auction = _requireActiveAuction(auctionId);
     if (block.timestamp < auction.endTime)
@@ -400,7 +400,7 @@ contract Marketplace is Ownable
     uint256 feePaid = (auction.highestBid * feeBps) / 10_000;
     uint256 sellerPayout = auction.highestBid - feePaid;
 
-    chunkClaims.marketplaceTransferChunk(auction.x, auction.y, auction.seller, auction.highestBidder);
+    chunkClaims.MarketplaceTransferChunk(auction.x, auction.y, auction.seller, auction.highestBidder);
 
     (bool payoutOk, ) = payable(auction.seller).call{value: sellerPayout}("");
     if (!payoutOk)
@@ -421,12 +421,12 @@ contract Marketplace is Ownable
     );
   }
 
-  function getSaleStateForChunk(int32 x, int32 y) external view returns (SaleState memory)
+  function GetSaleStateForChunk(int32 x, int32 y) external view returns (SaleState memory)
   {
-    return _getSaleStateForTokenAndChunk(chunkClaims.tokenIdOfChunk(x, y), x, y);
+    return _getSaleStateForTokenAndChunk(chunkClaims.TokenIdOfChunk(x, y), x, y);
   }
 
-  function getSaleStateForToken(uint256 tokenId) external view returns (SaleState memory)
+  function GetSaleStateForToken(uint256 tokenId) external view returns (SaleState memory)
   {
     Listing storage listing = listings[activeListingByTokenId[tokenId]];
     if (listing.active)
@@ -458,7 +458,7 @@ contract Marketplace is Ownable
     });
   }
 
-  function withdrawFees(address payable recipient) external onlyOwner
+  function WithdrawFees(address payable recipient) external onlyOwner
   {
     uint256 amount = address(this).balance;
     (bool ok, ) = recipient.call{value: amount}("");
@@ -488,12 +488,12 @@ contract Marketplace is Ownable
 
   function _requireSellerOwnsChunk(address seller, int32 x, int32 y, uint256 saleId) private view returns (uint256 tokenId)
   {
-    if (chunkClaims.ownerOf(x, y) != seller)
+    if (chunkClaims.OwnerOf(x, y) != seller)
     {
       revert SellerNoLongerOwnsChunk(saleId);
     }
 
-    tokenId = chunkClaims.tokenIdOfChunk(x, y);
+    tokenId = chunkClaims.TokenIdOfChunk(x, y);
   }
 
   function _requireNoActiveSale(uint256 tokenId) private view
@@ -567,7 +567,7 @@ contract Marketplace is Ownable
       x: listing.x,
       y: listing.y,
       seller: listing.seller,
-      sellerStillOwnsChunk: chunkClaims.ownerOf(listing.x, listing.y) == listing.seller,
+      sellerStillOwnsChunk: chunkClaims.OwnerOf(listing.x, listing.y) == listing.seller,
       active: listing.active,
       price: listing.price,
       reservePrice: 0,
@@ -587,7 +587,7 @@ contract Marketplace is Ownable
       x: auction.x,
       y: auction.y,
       seller: auction.seller,
-      sellerStillOwnsChunk: chunkClaims.ownerOf(auction.x, auction.y) == auction.seller,
+      sellerStillOwnsChunk: chunkClaims.OwnerOf(auction.x, auction.y) == auction.seller,
       active: auction.active,
       price: 0,
       reservePrice: auction.reservePrice,

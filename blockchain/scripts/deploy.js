@@ -87,7 +87,7 @@ async function main()
   nonce += 1;
   console.log(`[deploy] marketplace=${await marketplace.getAddress()}`);
 
-  const setMarketplaceTx = await claims.connect(wallet).setMarketplace(await marketplace.getAddress(), { nonce });
+  const setMarketplaceTx = await claims.connect(wallet).SetMarketplace(await marketplace.getAddress(), { nonce });
   await setMarketplaceTx.wait();
   console.log(`[deploy] marketplace linked in tx=${setMarketplaceTx.hash}`);
 

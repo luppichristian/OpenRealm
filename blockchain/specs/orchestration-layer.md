@@ -8,7 +8,7 @@ This document describes the current concrete orchestration-layer implementation 
 Tracks wallet-linked player registration.
 
 Responsibilities:
-- register a handle and metadata URI
+- Register a handle and metadata URI
 - enforce one active registration per wallet
 - enforce unique active handles
 - allow handle updates
@@ -24,9 +24,9 @@ Current assumptions:
 - runtime-session keys are ephemeral delegations intended for gameplay/runtime signing so the wallet itself does not need to sign every action
 
 Runtime-facing surfaces:
-- `playerIdOf(account)`
-- `resolveRuntimeAccount(actor)`
-- `getRuntimeSession(session)`
+- `PlayerIdOf(account)`
+- `ResolveRuntimeAccount(actor)`
+- `GetRuntimeSession(session)`
 
 ### `ChunkClaims`
 Tracks NFT-backed ownership of chunk coordinates.
@@ -49,13 +49,13 @@ Current assumptions:
 - rich token metadata hosting is deferred
 
 Runtime-facing surfaces:
-- `canEdit(x, y, account)`
-- `canEditWithRuntimeSigner(x, y, actor)`
-- `editorEpochOfChunk(x, y)`
-- `getChunkRuntimeState(x, y, actor)`
-- `getClaim(x, y)` / `getClaimByTokenId(tokenId)`
+- `CanEdit(x, y, account)`
+- `CanEditWithRuntimeSigner(x, y, actor)`
+- `EditorEpochOfChunk(x, y)`
+- `GetChunkRuntimeState(x, y, actor)`
+- `GetClaim(x, y)` / `GetClaimByTokenId(tokenId)`
 
-`getChunkRuntimeState(...)` is intended to be the primary one-call read for the next runtime layer. It returns:
+`GetChunkRuntimeState(...)` is intended to be the primary one-call read for the next runtime layer. It returns:
 - whether the chunk is claimed
 - token id / coordinates / claim timestamp
 - current owner address and stable `ownerPlayerId`
@@ -84,8 +84,8 @@ Current assumptions:
 - fee capture remains marketplace-mediated rather than embedded in the NFT transfer primitive itself
 
 Runtime-facing surfaces:
-- `getSaleStateForChunk(x, y)`
-- `getSaleStateForToken(tokenId)`
+- `GetSaleStateForChunk(x, y)`
+- `GetSaleStateForToken(tokenId)`
 
 These sale-state views are intended for runtime/UI code that wants a single read describing whether a chunk currently has:
 - no active sale
@@ -134,7 +134,7 @@ Deployment writes a record to `deployments/<network>.json`.
 
 ## Main Flows Covered By Tests
 
-1. player registration, handle uniqueness, handle release on unregister
+1. player registration, handle uniqueness, handle release on Unregister
 2. runtime-session authorization and runtime-facing chunk permission resolution
 3. NFT-backed chunk claims and registered-only transfers
 4. fixed-price marketplace purchase + fee retention + sale-state query
