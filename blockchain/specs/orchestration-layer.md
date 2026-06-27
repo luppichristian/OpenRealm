@@ -4,7 +4,7 @@ This document describes the current concrete orchestration-layer implementation 
 
 ## Contracts
 
-### `OpenRealmPlayerRegistry`
+### `PlayerRegistry`
 Tracks wallet-linked player registration.
 
 Responsibilities:
@@ -14,13 +14,21 @@ Responsibilities:
 - allow handle updates
 - allow unregistering while preserving historical player id
 - expose handle-hash-friendly events for indexers
+- authorize expiring runtime-session keys for off-chain/runtime message signing
+- resolve an arbitrary actor address into either a registered wallet account or an authorized runtime session owner
 
 Current assumptions:
 - one wallet maps to one active player identity
 - handle uniqueness is enforced by `keccak256(bytes(handle))`
 - registration state is the on-chain gate used by the chunk-claim layer
+- runtime-session keys are ephemeral delegations intended for gameplay/runtime signing so the wallet itself does not need to sign every action
 
-### `OpenRealmChunkClaims`
+Runtime-facing surfaces:
+- `playerIdOf(account)`
+- `resolveRuntimeAccount(actor)`
+- `getRuntimeSession(session)`
+
+### `ChunkClaims`
 Tracks NFT-backed ownership of chunk coordinates.
 
 Responsibilities:
@@ -32,6 +40,7 @@ Responsibilities:
 - allow owner-managed delegated editors
 - invalidate delegated-editor state on ownership transfer
 - expose a marketplace transfer hook for official sales
+- expose runtime-facing permission/state reads that resolve wallet owners, delegated editors, and authorized runtime-session keys
 
 Current assumptions:
 - ownership is NFT-backed through the local `ERC721Lite` utility, not plain storage
@@ -39,7 +48,22 @@ Current assumptions:
 - delegated editors are runtime-facing permission hints that can be read by off-chain systems
 - rich token metadata hosting is deferred
 
-### `OpenRealmMarketplace`
+Runtime-facing surfaces:
+- `canEdit(x, y, account)`
+- `canEditWithRuntimeSigner(x, y, actor)`
+- `editorEpochOfChunk(x, y)`
+- `getChunkRuntimeState(x, y, actor)`
+- `getClaim(x, y)` / `getClaimByTokenId(tokenId)`
+
+`getChunkRuntimeState(...)` is intended to be the primary one-call read for the next runtime layer. It returns:
+- whether the chunk is claimed
+- token id / coordinates / claim timestamp
+- current owner address and stable `ownerPlayerId`
+- current permission/editor epoch for cache invalidation
+- resolved actor account for the supplied signer
+- whether the supplied signer is registered / can edit / is acting through a runtime-session delegation
+
+### `Marketplace`
 Runs the official chunk sale flow.
 
 Responsibilities:
@@ -48,15 +72,27 @@ Responsibilities:
 - prevent simultaneous active sale modes for one chunk token
 - accept buyer payments and bids from registered players only
 - invalidate stale sales when ownership changes outside the marketplace
-- transfer ownership through `OpenRealmChunkClaims`
+- transfer ownership through `ChunkClaims`
 - retain a protocol fee in basis points
 - allow owner withdrawal of accumulated fees
 - emit chunk-key/token-id-friendly events for indexers
+- expose unified sale-state reads for runtime/UI consumption
 
 Current assumptions:
 - fixed-price and auction sales are both first-party marketplace flows
 - stale sales must be explicitly invalidated if ownership changes outside the marketplace
 - fee capture remains marketplace-mediated rather than embedded in the NFT transfer primitive itself
+
+Runtime-facing surfaces:
+- `getSaleStateForChunk(x, y)`
+- `getSaleStateForToken(tokenId)`
+
+These sale-state views are intended for runtime/UI code that wants a single read describing whether a chunk currently has:
+- no active sale
+- an active listing
+- an active auction
+
+along with seller ownership freshness and current pricing/bid fields.
 
 ## Tooling
 
@@ -99,11 +135,12 @@ Deployment writes a record to `deployments/<network>.json`.
 ## Main Flows Covered By Tests
 
 1. player registration, handle uniqueness, handle release on unregister
-2. NFT-backed chunk claims and registered-only transfers
-3. fixed-price marketplace purchase + fee retention
-4. English auction bidding and settlement
-5. stale listing invalidation after direct token transfer
-6. rejection of unregistered buyers
+2. runtime-session authorization and runtime-facing chunk permission resolution
+3. NFT-backed chunk claims and registered-only transfers
+4. fixed-price marketplace purchase + fee retention + sale-state query
+5. English auction bidding, sale-state reads, and settlement
+6. stale listing invalidation after direct token transfer
+7. rejection of unregistered buyers
 
 ## Deferred Items
 
@@ -113,4 +150,4 @@ Not implemented yet:
 - third-party marketplace/royalty standards
 - hosted NFT metadata and richer token URI generation
 - indexer/subgraph project files
-- runtime signature standards for off-chain messages
+- runtime message envelope standards beyond on-chain runtime-session authorization

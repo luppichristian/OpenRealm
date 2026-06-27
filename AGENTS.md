@@ -101,7 +101,11 @@ Do not describe this repo as if it already contains distributed networking or co
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
-  - Current key files include `contracts/OpenRealmPlayerRegistry.sol`, `contracts/OpenRealmChunkClaims.sol`, `contracts/OpenRealmMarketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
+  - Current key files include `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
+  - Blockchain contract/interface/file names intentionally omit the redundant `OpenRealm` prefix; prefer concise names like `PlayerRegistry`, `ChunkClaims`, `Marketplace`, `IPlayerRegistry`, and `IChunkClaims`.
+  - `PlayerRegistry` now also owns expiring runtime-session authorizations so the upcoming runtime layer can resolve gameplay/session signers back to registered wallet accounts.
+  - `ChunkClaims` now exposes `getChunkRuntimeState(...)`, `canEditWithRuntimeSigner(...)`, and `editorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
+  - `Marketplace` now exposes unified sale-state reads (`getSaleStateForChunk`, `getSaleStateForToken`) for runtime/UI integration.
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
 
 ## Architecture Notes
@@ -139,10 +143,12 @@ Do not describe this repo as if it already contains distributed networking or co
 - Early conflict resolution should prefer authority-local deterministic ordering / first-valid-edit-seen semantics instead of timestamp-trusting or CRDT-heavy designs.
 - Chunk ownership is expected to grant at least build rights, allow/deny/delegate permission control, and transfer/sale rights; claims should not expire by default, voluntary abandonment should remain possible, and chunk subdivision is deferred.
 - Runtime permission enforcement is expected to cache ownership/permission state from the orchestration layer, reject unauthorized edits, and bind important actions to runtime identities linked to wallet-backed ownership where relevant.
+- Runtime identity delegation is currently expected to use wallet-authorized expiring runtime-session keys recorded in `PlayerRegistry`; runtime code should resolve incoming signers through the registry before applying ownership/permission rules.
 - Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
-- The current concrete orchestration-layer implementation is NFT-backed: `OpenRealmPlayerRegistry` manages one active player identity per wallet + unique handles, `OpenRealmChunkClaims` mints one ERC721-like ownership token per claimed chunk and resets delegated-editor state on transfer, and `OpenRealmMarketplace` supports fixed-price listings plus English auctions with protocol-fee retention.
+- The current concrete orchestration-layer implementation is NFT-backed: `PlayerRegistry` manages one active player identity per wallet + unique handles, `ChunkClaims` mints one ERC721-like ownership token per claimed chunk and resets delegated-editor state on transfer, and `Marketplace` supports fixed-price listings plus English auctions with protocol-fee retention.
+- The current runtime-facing blockchain read model is: resolve signer/session via `PlayerRegistry`, read chunk ownership/permission state via `ChunkClaims.getChunkRuntimeState(...)`, and read active sale state via `Marketplace.getSaleStateForChunk(...)`.
 - Claimed chunks are expected to be economically meaningful even when voxel state is volatile; chunks nearer world origin `(0, 0)` are expected to be more valuable because they are more likely to stay alive due to denser node activity.
 - Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, add peer discovery/jump-node flow, implement region-of-interest topology + relay behavior, implement chunk responsibility/authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
 - `World` is the main composition root for world-side systems.

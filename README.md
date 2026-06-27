@@ -79,9 +79,9 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  Registry[OpenRealmPlayerRegistry]
-  Claims[OpenRealmChunkClaims\nERC721-like chunk ownership]
-  Market[OpenRealmMarketplace]
+  Registry[PlayerRegistry]
+  Claims[ChunkClaims\nERC721-like chunk ownership]
+  Market[Marketplace]
 
   Registry --> Claims
   Claims --> Market

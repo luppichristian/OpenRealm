@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./interfaces/IOpenRealmChunkClaims.sol";
+import "./interfaces/IChunkClaims.sol";
 import "./utils/Ownable.sol";
 
 error InvalidFeeBps(uint96 feeBps);
@@ -23,7 +23,7 @@ error AuctionNotEnded(uint256 auctionId);
 error AuctionHasExistingBids(uint256 auctionId);
 error NotRegisteredBuyer(address account);
 
-contract OpenRealmMarketplace is Ownable
+contract Marketplace is Ownable
 {
   struct Listing
   {
@@ -52,16 +52,39 @@ contract OpenRealmMarketplace is Ownable
     bool settled;
   }
 
+  // Unified read model so runtime/UI code does not need to inspect listings and auctions separately.
+  struct SaleState
+  {
+    uint8 saleKind;
+    uint256 saleId;
+    uint256 tokenId;
+    int32 x;
+    int32 y;
+    address seller;
+    bool sellerStillOwnsChunk;
+    bool active;
+    uint256 price;
+    uint256 reservePrice;
+    uint256 minBidIncrement;
+    uint64 endTime;
+    address highestBidder;
+    uint256 highestBid;
+  }
+
+  uint8 public constant SALE_KIND_NONE = 0;
+  uint8 public constant SALE_KIND_LISTING = 1;
+  uint8 public constant SALE_KIND_AUCTION = 2;
   uint96 public constant MAX_FEE_BPS = 2_500;
   uint64 public constant MIN_AUCTION_DURATION = 60;
 
-  IOpenRealmChunkClaims public immutable chunkClaims;
+  IChunkClaims public immutable chunkClaims;
   uint96 public feeBps;
   uint256 public nextListingId = 1;
   uint256 public nextAuctionId = 1;
 
   mapping(uint256 => Listing) public listings;
   mapping(uint256 => Auction) public auctions;
+  // We keep direct token -> active sale ids so reads stay cheap.
   mapping(uint256 => uint256) public activeListingByTokenId;
   mapping(uint256 => uint256) public activeAuctionByTokenId;
 
@@ -126,7 +149,7 @@ contract OpenRealmMarketplace is Ownable
       revert InvalidFeeBps(initialFeeBps);
     }
 
-    chunkClaims = IOpenRealmChunkClaims(chunkClaimsAddress);
+    chunkClaims = IChunkClaims(chunkClaimsAddress);
     feeBps = initialFeeBps;
   }
 
@@ -207,6 +230,7 @@ contract OpenRealmMarketplace is Ownable
     _requireSellerOwnsChunk(listing.seller, listing.x, listing.y, listingId);
     _deactivateListing(listing);
 
+    // The marketplace keeps a protocol fee and forwards the rest to the seller.
     uint256 feePaid = (listing.price * feeBps) / 10_000;
     uint256 sellerPayout = listing.price - feePaid;
 
@@ -288,6 +312,7 @@ contract OpenRealmMarketplace is Ownable
       revert AuctionAlreadyEnded(auctionId);
     }
 
+    // First bid must meet the reserve; later bids must beat the current one by the increment.
     uint256 minimumBid = auction.highestBid == 0
       ? auction.reservePrice
       : auction.highestBid + auction.minBidIncrement;
@@ -396,6 +421,43 @@ contract OpenRealmMarketplace is Ownable
     );
   }
 
+  function getSaleStateForChunk(int32 x, int32 y) external view returns (SaleState memory)
+  {
+    return _getSaleStateForTokenAndChunk(chunkClaims.tokenIdOfChunk(x, y), x, y);
+  }
+
+  function getSaleStateForToken(uint256 tokenId) external view returns (SaleState memory)
+  {
+    Listing storage listing = listings[activeListingByTokenId[tokenId]];
+    if (listing.active)
+    {
+      return _buildListingSaleState(listing);
+    }
+
+    Auction storage auction = auctions[activeAuctionByTokenId[tokenId]];
+    if (auction.active)
+    {
+      return _buildAuctionSaleState(auction);
+    }
+
+    return SaleState({
+      saleKind: SALE_KIND_NONE,
+      saleId: 0,
+      tokenId: tokenId,
+      x: 0,
+      y: 0,
+      seller: address(0),
+      sellerStillOwnsChunk: false,
+      active: false,
+      price: 0,
+      reservePrice: 0,
+      minBidIncrement: 0,
+      endTime: 0,
+      highestBidder: address(0),
+      highestBid: 0
+    });
+  }
+
   function withdrawFees(address payable recipient) external onlyOwner
   {
     uint256 amount = address(this).balance;
@@ -462,6 +524,78 @@ contract OpenRealmMarketplace is Ownable
   function _isAuctionActive(uint256 auctionId) private view returns (bool)
   {
     return auctionId != 0 && auctions[auctionId].active;
+  }
+
+  function _getSaleStateForTokenAndChunk(uint256 tokenId, int32 x, int32 y) private view returns (SaleState memory)
+  {
+    Listing storage listing = listings[activeListingByTokenId[tokenId]];
+    if (listing.active)
+    {
+      return _buildListingSaleState(listing);
+    }
+
+    Auction storage auction = auctions[activeAuctionByTokenId[tokenId]];
+    if (auction.active)
+    {
+      return _buildAuctionSaleState(auction);
+    }
+
+    return SaleState({
+      saleKind: SALE_KIND_NONE,
+      saleId: 0,
+      tokenId: tokenId,
+      x: x,
+      y: y,
+      seller: address(0),
+      sellerStillOwnsChunk: false,
+      active: false,
+      price: 0,
+      reservePrice: 0,
+      minBidIncrement: 0,
+      endTime: 0,
+      highestBidder: address(0),
+      highestBid: 0
+    });
+  }
+
+  function _buildListingSaleState(Listing storage listing) private view returns (SaleState memory)
+  {
+    return SaleState({
+      saleKind: SALE_KIND_LISTING,
+      saleId: listing.id,
+      tokenId: listing.tokenId,
+      x: listing.x,
+      y: listing.y,
+      seller: listing.seller,
+      sellerStillOwnsChunk: chunkClaims.ownerOf(listing.x, listing.y) == listing.seller,
+      active: listing.active,
+      price: listing.price,
+      reservePrice: 0,
+      minBidIncrement: 0,
+      endTime: 0,
+      highestBidder: address(0),
+      highestBid: 0
+    });
+  }
+
+  function _buildAuctionSaleState(Auction storage auction) private view returns (SaleState memory)
+  {
+    return SaleState({
+      saleKind: SALE_KIND_AUCTION,
+      saleId: auction.id,
+      tokenId: auction.tokenId,
+      x: auction.x,
+      y: auction.y,
+      seller: auction.seller,
+      sellerStillOwnsChunk: chunkClaims.ownerOf(auction.x, auction.y) == auction.seller,
+      active: auction.active,
+      price: 0,
+      reservePrice: auction.reservePrice,
+      minBidIncrement: auction.minBidIncrement,
+      endTime: auction.endTime,
+      highestBidder: auction.highestBidder,
+      highestBid: auction.highestBid
+    });
   }
 
   function _chunkKey(int32 x, int32 y) private pure returns (bytes32)

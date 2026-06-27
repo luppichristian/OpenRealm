@@ -7,9 +7,14 @@ error EmptyHandle();
 error AlreadyRegistered(address account);
 error HandleAlreadyTaken(string handle);
 error ProfileNotRegistered(address account);
+error InvalidRuntimeSession(address session);
+error InvalidRuntimeSessionExpiry(uint64 expiresAt);
+error RuntimeSessionAlreadyBound(address session, address account);
+error RuntimeSessionNotOwnedByAccount(address account, address session);
 
-contract OpenRealmPlayerRegistry is Ownable
+contract PlayerRegistry is Ownable
 {
+  // One long-lived on-chain player identity per wallet.
   struct PlayerProfile
   {
     uint256 playerId;
@@ -18,10 +23,21 @@ contract OpenRealmPlayerRegistry is Ownable
     bool active;
   }
 
+  struct RuntimeSession
+  {
+    // Wallet account that authorized this temporary runtime signer.
+    address account;
+    uint64 expiresAt;
+    bool active;
+  }
+
   uint256 public nextPlayerId = 1;
 
   mapping(address => PlayerProfile) private profiles;
+  // Handle lookups use the keccak256 hash so uniqueness checks stay cheap.
   mapping(bytes32 => address) private handleOwners;
+  // Runtime session key -> wallet account that authorized it.
+  mapping(address => RuntimeSession) private runtimeSessions;
 
   event PlayerRegistered(
     address indexed account,
@@ -38,6 +54,8 @@ contract OpenRealmPlayerRegistry is Ownable
     bytes32 indexed newHandleHash,
     string newHandle
   );
+  event RuntimeSessionAuthorized(address indexed account, address indexed session, uint64 expiresAt);
+  event RuntimeSessionRevoked(address indexed account, address indexed session);
 
   constructor(address initialOwner) Ownable(initialOwner)
   {
@@ -61,6 +79,7 @@ contract OpenRealmPlayerRegistry is Ownable
       revert HandleAlreadyTaken(handle);
     }
 
+    // Reuse the old player id if this wallet registered before, otherwise mint a new one.
     uint256 playerId = profile.playerId;
     if (playerId == 0)
     {
@@ -115,6 +134,42 @@ contract OpenRealmPlayerRegistry is Ownable
     emit PlayerHandleUpdated(msg.sender, profile.playerId, newHandleHash, newHandle);
   }
 
+  function authorizeRuntimeSession(address session, uint64 expiresAt) external
+  {
+    _requireActiveProfile(msg.sender);
+
+    if (session == address(0) || session == msg.sender)
+    {
+      revert InvalidRuntimeSession(session);
+    }
+    if (expiresAt <= block.timestamp)
+    {
+      revert InvalidRuntimeSessionExpiry(expiresAt);
+    }
+
+    // A live session key can only belong to one wallet at a time.
+    RuntimeSession storage existingSession = runtimeSessions[session];
+    if (existingSession.active && existingSession.expiresAt >= block.timestamp && existingSession.account != msg.sender)
+    {
+      revert RuntimeSessionAlreadyBound(session, existingSession.account);
+    }
+
+    runtimeSessions[session] = RuntimeSession({account: msg.sender, expiresAt: expiresAt, active: true});
+    emit RuntimeSessionAuthorized(msg.sender, session, expiresAt);
+  }
+
+  function revokeRuntimeSession(address session) external
+  {
+    RuntimeSession storage runtimeSession = runtimeSessions[session];
+    if (!runtimeSession.active || runtimeSession.account != msg.sender)
+    {
+      revert RuntimeSessionNotOwnedByAccount(msg.sender, session);
+    }
+
+    delete runtimeSessions[session];
+    emit RuntimeSessionRevoked(msg.sender, session);
+  }
+
   function getProfile(
     address account
   )
@@ -124,6 +179,12 @@ contract OpenRealmPlayerRegistry is Ownable
   {
     PlayerProfile storage profile = profiles[account];
     return (profile.playerId, profile.handle, profile.metadataURI, profile.active);
+  }
+
+  function getRuntimeSession(address session) external view returns (address account, uint64 expiresAt, bool active)
+  {
+    RuntimeSession storage runtimeSession = runtimeSessions[session];
+    return (runtimeSession.account, runtimeSession.expiresAt, runtimeSession.active);
   }
 
   function playerIdOf(address account) external view returns (uint256)
@@ -144,6 +205,27 @@ contract OpenRealmPlayerRegistry is Ownable
   function handleHashAvailable(bytes32 handleHash) external view returns (bool)
   {
     return handleOwners[handleHash] == address(0);
+  }
+
+  function resolveRuntimeAccount(address actor) external view returns (address account, bool isDirect, bool isRuntimeSession)
+  {
+    // First treat the signer as a normal registered wallet address.
+    PlayerProfile storage directProfile = profiles[actor];
+    if (directProfile.active)
+    {
+      return (actor, true, false);
+    }
+
+    // If it is not a wallet, try resolving it as a delegated runtime session key.
+    RuntimeSession storage runtimeSession = runtimeSessions[actor];
+    if (
+      runtimeSession.active && runtimeSession.expiresAt >= block.timestamp && profiles[runtimeSession.account].active
+    )
+    {
+      return (runtimeSession.account, false, true);
+    }
+
+    return (address(0), false, false);
   }
 
   function _requireActiveProfile(address account) private view returns (PlayerProfile storage profile)

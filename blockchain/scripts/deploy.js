@@ -63,14 +63,14 @@ async function main()
   console.log(`[deploy] owner=${ownerAddress}`);
   console.log(`[deploy] fee_bps=${feeBps}`);
 
-  const registry = await deployContract(compiledContracts, wallet, 'OpenRealmPlayerRegistry', [ownerAddress], { nonce });
+  const registry = await deployContract(compiledContracts, wallet, 'PlayerRegistry', [ownerAddress], { nonce });
   nonce += 1;
   console.log(`[deploy] registry=${await registry.getAddress()}`);
 
   const claims = await deployContract(
     compiledContracts,
     wallet,
-    'OpenRealmChunkClaims',
+    'ChunkClaims',
     [ownerAddress, await registry.getAddress()],
     { nonce }
   );
@@ -80,7 +80,7 @@ async function main()
   const marketplace = await deployContract(
     compiledContracts,
     wallet,
-    'OpenRealmMarketplace',
+    'Marketplace',
     [ownerAddress, await claims.getAddress(), feeBps],
     { nonce }
   );
@@ -100,9 +100,9 @@ async function main()
     feeBps,
     deployedAt: new Date().toISOString(),
     contracts: {
-      OpenRealmPlayerRegistry: await registry.getAddress(),
-      OpenRealmChunkClaims: await claims.getAddress(),
-      OpenRealmMarketplace: await marketplace.getAddress()
+      PlayerRegistry: await registry.getAddress(),
+      ChunkClaims: await claims.getAddress(),
+      Marketplace: await marketplace.getAddress()
     }
   };
 

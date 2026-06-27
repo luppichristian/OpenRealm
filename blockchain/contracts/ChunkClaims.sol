@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./interfaces/IOpenRealmPlayerRegistry.sol";
+import "./interfaces/IPlayerRegistry.sol";
 import "./utils/ERC721Lite.sol";
 import "./utils/Ownable.sol";
 
@@ -15,8 +15,9 @@ error UnauthorizedMarketplace(address account);
 error CannotDelegateToZeroAddress();
 error UnknownChunkToken(uint256 tokenId);
 
-contract OpenRealmChunkClaims is Ownable, ERC721Lite
+contract ChunkClaims is Ownable, ERC721Lite
 {
+  // Minimal on-chain data for one claimed chunk.
   struct ChunkClaim
   {
     uint256 tokenId;
@@ -25,16 +26,36 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
     uint64 claimedAt;
   }
 
+  // One-call view tailored for runtime permission checks.
+  struct RuntimeChunkState
+  {
+    bool claimed;
+    uint256 tokenId;
+    int32 x;
+    int32 y;
+    address owner;
+    uint256 ownerPlayerId;
+    uint64 claimedAt;
+    uint64 editorEpoch;
+    address resolvedActor;
+    bool actorRegistered;
+    bool actorCanEdit;
+    bool actorUsesRuntimeSession;
+  }
+
   int32 public constant MIN_CHUNK_COORD = -30000;
   int32 public constant MAX_CHUNK_COORD = 30000;
 
-  IOpenRealmPlayerRegistry public immutable registry;
+  IPlayerRegistry public immutable registry;
   address public marketplace;
   uint256 public nextTokenId = 1;
 
+  // chunk key -> NFT token id.
   mapping(bytes32 => uint256) private chunkTokenIds;
   mapping(uint256 => ChunkClaim) private claimsByTokenId;
+  // Incremented whenever cached permission data should be considered stale.
   mapping(uint256 => uint64) private editorEpochs;
+  // token id -> permission epoch -> editor wallet -> allowed.
   mapping(uint256 => mapping(uint64 => mapping(address => bool))) private delegatedEditors;
 
   event MarketplaceUpdated(address indexed marketplace);
@@ -81,7 +102,7 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
       revert NotRegisteredPlayer(address(0));
     }
 
-    registry = IOpenRealmPlayerRegistry(registryAddress);
+    registry = IPlayerRegistry(registryAddress);
   }
 
   function setMarketplace(address marketplaceAddress) external onlyOwner
@@ -100,6 +121,7 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
     _requireRegistered(msg.sender);
     _requireValidChunk(x, y);
 
+    // The chunk key is the canonical hash used for ownership lookups.
     bytes32 chunkKey = _chunkKey(x, y);
     if (chunkTokenIds[chunkKey] != 0)
     {
@@ -147,6 +169,7 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
 
     bytes32 chunkKey = _requireChunkOwner(msg.sender, x, y);
     uint256 tokenId = chunkTokenIds[chunkKey];
+    // Permissions live inside the current epoch so a transfer can invalidate them cheaply.
     uint64 editorEpoch = editorEpochs[tokenId];
     delegatedEditors[tokenId][editorEpoch][editor] = allowed;
 
@@ -213,7 +236,7 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
     return claim;
   }
 
-  function canEdit(int32 x, int32 y, address account) external view returns (bool)
+  function canEdit(int32 x, int32 y, address account) public view returns (bool)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
     if (tokenId == 0)
@@ -224,6 +247,72 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
     address chunkOwner = ownerOfToken(tokenId);
     uint64 editorEpoch = editorEpochs[tokenId];
     return chunkOwner == account || delegatedEditors[tokenId][editorEpoch][account];
+  }
+
+  function canEditWithRuntimeSigner(
+    int32 x,
+    int32 y,
+    address actor
+  )
+    external
+    view
+    returns (bool allowed, address resolvedActor, bool actorUsesRuntimeSession)
+  {
+    // Resolve the incoming signer first, because runtime code may use a delegated session key.
+    (resolvedActor, , actorUsesRuntimeSession) = registry.resolveRuntimeAccount(actor);
+    if (resolvedActor == address(0))
+    {
+      return (false, address(0), actorUsesRuntimeSession);
+    }
+
+    return (canEdit(x, y, resolvedActor), resolvedActor, actorUsesRuntimeSession);
+  }
+
+  function editorEpochOfChunk(int32 x, int32 y) external view returns (uint64)
+  {
+    uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];
+    if (tokenId == 0)
+    {
+      return 0;
+    }
+
+    return editorEpochs[tokenId];
+  }
+
+  function getChunkRuntimeState(int32 x, int32 y, address actor) external view returns (RuntimeChunkState memory state)
+  {
+    _requireValidChunk(x, y);
+
+    bytes32 chunkKey = _chunkKey(x, y);
+    uint256 tokenId = chunkTokenIds[chunkKey];
+    // The runtime may pass either a wallet or a temporary session signer here.
+    (address resolvedActor, , bool actorUsesRuntimeSession) = registry.resolveRuntimeAccount(actor);
+
+    state.x = x;
+    state.y = y;
+    state.resolvedActor = resolvedActor;
+    state.actorRegistered = resolvedActor != address(0);
+    state.actorUsesRuntimeSession = actorUsesRuntimeSession;
+
+    if (tokenId == 0)
+    {
+      return state;
+    }
+
+    ChunkClaim memory claim = claimsByTokenId[tokenId];
+    address chunkOwner = ownerOfToken(tokenId);
+    uint64 editorEpoch = editorEpochs[tokenId];
+
+    state.claimed = true;
+    state.tokenId = tokenId;
+    state.owner = chunkOwner;
+    state.ownerPlayerId = registry.playerIdOf(chunkOwner);
+    state.claimedAt = claim.claimedAt;
+    state.editorEpoch = editorEpoch;
+    // This is the core permission answer the runtime cares about for edit authorization.
+    state.actorCanEdit = resolvedActor != address(0) && (
+      chunkOwner == resolvedActor || delegatedEditors[tokenId][editorEpoch][resolvedActor]
+    );
   }
 
   function isRegisteredPlayer(address account) external view returns (bool)
@@ -251,6 +340,7 @@ contract OpenRealmChunkClaims is Ownable, ERC721Lite
 
     if (from != address(0) && to != address(0))
     {
+      // Any ownership change invalidates cached delegated-editor permissions.
       editorEpochs[tokenId] += 1;
     }
   }
