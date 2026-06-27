@@ -33,8 +33,11 @@ Do not describe this repo as if it already contains distributed networking or co
 
 ## Repository Layout
 
-- `node/Main.cpp`
-  - Minimal entrypoint. Owns the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
+- `node/targets/`
+  - Executable entry points for the distinct node types.
+  - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
+  - `Simulator.cpp` owns the headless simulator node entrypoint.
+  - `Relay.cpp` owns the lightweight relay node entrypoint placeholder.
 - `node/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
@@ -114,6 +117,10 @@ Do not describe this repo as if it already contains distributed networking or co
 
 ## Architecture Notes
 
+- The `project.bbs` native targets are split by node type:
+  - `openrealm_client` builds `openrealm-client` from `node/targets/Client.cpp` plus the client/world libraries.
+  - `openrealm_simulator` builds `openrealm-simulator` from `node/targets/Simulator.cpp` plus the world library.
+  - `openrealm_relay` builds `openrealm-relay` from `node/targets/Relay.cpp` plus the world library.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
@@ -256,12 +263,14 @@ These are not generic C++ preferences. They reflect the code that is already in 
 
 - Keep gameplay/world logic in `node/world/` unless it is clearly client glue.
 - Keep app startup, window lifecycle, rendering, meshing, audio, and high-level input flow in `node/client/`.
+- Keep executable `main()` functions under `node/targets/`; do not put target entrypoints back at the root of `node/`.
 - The repository root `README.md` is the main onboarding document and should describe both the native voxel engine/client foundation and the separate `blockchain/` orchestration workspace.
 - The root `README.md` may use Mermaid diagrams for architecture explanations; keep them aligned with the current repo state and avoid depicting the future decentralized runtime as already implemented.
-- When adding source files, check whether they belong under `node/client/` or `node/world/`; the current `project.bbs` glob picks up:
-  - `node/*.cpp`
+- When adding source files, check whether they belong under `node/client/` or `node/world/`; the current `project.bbs` native libraries pick up:
+  - `node/TaskManager.cpp`
   - `node/client/*.cpp`
   - `node/world/*.cpp`
+- Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
 - For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` / `npm run deploy:local` deploy the registry + claims + marketplace stack and write `deployments/<network>.json`.

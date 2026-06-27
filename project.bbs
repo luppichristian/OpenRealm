@@ -25,16 +25,67 @@ targets(
     cmake_target(TracyClient)
   )
 
-  console(
-    output(openrealm)
+  static_lib(
+    id(openrealm_node_world)
+    name("OpenRealm Node World")
     lang(cpp)
     stdver(c++20)
     additional_compile_args("/FS")
     dependencies(raylib tracy)
     units(
-      node/*.cpp
-      node/client/*.cpp
+      node/TaskManager.cpp
       node/world/*.cpp
+    )
+  )
+
+  static_lib(
+    id(openrealm_node_client)
+    name("OpenRealm Node Client")
+    lang(cpp)
+    stdver(c++20)
+    additional_compile_args("/FS")
+    dependencies(openrealm_node_world)
+    units(
+      node/client/*.cpp
+    )
+  )
+
+  console(
+    id(openrealm_client)
+    name("OpenRealm Client Node")
+    output(openrealm-client)
+    lang(cpp)
+    stdver(c++20)
+    additional_compile_args("/FS")
+    dependencies(openrealm_node_client)
+    units(
+      node/targets/Client.cpp
+    )
+  )
+
+  console(
+    id(openrealm_simulator)
+    name("OpenRealm Simulator Node")
+    output(openrealm-simulator)
+    lang(cpp)
+    stdver(c++20)
+    additional_compile_args("/FS")
+    dependencies(openrealm_node_world)
+    units(
+      node/targets/Simulator.cpp
+    )
+  )
+
+  console(
+    id(openrealm_relay)
+    name("OpenRealm Relay Node")
+    output(openrealm-relay)
+    lang(cpp)
+    stdver(c++20)
+    additional_compile_args("/FS")
+    dependencies(openrealm_node_world)
+    units(
+      node/targets/Relay.cpp
     )
   )
 )

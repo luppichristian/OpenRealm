@@ -1,5 +1,5 @@
-#include "TaskManager.h"
-#include "client/Game.h"
+#include "../TaskManager.h"
+#include "../client/Game.h"
 
 int main()
 {

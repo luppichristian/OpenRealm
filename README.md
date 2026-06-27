@@ -55,8 +55,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  Main[node/Main.cpp] --> TaskManager[TaskManager]
-  Main --> Game[client/Game]
+  ClientTarget[node/targets/Client.cpp] --> TaskManager[TaskManager]
+  ClientTarget --> Game[client/Game]
   Game --> ClientWorld[client/ClientWorld]
   Game --> World[world/World]
   Game --> ColorMenu[client/ColorMenu]
@@ -92,8 +92,11 @@ flowchart LR
 
 ## Repository layout
 
-### Root engine/client code
-- `node/Main.cpp` — minimal entrypoint; creates the shared `TaskManager` and starts `Game`
+### Root node/client code
+- `node/targets/` — executable entry points for client, simulator, and relay node types
+- `node/targets/Client.cpp` — client node entrypoint; creates the shared `TaskManager` and starts `Game`
+- `node/targets/Simulator.cpp` — simulator node entrypoint for headless world simulation work
+- `node/targets/Relay.cpp` — relay node entrypoint placeholder for the future lightweight relay role
 - `node/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
 - `node/world/` — headless simulation-side world systems, voxel data, player system, world events
 - `node/TaskManager.*` — generic background worker queue
@@ -124,7 +127,7 @@ From the repository root:
 
 ```bash
 bbs build
-bbs run -t openrealm
+bbs run -t openrealm_client
 ```
 
 Useful commands:
@@ -132,7 +135,9 @@ Useful commands:
 ```bash
 bbs info project
 bbs update --init-toolchain
-bbs build -t openrealm
+bbs build -t openrealm_client
+bbs build -t openrealm_simulator
+bbs build -t openrealm_relay
 ```
 
 ### Native dependencies
