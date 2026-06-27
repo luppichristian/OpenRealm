@@ -54,7 +54,7 @@ jobs:
           cache-dependency-path: blockchain/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build contract artifacts
         run: npm run build
@@ -127,7 +127,7 @@ jobs:
           cache-dependency-path: blockchain/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build contract artifacts
         run: npm run build
