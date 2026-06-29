@@ -45,7 +45,13 @@ Do not describe this repo as if it already contains distributed networking or co
   - `RuntimeNetClient.*` wraps the current ENet binary-packet scaffold.
 - `node/blockchain/`
   - Native-side orchestration-layer / JSON-RPC integration code.
+  - `SmartContract.h` is the common base for native contract wrappers; it centralizes shared RPC/address behavior.
+  - `Blockchain.*` is the unified native blockchain facade that owns the RPC client, wallet abstraction, and contract wrappers.
+  - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: RPC URL, contract addresses, and request timeouts.
+  - `BlockchainAbi.*` contains the current lightweight Ethereum ABI call encoding/decoding helpers used by the native wrappers.
+  - `Wallet.*` currently abstracts the selected wallet account plus optional runtime signer metadata for the native layer; transaction signing/submission is not implemented yet.
   - `BlockchainRpcClient.*` wraps JSON-RPC calls to the orchestration-layer backend.
+  - `GlobalParamsContract.*`, `PlayerRegistryContract.*`, `ChunkClaimsContract.*`, and `MarketplaceContract.*` are the native contract wrapper classes for the current runtime-facing orchestration reads; each wrapper keeps its own related POD read models in its header instead of using a shared blockchain-types header.
 - `node/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
