@@ -26,28 +26,34 @@ targets(
   )
 
   static_lib(
-    id(openrealm_node_world)
-    name("OpenRealm Node World")
-    lang(cpp)
-    stdver(c++20)
-    additional_compile_args("/FS")
-    dependencies(raylib tracy)
-    units(
-      node/TaskManager.cpp
-      node/world/*.cpp
+    id(httplib)
+    name("cpp-httplib")
+    repo(
+      link("https://github.com/yhirose/cpp-httplib.git")
+      tag("v0.20.1")
     )
+    cmake_target(httplib::httplib)
   )
 
   static_lib(
-    id(openrealm_node_client)
-    name("OpenRealm Node Client")
-    lang(cpp)
-    stdver(c++20)
-    additional_compile_args("/FS")
-    dependencies(openrealm_node_world)
-    units(
-      node/client/*.cpp
+    id(nlohmann_json)
+    name("nlohmann/json")
+    repo(
+      link("https://github.com/nlohmann/json.git")
+      tag("v3.11.3")
     )
+    cmake_target(nlohmann_json::nlohmann_json)
+  )
+
+  static_lib(
+    id(enet)
+    name("ENet")
+    repo(
+      link("https://github.com/lsalzman/enet.git")
+      tag("v1.3.18")
+    )
+    cmake_target(enet)
+    include_dirs(include)
   )
 
   console(
@@ -57,8 +63,11 @@ targets(
     lang(cpp)
     stdver(c++20)
     additional_compile_args("/FS")
-    dependencies(openrealm_node_client)
+    dependencies(raylib tracy)
     units(
+      node/TaskManager.cpp
+      node/world/*.cpp
+      node/client/*.cpp
       node/targets/Client.cpp
     )
   )
@@ -70,8 +79,10 @@ targets(
     lang(cpp)
     stdver(c++20)
     additional_compile_args("/FS")
-    dependencies(openrealm_node_world)
+    dependencies(raylib tracy)
     units(
+      node/TaskManager.cpp
+      node/world/*.cpp
       node/targets/Simulator.cpp
     )
   )
@@ -82,9 +93,18 @@ targets(
     output(openrealm-relay)
     lang(cpp)
     stdver(c++20)
-    additional_compile_args("/FS")
-    dependencies(openrealm_node_world)
+    additional_compile_args("/FS /IC:/Users/Utente/Developer/Utils/packages/enet_7e6e6b89/include")
+    include_dirs(
+      C:/Users/Utente/Developer/Utils/packages/enet_7e6e6b89/include
+    )
+    dependencies(raylib tracy httplib nlohmann_json enet)
+    link_libs(
+      ws2_32
+      winmm
+    )
     units(
+      node/runtime/*.cpp
+      node/blockchain/*.cpp
       node/targets/Relay.cpp
     )
   )
