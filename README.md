@@ -79,10 +79,13 @@ flowchart TD
 
 ```mermaid
 flowchart LR
+  Params[GlobalParams]
   Registry[PlayerRegistry]
   Claims[ChunkClaims\nERC721-like chunk ownership]
   Market[Marketplace]
 
+  Params --> Claims
+  Params --> Market
   Registry --> Claims
   Claims --> Market
   Market --> Fees[Protocol fee retention]
@@ -96,14 +99,16 @@ flowchart LR
 - `node/targets/` — executable entry points for client, simulator, and relay node types
 - `node/targets/Client.cpp` — client node entrypoint; creates the shared `TaskManager` and starts `Game`
 - `node/targets/Simulator.cpp` — simulator node entrypoint for headless world simulation work
-- `node/targets/Relay.cpp` — relay node entrypoint placeholder for the future lightweight relay role
+- `node/targets/Relay.cpp` — relay node entrypoint plus the current runtime-networking/blockchain integration smoke test
 - `node/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
 - `node/world/` — headless simulation-side world systems, voxel data, player system, world events
+- `node/runtime/` — node-to-node runtime transport code
+- `node/blockchain/` — orchestration-layer / JSON-RPC integration code used by native nodes
 - `node/TaskManager.*` — generic background worker queue
 - `assets/` — shaders and sounds used at runtime
 
 ### Blockchain orchestration workspace
-- `blockchain/contracts/` — Solidity contracts for registry, chunk claims, and marketplace
+- `blockchain/contracts/` — Solidity contracts for global params, registry, chunk claims, and marketplace
 - `blockchain/test/` — Mocha + Ganache contract tests
 - `blockchain/scripts/` — artifact generation and deployment scripts
 - `blockchain/specs/` — orchestration-layer notes/specs
@@ -143,6 +148,12 @@ bbs build -t openrealm_relay
 ### Native dependencies
 - `raylib`
 - `tracy`
+- `cpp-httplib`
+- `nlohmann/json`
+
+The current relay scaffold uses:
+- ENet for binary node-to-node packets
+- `cpp-httplib` + `nlohmann/json` only for blockchain JSON-RPC
 
 These are declared in `project.bbs`.
 

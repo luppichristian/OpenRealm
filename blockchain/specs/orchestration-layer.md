@@ -4,6 +4,21 @@ This document describes the current concrete orchestration-layer implementation 
 
 ## Contracts
 
+### `GlobalParams`
+Holds the shared on-chain tuning values that the runtime/UI can fetch later.
+
+Responsibilities:
+- expose the global chunk coordinate bounds
+- expose the minimum purchase price for a free chunk
+- expose marketplace-wide validation limits such as max fee bps and minimum auction duration
+
+Current parameters:
+- `MIN_CHUNK_COORD`
+- `MAX_CHUNK_COORD`
+- `MIN_CHUNK_PRICE`
+- `MAX_FEE_BPS`
+- `MIN_AUCTION_DURATION`
+
 ### `PlayerRegistry`
 Tracks wallet-linked player registration.
 
@@ -32,11 +47,12 @@ Runtime-facing surfaces:
 Tracks NFT-backed ownership of chunk coordinates.
 
 Responsibilities:
-- enforce coordinate bounds `[-30000, 30000]`
-- allow only registered players to claim chunks
+- enforce coordinate bounds through `GlobalParams`
+- allow only registered players to buy/claim free chunks
+- require the exact `MIN_CHUNK_PRICE` payment when claiming a free chunk
 - mint one ERC721-like ownership token per claimed chunk
 - map chunk coordinate -> token id -> owner
-- allow direct owner transfer and voluntary abandonment
+- allow direct owner transfer and voluntary abandonment with refund of the locked minimum chunk purchase price
 - allow owner-managed delegated editors
 - invalidate delegated-editor state on ownership transfer
 - expose a marketplace transfer hook for official sales
@@ -44,6 +60,7 @@ Responsibilities:
 
 Current assumptions:
 - ownership is NFT-backed through the local `ERC721Lite` utility, not plain storage
+- every newly claimed free chunk costs `MIN_CHUNK_PRICE`, which is kept in the contract and refunded if the owner later abandons the chunk back to the free pool
 - ownership does not imply runtime simulation authority
 - delegated editors are runtime-facing permission hints that can be read by off-chain systems
 - rich token metadata hosting is deferred
@@ -67,13 +84,13 @@ Runtime-facing surfaces:
 Runs the official chunk sale flow.
 
 Responsibilities:
-- create fixed-price listings
-- create English auctions with reserve price + minimum bid increment
+- create fixed-price listings at or above `MIN_CHUNK_PRICE`
+- create English auctions with reserve price + minimum bid increment, where the reserve is at or above `MIN_CHUNK_PRICE`
 - prevent simultaneous active sale modes for one chunk token
 - accept buyer payments and bids from registered players only
 - invalidate stale sales when ownership changes outside the marketplace
 - transfer ownership through `ChunkClaims`
-- retain a protocol fee in basis points
+- retain a protocol fee in basis points, capped by `GlobalParams.MAX_FEE_BPS`
 - allow owner withdrawal of accumulated fees
 - emit chunk-key/token-id-friendly events for indexers
 - expose unified sale-state reads for runtime/UI consumption
@@ -137,10 +154,11 @@ Deployment writes a record to `deployments/<network>.json`.
 1. player registration, handle uniqueness, handle release on Unregister
 2. runtime-session authorization and runtime-facing chunk permission resolution
 3. NFT-backed chunk claims and registered-only transfers
-4. fixed-price marketplace purchase + fee retention + sale-state query
-5. English auction bidding, sale-state reads, and settlement
-6. stale listing invalidation after direct token transfer
-7. rejection of unregistered buyers
+4. minimum-priced free chunk claims, abandonment refunds, and reclaiming a freed chunk
+5. fixed-price marketplace purchase + fee retention + sale-state query
+6. English auction bidding, sale-state reads, and settlement
+7. stale listing invalidation after direct token transfer
+8. rejection of unregistered buyers
 
 ## Deferred Items
 

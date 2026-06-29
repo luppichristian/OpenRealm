@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/IChunkClaims.sol";
+import "./interfaces/IGlobalParams.sol";
 import "./utils/Ownable.sol";
 
 error InvalidFeeBps(uint96 feeBps);
@@ -22,6 +23,7 @@ error AuctionAlreadyEnded(uint256 auctionId);
 error AuctionNotEnded(uint256 auctionId);
 error AuctionHasExistingBids(uint256 auctionId);
 error NotRegisteredBuyer(address account);
+error InvalidGlobalParams(address globalParams);
 
 contract Marketplace is Ownable
 {
@@ -74,10 +76,8 @@ contract Marketplace is Ownable
   uint8 public constant SALE_KIND_NONE = 0;
   uint8 public constant SALE_KIND_LISTING = 1;
   uint8 public constant SALE_KIND_AUCTION = 2;
-  uint96 public constant MAX_FEE_BPS = 2_500;
-  uint64 public constant MIN_AUCTION_DURATION = 60;
-
   IChunkClaims public immutable chunkClaims;
+  IGlobalParams public immutable globalParams;
   uint96 public feeBps;
   uint256 public nextListingId = 1;
   uint256 public nextAuctionId = 1;
@@ -142,20 +142,27 @@ contract Marketplace is Ownable
     uint256 feePaid
   );
 
-  constructor(address initialOwner, address chunkClaimsAddress, uint96 initialFeeBps) Ownable(initialOwner)
+  constructor(address initialOwner, address chunkClaimsAddress, address globalParamsAddress, uint96 initialFeeBps) Ownable(initialOwner)
   {
-    if (initialFeeBps > MAX_FEE_BPS)
+    if (globalParamsAddress == address(0))
+    {
+      revert InvalidGlobalParams(globalParamsAddress);
+    }
+
+    uint96 maxFeeBps = IGlobalParams(globalParamsAddress).MAX_FEE_BPS();
+    if (initialFeeBps > maxFeeBps)
     {
       revert InvalidFeeBps(initialFeeBps);
     }
 
     chunkClaims = IChunkClaims(chunkClaimsAddress);
+    globalParams = IGlobalParams(globalParamsAddress);
     feeBps = initialFeeBps;
   }
 
   function SetFeeBps(uint96 newFeeBps) external onlyOwner
   {
-    if (newFeeBps > MAX_FEE_BPS)
+    if (newFeeBps > globalParams.MAX_FEE_BPS())
     {
       revert InvalidFeeBps(newFeeBps);
     }
@@ -166,7 +173,7 @@ contract Marketplace is Ownable
 
   function CreateListing(int32 x, int32 y, uint256 price) external returns (uint256 listingId)
   {
-    if (price == 0)
+    if (price < globalParams.MIN_CHUNK_PRICE())
     {
       revert InvalidPrice(price);
     }
@@ -265,11 +272,11 @@ contract Marketplace is Ownable
     external
     returns (uint256 auctionId)
   {
-    if (reservePrice == 0)
+    if (reservePrice < globalParams.MIN_CHUNK_PRICE())
     {
       revert InvalidPrice(reservePrice);
     }
-    if (durationSeconds < MIN_AUCTION_DURATION)
+    if (durationSeconds < globalParams.MIN_AUCTION_DURATION())
     {
       revert InvalidAuctionDuration(durationSeconds);
     }

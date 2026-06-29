@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/IPlayerRegistry.sol";
+import "./interfaces/IGlobalParams.sol";
 import "./utils/ERC721Lite.sol";
 import "./utils/Ownable.sol";
 
@@ -11,9 +12,12 @@ error ChunkNotClaimed(int32 x, int32 y);
 error NotChunkOwner(address account, int32 x, int32 y);
 error NotRegisteredPlayer(address account);
 error InvalidMarketplace(address marketplace);
+error InvalidGlobalParams(address globalParams);
 error UnauthorizedMarketplace(address account);
 error CannotDelegateToZeroAddress();
 error UnknownChunkToken(uint256 tokenId);
+error IncorrectChunkPurchasePrice(uint256 expected, uint256 actual);
+error ChunkRefundFailed(address recipient, uint256 amount);
 
 contract ChunkClaims is Ownable, ERC721Lite
 {
@@ -43,16 +47,15 @@ contract ChunkClaims is Ownable, ERC721Lite
     bool actorUsesRuntimeSession;
   }
 
-  int32 public constant MIN_CHUNK_COORD = -30000;
-  int32 public constant MAX_CHUNK_COORD = 30000;
-
   IPlayerRegistry public immutable registry;
+  IGlobalParams public immutable globalParams;
   address public marketplace;
   uint256 public nextTokenId = 1;
 
   // chunk key -> NFT token id.
   mapping(bytes32 => uint256) private chunkTokenIds;
   mapping(uint256 => ChunkClaim) private claimsByTokenId;
+  mapping(uint256 => uint256) private claimPricesByTokenId;
   // Incremented whenever cached permission data should be considered stale.
   mapping(uint256 => uint64) private editorEpochs;
   // token id -> permission epoch -> editor wallet -> allowed.
@@ -93,7 +96,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     uint64 editorEpoch
   );
 
-  constructor(address initialOwner, address registryAddress)
+  constructor(address initialOwner, address registryAddress, address globalParamsAddress)
     Ownable(initialOwner)
     ERC721Lite("OpenRealm Chunk Claim", "ORCHUNK")
   {
@@ -101,8 +104,13 @@ contract ChunkClaims is Ownable, ERC721Lite
     {
       revert NotRegisteredPlayer(address(0));
     }
+    if (globalParamsAddress == address(0))
+    {
+      revert InvalidGlobalParams(globalParamsAddress);
+    }
 
     registry = IPlayerRegistry(registryAddress);
+    globalParams = IGlobalParams(globalParamsAddress);
   }
 
   function SetMarketplace(address marketplaceAddress) external onlyOwner
@@ -116,10 +124,16 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit MarketplaceUpdated(marketplaceAddress);
   }
 
-  function ClaimChunk(int32 x, int32 y) external returns (uint256 tokenId)
+  function ClaimChunk(int32 x, int32 y) external payable returns (uint256 tokenId)
   {
     _requireRegistered(msg.sender);
     _requireValidChunk(x, y);
+
+    uint256 claimPrice = globalParams.MIN_CHUNK_PRICE();
+    if (msg.value != claimPrice)
+    {
+      revert IncorrectChunkPurchasePrice(claimPrice, msg.value);
+    }
 
     // The chunk key is the canonical hash used for ownership lookups.
     bytes32 chunkKey = _chunkKey(x, y);
@@ -134,6 +148,7 @@ contract ChunkClaims is Ownable, ERC721Lite
     uint64 claimedAt = uint64(block.timestamp);
     chunkTokenIds[chunkKey] = tokenId;
     claimsByTokenId[tokenId] = ChunkClaim({tokenId: tokenId, x: x, y: y, claimedAt: claimedAt});
+    claimPricesByTokenId[tokenId] = claimPrice;
     _mint(msg.sender, tokenId);
 
     emit ChunkClaimed(msg.sender, tokenId, chunkKey, x, y, claimedAt);
@@ -144,11 +159,19 @@ contract ChunkClaims is Ownable, ERC721Lite
     bytes32 chunkKey = _requireChunkOwner(msg.sender, x, y);
     uint256 tokenId = chunkTokenIds[chunkKey];
     address previousOwner = ownerOfToken(tokenId);
+    uint256 claimPrice = claimPricesByTokenId[tokenId];
 
     delete chunkTokenIds[chunkKey];
     delete claimsByTokenId[tokenId];
+    delete claimPricesByTokenId[tokenId];
     editorEpochs[tokenId] += 1;
     _burn(tokenId);
+
+    (bool refundOk, ) = payable(previousOwner).call{value: claimPrice}("");
+    if (!refundOk)
+    {
+      revert ChunkRefundFailed(previousOwner, claimPrice);
+    }
 
     emit ChunkAbandoned(previousOwner, tokenId, chunkKey, x, y);
   }
@@ -356,9 +379,11 @@ contract ChunkClaims is Ownable, ERC721Lite
     emit ChunkTransferred(from, to, tokenId, _chunkKey(claim.x, claim.y), claim.x, claim.y, msg.sender);
   }
 
-  function _requireValidChunk(int32 x, int32 y) private pure
+  function _requireValidChunk(int32 x, int32 y) private view
   {
-    if (x < MIN_CHUNK_COORD || x > MAX_CHUNK_COORD || y < MIN_CHUNK_COORD || y > MAX_CHUNK_COORD)
+    int32 minChunkCoord = globalParams.MIN_CHUNK_COORD();
+    int32 maxChunkCoord = globalParams.MAX_CHUNK_COORD();
+    if (x < minChunkCoord || x > maxChunkCoord || y < minChunkCoord || y > maxChunkCoord)
     {
       revert InvalidChunkCoordinate(x, y);
     }

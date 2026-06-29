@@ -47,6 +47,11 @@ async function main()
   const privateKey = args['private-key'] || process.env.PRIVATE_KEY;
   const networkName = args.network || process.env.DEPLOY_NETWORK || 'custom';
   const ownerAddressArg = args.owner || process.env.OWNER_ADDRESS;
+  const minChunkCoord = Number(args['min-chunk-coord'] || process.env.MIN_CHUNK_COORD || '-30000');
+  const maxChunkCoord = Number(args['max-chunk-coord'] || process.env.MAX_CHUNK_COORD || '30000');
+  const minChunkPrice = BigInt(args['min-chunk-price-wei'] || process.env.MIN_CHUNK_PRICE_WEI || ethers.parseEther('0.01').toString());
+  const maxFeeBps = Number(args['max-fee-bps'] || process.env.MAX_FEE_BPS || '2500');
+  const minAuctionDuration = Number(args['min-auction-duration-seconds'] || process.env.MIN_AUCTION_DURATION_SECONDS || '60');
   const feeBps = Number(args['fee-bps'] || process.env.FEE_BPS || '500');
 
   ensureRequired(rpcUrl, 'Missing RPC URL. Pass --rpc <url> or set RPC_URL.');
@@ -61,17 +66,32 @@ async function main()
   console.log(`[deploy] network=${networkName}`);
   console.log(`[deploy] deployer=${wallet.address}`);
   console.log(`[deploy] owner=${ownerAddress}`);
+  console.log(`[deploy] min_chunk_coord=${minChunkCoord}`);
+  console.log(`[deploy] max_chunk_coord=${maxChunkCoord}`);
+  console.log(`[deploy] min_chunk_price_wei=${minChunkPrice}`);
+  console.log(`[deploy] max_fee_bps=${maxFeeBps}`);
+  console.log(`[deploy] min_auction_duration_seconds=${minAuctionDuration}`);
   console.log(`[deploy] fee_bps=${feeBps}`);
 
   const registry = await deployContract(compiledContracts, wallet, 'PlayerRegistry', [ownerAddress], { nonce });
   nonce += 1;
   console.log(`[deploy] registry=${await registry.getAddress()}`);
 
+  const globalParams = await deployContract(
+    compiledContracts,
+    wallet,
+    'GlobalParams',
+    [minChunkCoord, maxChunkCoord, minChunkPrice, maxFeeBps, minAuctionDuration],
+    { nonce }
+  );
+  nonce += 1;
+  console.log(`[deploy] global_params=${await globalParams.getAddress()}`);
+
   const claims = await deployContract(
     compiledContracts,
     wallet,
     'ChunkClaims',
-    [ownerAddress, await registry.getAddress()],
+    [ownerAddress, await registry.getAddress(), await globalParams.getAddress()],
     { nonce }
   );
   nonce += 1;
@@ -81,7 +101,7 @@ async function main()
     compiledContracts,
     wallet,
     'Marketplace',
-    [ownerAddress, await claims.getAddress(), feeBps],
+    [ownerAddress, await claims.getAddress(), await globalParams.getAddress(), feeBps],
     { nonce }
   );
   nonce += 1;
@@ -97,10 +117,18 @@ async function main()
     chainId,
     ownerAddress,
     deployerAddress: wallet.address,
+    globalParams: {
+      minChunkCoord,
+      maxChunkCoord,
+      minChunkPriceWei: minChunkPrice.toString(),
+      maxFeeBps,
+      minAuctionDurationSeconds: minAuctionDuration
+    },
     feeBps,
     deployedAt: new Date().toISOString(),
     contracts: {
       PlayerRegistry: await registry.getAddress(),
+      GlobalParams: await globalParams.getAddress(),
       ChunkClaims: await claims.getAddress(),
       Marketplace: await marketplace.getAddress()
     }

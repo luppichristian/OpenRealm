@@ -30,6 +30,8 @@ Do not describe this repo as if it already contains distributed networking or co
 - Build system: `bbs`
 - Windowing/render/input/audio: `raylib`
 - Profiling dependency: `tracy`
+- Runtime node-to-node networking scaffold: ENet binary UDP transport
+- Blockchain JSON-RPC integration scaffold: `cpp-httplib` + `nlohmann/json`
 
 ## Repository Layout
 
@@ -37,7 +39,13 @@ Do not describe this repo as if it already contains distributed networking or co
   - Executable entry points for the distinct node types.
   - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
   - `Simulator.cpp` owns the headless simulator node entrypoint.
-  - `Relay.cpp` owns the lightweight relay node entrypoint placeholder.
+  - `Relay.cpp` owns the lightweight relay node entrypoint and currently exercises the runtime-networking/blockchain integration scaffolds.
+- `node/runtime/`
+  - Runtime node-to-node transport code only.
+  - `RuntimeNetClient.*` wraps the current ENet binary-packet scaffold.
+- `node/blockchain/`
+  - Native-side orchestration-layer / JSON-RPC integration code.
+  - `BlockchainRpcClient.*` wraps JSON-RPC calls to the orchestration-layer backend.
 - `node/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
@@ -52,7 +60,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Converts mouse/keyboard input into `WorldEvent`s.
   - Draws HUD elements.
 - `node/client/ColorMenu.*`
-  - In-game voxel color picker UI.
+
 - `node/client/AssetManager.*`
   - Lazy asset cache for textures, shaders, shader locations, and sounds.
 - `node/client/SoundPlayer.*`
@@ -105,11 +113,14 @@ Do not describe this repo as if it already contains distributed networking or co
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
   - Includes Windows helper batch scripts at the `blockchain/` root for common local flows: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, `start-ganache-local.bat`, `deploy-local.bat`, and `verify-local.bat`.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
-  - Current key files include `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
+  - Current key files include `contracts/GlobalParams.sol`, `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
   - Blockchain contract/interface/file names intentionally omit the redundant `OpenRealm` prefix; prefer concise names like `PlayerRegistry`, `ChunkClaims`, `Marketplace`, `IPlayerRegistry`, and `IChunkClaims`.
+  - `GlobalParams` is the shared on-chain source for orchestration-layer tuning values such as chunk coordinate bounds, `MIN_CHUNK_PRICE`, max fee bps, and minimum auction duration; deployment records include both the contract address and the configured values for later runtime fetching.
   - `PlayerRegistry` now also owns expiring runtime-session authorizations so the upcoming runtime layer can resolve gameplay/session signers back to registered wallet accounts.
   - `ChunkClaims` now exposes `GetChunkRuntimeState(...)`, `CanEditWithRuntimeSigner(...)`, and `EditorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
+  - Free chunks are claimed by paying exactly `GlobalParams.MIN_CHUNK_PRICE`; abandoning a chunk refunds that locked minimum purchase price to the owner and returns the chunk to the free pool.
   - `Marketplace` now exposes unified sale-state reads (`GetSaleStateForChunk`, `GetSaleStateForToken`) for runtime/UI integration.
+  - Marketplace listings and auction reserve prices must be at least `GlobalParams.MIN_CHUNK_PRICE`; fee bps validation is capped by `GlobalParams.MAX_FEE_BPS`.
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
 - `.github/workflows/`
   - `orchestration-test.yml` runs the blockchain workspace build/tests on pushes and pull requests that touch orchestration-layer files.
@@ -118,9 +129,9 @@ Do not describe this repo as if it already contains distributed networking or co
 ## Architecture Notes
 
 - The `project.bbs` native targets are split by node type:
-  - `openrealm_client` builds `openrealm-client` from `node/targets/Client.cpp` plus the client/world libraries.
-  - `openrealm_simulator` builds `openrealm-simulator` from `node/targets/Simulator.cpp` plus the world library.
-  - `openrealm_relay` builds `openrealm-relay` from `node/targets/Relay.cpp` plus the world library.
+  - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
+  - `openrealm_simulator` builds `openrealm-simulator` from the world/task-manager folders plus `node/targets/Simulator.cpp`.
+  - `openrealm_relay` builds `openrealm-relay` from the runtime/blockchain folders plus `node/targets/Relay.cpp`.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
@@ -209,11 +220,8 @@ These are not generic C++ preferences. They reflect the code that is already in 
 
 - Do not introduce named namespaces by default.
 - The current codebase is intentionally flat at the symbol level.
-- The only namespace usage currently present is an anonymous namespace in `ChunkMesher.cpp` for file-local helpers.
-- For file-local helpers in `.cpp` files, prefer either:
-  - an anonymous namespace
-  - `static` free functions
 - Do not wrap the project in `namespace OpenRealm` unless the user explicitly asks for that refactor.
+- For new file-local helpers in `.cpp` files, prefer `static` free functions over introducing extra namespace blocks.
 
 ### Data Modeling
 
@@ -266,10 +274,11 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - Keep executable `main()` functions under `node/targets/`; do not put target entrypoints back at the root of `node/`.
 - The repository root `README.md` is the main onboarding document and should describe both the native voxel engine/client foundation and the separate `blockchain/` orchestration workspace.
 - The root `README.md` may use Mermaid diagrams for architecture explanations; keep them aligned with the current repo state and avoid depicting the future decentralized runtime as already implemented.
-- When adding source files, check whether they belong under `node/client/` or `node/world/`; the current `project.bbs` native libraries pick up:
-  - `node/TaskManager.cpp`
-  - `node/client/*.cpp`
-  - `node/world/*.cpp`
+- When adding source files, check which node target should own them; the current `project.bbs` console targets select source folders directly rather than routing through repo-local static libraries.
+- Current target folder mapping is:
+  - `openrealm_client`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, `node/targets/Client.cpp`
+  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
+  - `openrealm_relay`: `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.

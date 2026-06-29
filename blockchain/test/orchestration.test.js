@@ -8,6 +8,11 @@ describe('OpenRealm orchestration layer', function ()
   this.timeout(20000);
 
   let compiledContracts;
+  const MIN_CHUNK_PRICE = ethers.parseEther('0.01');
+  const MIN_CHUNK_COORD = -30000;
+  const MAX_CHUNK_COORD = 30000;
+  const MAX_FEE_BPS = 2500;
+  const MIN_AUCTION_DURATION = 60;
 
   async function deploy(contractName, signer, args = [])
   {
@@ -61,11 +66,27 @@ describe('OpenRealm orchestration layer', function ()
     const dave = await provider.getSigner(4);
 
     const registry = await deploy('PlayerRegistry', owner, [owner.address]);
-    const claims = await deploy('ChunkClaims', owner, [owner.address, await registry.getAddress()]);
-    const marketplace = await deploy('Marketplace', owner, [owner.address, await claims.getAddress(), 500]);
+    const globalParams = await deploy('GlobalParams', owner, [
+      MIN_CHUNK_COORD,
+      MAX_CHUNK_COORD,
+      MIN_CHUNK_PRICE,
+      MAX_FEE_BPS,
+      MIN_AUCTION_DURATION
+    ]);
+    const claims = await deploy('ChunkClaims', owner, [
+      owner.address,
+      await registry.getAddress(),
+      await globalParams.getAddress()
+    ]);
+    const marketplace = await deploy('Marketplace', owner, [
+      owner.address,
+      await claims.getAddress(),
+      await globalParams.getAddress(),
+      500
+    ]);
     await (await claims.connect(owner).SetMarketplace(await marketplace.getAddress())).wait();
 
-    return { provider, owner, alice, bob, carol, dave, registry, claims, marketplace };
+    return { provider, owner, alice, bob, carol, dave, registry, globalParams, claims, marketplace };
   }
 
   async function registerPlayers(registry, players)
@@ -74,6 +95,11 @@ describe('OpenRealm orchestration layer', function ()
     {
       await (await registry.connect(signer).Register(handle, `ipfs://${handle}`)).wait();
     }
+  }
+
+  async function getLatestBalance(provider, account)
+  {
+    return BigInt(await provider.send('eth_getBalance', [account, 'latest']));
   }
 
   it('registers players, enforces unique handles, and frees handles after unregistering', async function ()
@@ -107,7 +133,7 @@ describe('OpenRealm orchestration layer', function ()
     const { provider, alice, bob, carol, registry, claims } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
 
-    await (await claims.connect(alice).ClaimChunk(10, 12)).wait();
+    await (await claims.connect(alice).ClaimChunk(10, 12, { value: MIN_CHUNK_PRICE })).wait();
     await (await claims.connect(alice).SetChunkEditor(10, 12, bob.address, true)).wait();
 
     const latestBlock = await provider.getBlock('latest');
@@ -143,20 +169,24 @@ describe('OpenRealm orchestration layer', function ()
     assert.equal(expiredState.actorCanEdit, false);
   });
 
-  it('mints NFT-backed chunk claims and enforces registered ownership transfers', async function ()
+  it('mints NFT-backed paid chunk claims, enforces coordinate/payment rules, and keeps registered-only transfers', async function ()
   {
     const { alice, bob, carol, registry, claims } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
 
     await expectRevert(
-      () => claims.connect(carol).ClaimChunk(10, 12)
+      () => claims.connect(carol).ClaimChunk(10, 12, { value: MIN_CHUNK_PRICE })
     );
 
     await expectRevert(
-      () => claims.connect(alice).ClaimChunk(30001, 0)
+      () => claims.connect(alice).ClaimChunk(30001, 0, { value: MIN_CHUNK_PRICE })
     );
 
-    await (await claims.connect(alice).ClaimChunk(10, 12)).wait();
+    await expectRevert(
+      () => claims.connect(alice).ClaimChunk(10, 12)
+    );
+
+    await (await claims.connect(alice).ClaimChunk(10, 12, { value: MIN_CHUNK_PRICE })).wait();
     const tokenId = await claims.TokenIdOfChunk(10, 12);
 
     assert.equal(tokenId, 1n);
@@ -178,13 +208,18 @@ describe('OpenRealm orchestration layer', function ()
     );
   });
 
-  it('supports fixed-price sales for NFT chunk ownership, fee retention, and sale-state queries', async function ()
+  it('supports fixed-price sales above the minimum chunk price, fee retention, and sale-state queries', async function ()
   {
     const { owner, alice, bob, registry, claims, marketplace, provider } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
 
-    await (await claims.connect(alice).ClaimChunk(5, -8)).wait();
+    await (await claims.connect(alice).ClaimChunk(5, -8, { value: MIN_CHUNK_PRICE })).wait();
     const tokenId = await claims.TokenIdOfChunk(5, -8);
+
+    await expectRevert(
+      () => marketplace.connect(alice).CreateListing(5, -8, MIN_CHUNK_PRICE - 1n)
+    );
+
     await (await marketplace.connect(alice).CreateListing(5, -8, ethers.parseEther('1'))).wait();
 
     const listing = await marketplace.listings(1);
@@ -212,13 +247,18 @@ describe('OpenRealm orchestration layer', function ()
     await (await marketplace.connect(owner).WithdrawFees(owner.address)).wait();
   });
 
-  it('supports English auctions, refunds losing bids, settles to the winner, and exposes auction sale-state', async function ()
+  it('supports English auctions above the minimum chunk price, refunds losing bids, settles to the winner, and exposes auction sale-state', async function ()
   {
     const { provider, alice, bob, carol, registry, claims, marketplace } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob], ['carol', carol]]);
 
-    await (await claims.connect(alice).ClaimChunk(2, 3)).wait();
+    await (await claims.connect(alice).ClaimChunk(2, 3, { value: MIN_CHUNK_PRICE })).wait();
     const tokenId = await claims.TokenIdOfChunk(2, 3);
+
+    await expectRevert(
+      () => marketplace.connect(alice).CreateAuction(2, 3, MIN_CHUNK_PRICE - 1n, ethers.parseEther('0.1'), 120)
+    );
+
     await (await marketplace.connect(alice).CreateAuction(2, 3, ethers.parseEther('1'), ethers.parseEther('0.1'), 120)).wait();
 
     let auction = await marketplace.auctions(1);
@@ -259,7 +299,7 @@ describe('OpenRealm orchestration layer', function ()
     const { alice, bob, carol, registry, claims, marketplace } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
 
-    await (await claims.connect(alice).ClaimChunk(9, 9)).wait();
+    await (await claims.connect(alice).ClaimChunk(9, 9, { value: MIN_CHUNK_PRICE })).wait();
     const tokenId = await claims.TokenIdOfChunk(9, 9);
     await (await marketplace.connect(alice).CreateListing(9, 9, ethers.parseEther('0.25'))).wait();
 
@@ -277,5 +317,32 @@ describe('OpenRealm orchestration layer', function ()
 
     assert.equal((await marketplace.listings(1)).active, false);
     assert.equal(await claims.OwnerOf(9, 9), bob.address);
+  });
+
+  it('refunds the minimum chunk purchase price when abandoning and returns the chunk to the free pool', async function ()
+  {
+    const { provider, alice, bob, registry, claims } = await deployFixture();
+    await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
+
+    await (await claims.connect(alice).ClaimChunk(4, 4, { value: MIN_CHUNK_PRICE })).wait();
+    const tokenId = await claims.TokenIdOfChunk(4, 4);
+    const contractBalanceBeforeAbandon = await getLatestBalance(provider, await claims.getAddress());
+
+    const abandonTx = await claims.connect(alice).AbandonChunk(4, 4);
+    await abandonTx.wait();
+    const contractBalanceAfterAbandon = await getLatestBalance(provider, await claims.getAddress());
+
+    assert.equal(contractBalanceBeforeAbandon, MIN_CHUNK_PRICE);
+    assert.equal(contractBalanceAfterAbandon, 0n);
+    assert.equal(await claims.TokenIdOfChunk(4, 4), 0n);
+    assert.equal(await claims.OwnerOf(4, 4), ethers.ZeroAddress);
+
+    await expectRevert(
+      () => claims.connect(bob).ClaimChunk(4, 4)
+    );
+
+    await (await claims.connect(bob).ClaimChunk(4, 4, { value: MIN_CHUNK_PRICE })).wait();
+    assert.equal(await claims.OwnerOf(4, 4), bob.address);
+    assert.equal(await claims.TokenIdOfChunk(4, 4), tokenId + 1n);
   });
 });
