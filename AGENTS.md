@@ -288,6 +288,9 @@ These are not generic C++ preferences. They reflect the code that is already in 
   - `openrealm_relay`: `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
+- In `project.bbs`, do not hardcode machine-local package cache paths (for example `C:/Users/.../packages/...`); package include/link data must flow from declared `dependencies(...)` or from repo-relative/generated paths derived at build time.
+- In `project.bbs`, do not add raw MSVC-only flags such as `/FS` through `additional_compile_args(...)`; prefer dedicated `bbs` fields or toolchain-agnostic/clang-style arguments that `bbs` can translate for MSVC.
+- `openrealm_relay` now uses the `bbs` target-specific expansion token `$DEP(enet.package.resolved_dir)` to include ENet headers directly from the resolved package root (`.../include`) instead of using a repo-local header-sync workaround or hardcoded package cache path.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
 - For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` / `npm run deploy:local` deploy the registry + claims + marketplace stack and write `deployments/<network>.json`.
 - Root `.gitignore` should ignore native build outputs (`build/`, `dist/`, `gen/`), machine-local `bbs` files (`config.bbs`, `toolchain.bbs`), and generated blockchain workspace directories such as `blockchain/node_modules/`, `blockchain/artifacts/`, and `blockchain/deployments/`.
