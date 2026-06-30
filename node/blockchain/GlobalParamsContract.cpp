@@ -2,10 +2,15 @@
 
 #include <vector>
 
+static constexpr const char* SIGNATURE_MIN_CHUNK_COORD = "MIN_CHUNK_COORD()";
 static constexpr const char* SELECTOR_MIN_CHUNK_COORD = "0x57da7eaa";
+static constexpr const char* SIGNATURE_MAX_CHUNK_COORD = "MAX_CHUNK_COORD()";
 static constexpr const char* SELECTOR_MAX_CHUNK_COORD = "0xcef63fb2";
+static constexpr const char* SIGNATURE_MIN_CHUNK_PRICE = "MIN_CHUNK_PRICE()";
 static constexpr const char* SELECTOR_MIN_CHUNK_PRICE = "0xae1664c6";
+static constexpr const char* SIGNATURE_MAX_FEE_BPS = "MAX_FEE_BPS()";
 static constexpr const char* SELECTOR_MAX_FEE_BPS = "0xd55be8c6";
+static constexpr const char* SIGNATURE_MIN_AUCTION_DURATION = "MIN_AUCTION_DURATION()";
 static constexpr const char* SELECTOR_MIN_AUCTION_DURATION = "0xc2f50a7a";
 
 const char* GlobalParamsContract::GetContractName() const

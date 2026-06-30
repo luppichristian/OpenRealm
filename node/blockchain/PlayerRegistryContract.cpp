@@ -2,21 +2,37 @@
 
 #include <vector>
 
+static constexpr const char* SIGNATURE_OWNER = "owner()";
 static constexpr const char* SELECTOR_OWNER = "0x8da5cb5b";
+static constexpr const char* SIGNATURE_TRANSFER_OWNERSHIP = "transferOwnership(address)";
 static constexpr const char* SELECTOR_TRANSFER_OWNERSHIP = "0xf2fde38b";
+static constexpr const char* SIGNATURE_NEXT_PLAYER_ID = "nextPlayerId()";
 static constexpr const char* SELECTOR_NEXT_PLAYER_ID = "0x19863f35";
+static constexpr const char* SIGNATURE_REGISTER = "Register(string,string)";
 static constexpr const char* SELECTOR_REGISTER = "0xd6192e29";
+static constexpr const char* SIGNATURE_UNREGISTER = "Unregister()";
 static constexpr const char* SELECTOR_UNREGISTER = "0xe92553d2";
+static constexpr const char* SIGNATURE_UPDATE_METADATA_URI = "UpdateMetadataURI(string)";
 static constexpr const char* SELECTOR_UPDATE_METADATA_URI = "0x079bef11";
+static constexpr const char* SIGNATURE_UPDATE_HANDLE = "UpdateHandle(string)";
 static constexpr const char* SELECTOR_UPDATE_HANDLE = "0x65380f43";
+static constexpr const char* SIGNATURE_AUTHORIZE_RUNTIME_SESSION = "AuthorizeRuntimeSession(address,uint64)";
 static constexpr const char* SELECTOR_AUTHORIZE_RUNTIME_SESSION = "0x54294bde";
+static constexpr const char* SIGNATURE_REVOKE_RUNTIME_SESSION = "RevokeRuntimeSession(address)";
 static constexpr const char* SELECTOR_REVOKE_RUNTIME_SESSION = "0x4ef5b029";
+static constexpr const char* SIGNATURE_GET_PROFILE = "GetProfile(address)";
 static constexpr const char* SELECTOR_GET_PROFILE = "0xaae68574";
+static constexpr const char* SIGNATURE_GET_RUNTIME_SESSION = "GetRuntimeSession(address)";
 static constexpr const char* SELECTOR_GET_RUNTIME_SESSION = "0x1c2cf579";
+static constexpr const char* SIGNATURE_PLAYER_ID_OF = "PlayerIdOf(address)";
 static constexpr const char* SELECTOR_PLAYER_ID_OF = "0xc59c689c";
+static constexpr const char* SIGNATURE_IS_REGISTERED = "IsRegistered(address)";
 static constexpr const char* SELECTOR_IS_REGISTERED = "0xc224122d";
+static constexpr const char* SIGNATURE_ACCOUNT_FOR_HANDLE = "AccountForHandle(string)";
 static constexpr const char* SELECTOR_ACCOUNT_FOR_HANDLE = "0x28275aef";
+static constexpr const char* SIGNATURE_HANDLE_HASH_AVAILABLE = "HandleHashAvailable(bytes32)";
 static constexpr const char* SELECTOR_HANDLE_HASH_AVAILABLE = "0xd47f893e";
+static constexpr const char* SIGNATURE_RESOLVE_RUNTIME_ACCOUNT = "ResolveRuntimeAccount(address)";
 static constexpr const char* SELECTOR_RESOLVE_RUNTIME_ACCOUNT = "0x935fe2d1";
 
 const char* PlayerRegistryContract::GetContractName() const

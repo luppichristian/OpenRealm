@@ -2,32 +2,59 @@
 
 #include <vector>
 
+static constexpr const char* SIGNATURE_OWNER = "owner()";
 static constexpr const char* SELECTOR_OWNER = "0x8da5cb5b";
+static constexpr const char* SIGNATURE_TRANSFER_OWNERSHIP = "transferOwnership(address)";
 static constexpr const char* SELECTOR_TRANSFER_OWNERSHIP = "0xf2fde38b";
+static constexpr const char* SIGNATURE_SALE_KIND_NONE = "SALE_KIND_NONE()";
 static constexpr const char* SELECTOR_SALE_KIND_NONE = "0x83c147f3";
+static constexpr const char* SIGNATURE_SALE_KIND_LISTING = "SALE_KIND_LISTING()";
 static constexpr const char* SELECTOR_SALE_KIND_LISTING = "0x7fa454c2";
+static constexpr const char* SIGNATURE_SALE_KIND_AUCTION = "SALE_KIND_AUCTION()";
 static constexpr const char* SELECTOR_SALE_KIND_AUCTION = "0x60a0ab83";
+static constexpr const char* SIGNATURE_CHUNK_CLAIMS = "chunkClaims()";
 static constexpr const char* SELECTOR_CHUNK_CLAIMS = "0x08ec4b91";
+static constexpr const char* SIGNATURE_GLOBAL_PARAMS = "globalParams()";
 static constexpr const char* SELECTOR_GLOBAL_PARAMS = "0x3acf597c";
+static constexpr const char* SIGNATURE_FEE_BPS = "feeBps()";
 static constexpr const char* SELECTOR_FEE_BPS = "0x24a9d853";
+static constexpr const char* SIGNATURE_NEXT_LISTING_ID = "nextListingId()";
 static constexpr const char* SELECTOR_NEXT_LISTING_ID = "0xaaccf1ec";
+static constexpr const char* SIGNATURE_NEXT_AUCTION_ID = "nextAuctionId()";
 static constexpr const char* SELECTOR_NEXT_AUCTION_ID = "0xfc528482";
+static constexpr const char* SIGNATURE_LISTINGS = "listings(uint256)";
 static constexpr const char* SELECTOR_LISTINGS = "0xde74e57b";
+static constexpr const char* SIGNATURE_AUCTIONS = "auctions(uint256)";
 static constexpr const char* SELECTOR_AUCTIONS = "0x571a26a0";
+static constexpr const char* SIGNATURE_ACTIVE_LISTING_BY_TOKEN_ID = "activeListingByTokenId(uint256)";
 static constexpr const char* SELECTOR_ACTIVE_LISTING_BY_TOKEN_ID = "0x6cb0577f";
+static constexpr const char* SIGNATURE_ACTIVE_AUCTION_BY_TOKEN_ID = "activeAuctionByTokenId(uint256)";
 static constexpr const char* SELECTOR_ACTIVE_AUCTION_BY_TOKEN_ID = "0xffed6016";
+static constexpr const char* SIGNATURE_SET_FEE_BPS = "SetFeeBps(uint96)";
 static constexpr const char* SELECTOR_SET_FEE_BPS = "0x5ae401c7";
+static constexpr const char* SIGNATURE_CREATE_LISTING = "CreateListing(int32,int32,uint256)";
 static constexpr const char* SELECTOR_CREATE_LISTING = "0xc269d4af";
+static constexpr const char* SIGNATURE_CANCEL_LISTING = "CancelListing(uint256)";
 static constexpr const char* SELECTOR_CANCEL_LISTING = "0xa5a50019";
+static constexpr const char* SIGNATURE_INVALIDATE_STALE_LISTING = "InvalidateStaleListing(uint256)";
 static constexpr const char* SELECTOR_INVALIDATE_STALE_LISTING = "0xd7f86764";
+static constexpr const char* SIGNATURE_PURCHASE_LISTING = "PurchaseListing(uint256)";
 static constexpr const char* SELECTOR_PURCHASE_LISTING = "0x400a1fc7";
+static constexpr const char* SIGNATURE_CREATE_AUCTION = "CreateAuction(int32,int32,uint256,uint256,uint64)";
 static constexpr const char* SELECTOR_CREATE_AUCTION = "0xdcb7fc3c";
+static constexpr const char* SIGNATURE_PLACE_AUCTION_BID = "PlaceAuctionBid(uint256)";
 static constexpr const char* SELECTOR_PLACE_AUCTION_BID = "0x2c3a46e7";
+static constexpr const char* SIGNATURE_CANCEL_AUCTION = "CancelAuction(uint256)";
 static constexpr const char* SELECTOR_CANCEL_AUCTION = "0xbea0e66c";
+static constexpr const char* SIGNATURE_INVALIDATE_STALE_AUCTION = "InvalidateStaleAuction(uint256)";
 static constexpr const char* SELECTOR_INVALIDATE_STALE_AUCTION = "0x30ef37f2";
+static constexpr const char* SIGNATURE_SETTLE_AUCTION = "SettleAuction(uint256)";
 static constexpr const char* SELECTOR_SETTLE_AUCTION = "0x03af424b";
+static constexpr const char* SIGNATURE_GET_SALE_STATE_FOR_CHUNK = "GetSaleStateForChunk(int32,int32)";
 static constexpr const char* SELECTOR_GET_SALE_STATE_FOR_CHUNK = "0x6a0551eb";
+static constexpr const char* SIGNATURE_GET_SALE_STATE_FOR_TOKEN = "GetSaleStateForToken(uint256)";
 static constexpr const char* SELECTOR_GET_SALE_STATE_FOR_TOKEN = "0x43fbccfc";
+static constexpr const char* SIGNATURE_WITHDRAW_FEES = "WithdrawFees(address)";
 static constexpr const char* SELECTOR_WITHDRAW_FEES = "0xd3719f04";
 
 static ListingState DecodeListing(const std::vector<std::string>& words)
