@@ -117,6 +117,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
+  - The local Solidity helper at `blockchain/test/helpers/compileContracts.js` should pin `evmVersion: 'shanghai'` so bytecode stays compatible with the Ganache version used by this repo's local verification flow.
   - Includes Windows helper batch scripts at the `blockchain/` root for common local flows: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, `start-ganache-local.bat`, `deploy-local.bat`, and `verify-local.bat`.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
   - Current key files include `contracts/GlobalParams.sol`, `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.

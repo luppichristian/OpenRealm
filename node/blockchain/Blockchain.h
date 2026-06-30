@@ -15,7 +15,9 @@ class Blockchain
 
   const BlockchainConfig& GetConfig() const;
   const Wallet& GetWallet() const;
+  Wallet& GetWallet();
   const BlockchainRpcClient& GetRpcClient() const;
+  BlockchainRpcClient& GetRpcClient();
 
   GlobalParamsContract& GetGlobalParams();
   const GlobalParamsContract& GetGlobalParams() const;

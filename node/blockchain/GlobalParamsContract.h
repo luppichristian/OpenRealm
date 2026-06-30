@@ -20,6 +20,11 @@ class GlobalParamsContract : public SmartContract
  public:
   using SmartContract::SmartContract;
 
+  int32_t GetMinChunkCoord() const;
+  int32_t GetMaxChunkCoord() const;
+  std::string GetMinChunkPrice() const;
+  uint64_t GetMaxFeeBps() const;
+  uint64_t GetMinAuctionDuration() const;
   GlobalParamsState GetState() const;
 
  protected:

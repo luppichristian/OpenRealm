@@ -43,6 +43,9 @@ function compileContracts()
         enabled: true,
         runs: 200
       },
+      // Keep bytecode compatible with the locally supported Ganache hardfork.
+      // Newer solc defaults can emit opcodes that Ganache v7.9.2 (Shanghai) does not execute.
+      evmVersion: 'shanghai',
       outputSelection: {
         '*': {
           '*': ['abi', 'evm.bytecode.object']

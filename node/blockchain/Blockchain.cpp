@@ -6,10 +6,10 @@ Blockchain::Blockchain(BlockchainConfig blockchainConfig, Wallet connectedWallet
     : config(std::move(blockchainConfig))
     , wallet(std::move(connectedWallet))
     , rpcClient(config)
-    , globalParams(&rpcClient, config.globalParamsAddress)
-    , playerRegistry(&rpcClient, config.playerRegistryAddress)
-    , chunkClaims(&rpcClient, config.chunkClaimsAddress)
-    , marketplace(&rpcClient, config.marketplaceAddress)
+    , globalParams(&rpcClient, &wallet, config.globalParamsAddress)
+    , playerRegistry(&rpcClient, &wallet, config.playerRegistryAddress)
+    , chunkClaims(&rpcClient, &wallet, config.chunkClaimsAddress)
+    , marketplace(&rpcClient, &wallet, config.marketplaceAddress)
 {
 }
 
@@ -23,7 +23,17 @@ const Wallet& Blockchain::GetWallet() const
   return wallet;
 }
 
+Wallet& Blockchain::GetWallet()
+{
+  return wallet;
+}
+
 const BlockchainRpcClient& Blockchain::GetRpcClient() const
+{
+  return rpcClient;
+}
+
+BlockchainRpcClient& Blockchain::GetRpcClient()
 {
   return rpcClient;
 }
@@ -70,5 +80,5 @@ const MarketplaceContract& Blockchain::GetMarketplace() const
 
 std::string Blockchain::DescribeStack() const
 {
-  return std::string("blockchain facade over ") + rpcClient.DescribeStack();
+  return "blockchain facade over " + rpcClient.DescribeStack();
 }

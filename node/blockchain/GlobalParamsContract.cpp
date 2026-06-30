@@ -13,33 +13,64 @@ const char* GlobalParamsContract::GetContractName() const
   return "GlobalParams";
 }
 
+int32_t GlobalParamsContract::GetMinChunkCoord() const
+{
+  std::vector<std::string> words = {};
+  if (!CallWords(BuildBlockchainCallData(SELECTOR_MIN_CHUNK_COORD, {}), &words) || words.empty())
+  {
+    return 0;
+  }
+  return DecodeBlockchainWordAsInt32(words[0]);
+}
+
+int32_t GlobalParamsContract::GetMaxChunkCoord() const
+{
+  std::vector<std::string> words = {};
+  if (!CallWords(BuildBlockchainCallData(SELECTOR_MAX_CHUNK_COORD, {}), &words) || words.empty())
+  {
+    return 0;
+  }
+  return DecodeBlockchainWordAsInt32(words[0]);
+}
+
+std::string GlobalParamsContract::GetMinChunkPrice() const
+{
+  std::vector<std::string> words = {};
+  if (!CallWords(BuildBlockchainCallData(SELECTOR_MIN_CHUNK_PRICE, {}), &words) || words.empty())
+  {
+    return {};
+  }
+  return DecodeBlockchainWordAsUintHex(words[0]);
+}
+
+uint64_t GlobalParamsContract::GetMaxFeeBps() const
+{
+  std::vector<std::string> words = {};
+  if (!CallWords(BuildBlockchainCallData(SELECTOR_MAX_FEE_BPS, {}), &words) || words.empty())
+  {
+    return 0;
+  }
+  return DecodeBlockchainWordAsUint64(words[0]);
+}
+
+uint64_t GlobalParamsContract::GetMinAuctionDuration() const
+{
+  std::vector<std::string> words = {};
+  if (!CallWords(BuildBlockchainCallData(SELECTOR_MIN_AUCTION_DURATION, {}), &words) || words.empty())
+  {
+    return 0;
+  }
+  return DecodeBlockchainWordAsUint64(words[0]);
+}
+
 GlobalParamsState GlobalParamsContract::GetState() const
 {
   GlobalParamsState state = {};
-
-  std::string minChunkCoordHex = {};
-  std::string maxChunkCoordHex = {};
-  std::string minChunkPriceHex = {};
-  std::string maxFeeBpsHex = {};
-  std::string minAuctionDurationHex = {};
-  if (!Call(BuildBlockchainCallData(SELECTOR_MIN_CHUNK_COORD, {}), &minChunkCoordHex)) return state;
-  if (!Call(BuildBlockchainCallData(SELECTOR_MAX_CHUNK_COORD, {}), &maxChunkCoordHex)) return state;
-  if (!Call(BuildBlockchainCallData(SELECTOR_MIN_CHUNK_PRICE, {}), &minChunkPriceHex)) return state;
-  if (!Call(BuildBlockchainCallData(SELECTOR_MAX_FEE_BPS, {}), &maxFeeBpsHex)) return state;
-  if (!Call(BuildBlockchainCallData(SELECTOR_MIN_AUCTION_DURATION, {}), &minAuctionDurationHex)) return state;
-
-  std::vector<std::string> minChunkCoordWords = SplitBlockchainWords(minChunkCoordHex);
-  std::vector<std::string> maxChunkCoordWords = SplitBlockchainWords(maxChunkCoordHex);
-  std::vector<std::string> minChunkPriceWords = SplitBlockchainWords(minChunkPriceHex);
-  std::vector<std::string> maxFeeBpsWords = SplitBlockchainWords(maxFeeBpsHex);
-  std::vector<std::string> minAuctionDurationWords = SplitBlockchainWords(minAuctionDurationHex);
-  if (minChunkCoordWords.empty() || maxChunkCoordWords.empty() || minChunkPriceWords.empty() || maxFeeBpsWords.empty() || minAuctionDurationWords.empty()) return state;
-
-  state.available = true;
-  state.minChunkCoord = DecodeBlockchainWordAsInt32(minChunkCoordWords[0]);
-  state.maxChunkCoord = DecodeBlockchainWordAsInt32(maxChunkCoordWords[0]);
-  state.minChunkPrice = DecodeBlockchainWordAsUintHex(minChunkPriceWords[0]);
-  state.maxFeeBps = DecodeBlockchainWordAsUint64(maxFeeBpsWords[0]);
-  state.minAuctionDuration = DecodeBlockchainWordAsUint64(minAuctionDurationWords[0]);
+  state.minChunkCoord = GetMinChunkCoord();
+  state.maxChunkCoord = GetMaxChunkCoord();
+  state.minChunkPrice = GetMinChunkPrice();
+  state.maxFeeBps = GetMaxFeeBps();
+  state.minAuctionDuration = GetMinAuctionDuration();
+  state.available = !state.minChunkPrice.empty();
   return state;
 }

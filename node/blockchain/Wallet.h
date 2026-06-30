@@ -17,9 +17,11 @@ class Wallet
 
   const WalletState& GetState() const;
   bool IsConnected() const;
+  bool CanTransact() const;
   const std::string& GetAccountAddress() const;
   const std::string& GetRuntimeSignerAddress() const;
   std::string GetActiveSignerAddress() const;
+  std::string GetTransactionSenderAddress() const;
   std::string DescribeWallet() const;
 
  private:
