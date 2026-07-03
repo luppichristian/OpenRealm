@@ -7,6 +7,14 @@
 class VoxelWorld
 {
  public:
+  struct MovementSweep
+  {
+    Vector3 minBounds = {};
+    Vector3 maxBounds = {};
+    int axisIndex = 0;
+    float delta = 0.0f;
+  };
+
   void Initialize();
   void Shutdown();
   void Seed();
@@ -17,7 +25,7 @@ class VoxelWorld
 
   bool IsAabbCollidingWithVoxels(Vector3 minBounds, Vector3 maxBounds) const;
   bool IsPlayerColliding(Vector3 playerPosition) const;
-  float ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBounds, int axisIndex, float delta, bool* collided) const;
+  float ClampMovementAgainstVoxels(const MovementSweep& sweep, bool* collided) const;
   CollisionMoveResult MovePlayerAlongAxis(Vector3* playerPosition, int axisIndex, float delta) const;
   void ResolvePlayerPenetration(Vector3* playerPosition) const;
   VoxelRaycastHit Raycast(Vector3 origin, Vector3 direction, float maxDistance) const;

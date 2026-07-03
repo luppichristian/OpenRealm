@@ -79,6 +79,8 @@ void PlayerSystem::ResetFrameInputs()
 
 void PlayerSystem::ProcessEvent(const WorldEvent& event)
 {
+  // World events are the only write path into per-frame input, so simulation can
+  // stay deterministic once the queue has been assembled by the caller.
   switch (event.type)
   {
     case WorldEventType::Spawn:
@@ -142,6 +144,7 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
     player->jumpedSinceGrounded = true;
   }
 
+  // Movement intentionally ignores pitch so looking up/down never tilts the walk plane.
   Vector3 movementForward = {cosf(player->yaw), sinf(player->yaw), 0.0f};
   Vector3 movementRight = {movementForward.y, -movementForward.x, 0.0f};
   Vector3 movement = Vector3Add(Vector3Scale(movementForward, player->frameInput.moveY), Vector3Scale(movementRight, player->frameInput.moveX));
@@ -184,25 +187,22 @@ void PlayerSystem::UpdatePlayerMovement(PlayerState* player, float frameTime, Vo
   if (!voxelWorld.IsPlayerColliding(player->position) && player->position.z <= GROUND_HEIGHT + 0.001f) player->isGrounded = true;
 }
 
-void PlayerSystem::GetCameraVectors(const PlayerState* player, Vector3* cameraPosition, Vector3* cameraForward, Vector3* cameraRight, Vector3* cameraUp) const
+PlayerSystem::CameraVectors PlayerSystem::BuildCameraVectors(const PlayerState* player) const
 {
-  *cameraPosition = {player->position.x, player->position.y, player->position.z + EYE_HEIGHT};
-  *cameraForward = {cosf(player->pitch) * cosf(player->yaw), cosf(player->pitch) * sinf(player->yaw), sinf(player->pitch)};
-  *cameraRight = Vector3Normalize(Vector3CrossProduct(*cameraForward, WORLD_UP));
-  *cameraUp = Vector3Normalize(Vector3CrossProduct(*cameraRight, *cameraForward));
+  CameraVectors camera = {};
+  camera.position = {player->position.x, player->position.y, player->position.z + EYE_HEIGHT};
+  camera.forward = {cosf(player->pitch) * cosf(player->yaw), cosf(player->pitch) * sinf(player->yaw), sinf(player->pitch)};
+  camera.right = Vector3Normalize(Vector3CrossProduct(camera.forward, WORLD_UP));
+  camera.up = Vector3Normalize(Vector3CrossProduct(camera.right, camera.forward));
+  return camera;
 }
 
 void PlayerSystem::HandlePlayerVoxelAction(PlayerState* player, VoxelWorld& voxelWorld) const
 {
   if (!player->frameInput.placeRequested) return;
 
-  Vector3 cameraPosition;
-  Vector3 cameraForward;
-  Vector3 cameraRight;
-  Vector3 cameraUp;
-  GetCameraVectors(player, &cameraPosition, &cameraForward, &cameraRight, &cameraUp);
-
-  VoxelRaycastHit voxelHit = voxelWorld.Raycast(cameraPosition, cameraForward, VOXEL_EDIT_DISTANCE);
+  CameraVectors camera = BuildCameraVectors(player);
+  VoxelRaycastHit voxelHit = voxelWorld.Raycast(camera.position, camera.forward, VOXEL_EDIT_DISTANCE);
 
   if (player->frameInput.placeVoxelValue == 0)
   {

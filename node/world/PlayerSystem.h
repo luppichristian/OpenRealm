@@ -2,12 +2,21 @@
 
 #include <array>
 
+#include "../Base.h"
 #include "VoxelWorld.h"
 #include "WorldEvent.h"
 
 class PlayerSystem
 {
  public:
+  struct CameraVectors
+  {
+    Vector3 position = {};
+    Vector3 forward = {};
+    Vector3 right = {};
+    Vector3 up = {};
+  };
+
   void Initialize();
   void ResetFrameInputs();
   void ProcessEvent(const WorldEvent& event);
@@ -16,7 +25,7 @@ class PlayerSystem
   PlayerState* FindPlayer(int playerId);
   const PlayerState* FindPlayer(int playerId) const;
   const std::array<PlayerState, MAX_PLAYERS>& GetPlayers() const;
-  void GetCameraVectors(const PlayerState* player, Vector3* cameraPosition, Vector3* cameraForward, Vector3* cameraRight, Vector3* cameraUp) const;
+  CameraVectors BuildCameraVectors(const PlayerState* player) const;
 
  private:
   PlayerState* SpawnPlayer(int playerId, Vector3 position, float yaw, float pitch);

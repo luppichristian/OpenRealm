@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 #include "../blockchain/Blockchain.h"
@@ -29,12 +30,9 @@ int main()
   blockchainConfig.chunkClaimsAddress = "0x0000000000000000000000000000000000000000";
   blockchainConfig.marketplaceAddress = "0x0000000000000000000000000000000000000000";
 
-  WalletState walletState = {};
-  walletState.connected = true;
-  walletState.accountAddress = "0x0000000000000000000000000000000000000001";
-  walletState.runtimeSignerAddress = "0x0000000000000000000000000000000000000001";
-
-  Blockchain blockchain(blockchainConfig, Wallet(walletState));
+  Wallet wallet("0x0000000000000000000000000000000000000001",
+                "0x0000000000000000000000000000000000000001");
+  Blockchain blockchain(blockchainConfig, std::move(wallet));
 
   const std::string chainId = blockchain.GetRpcClient().EthChainId();
   GlobalParamsState globalParamsState = blockchain.GetGlobalParams().GetState();

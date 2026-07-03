@@ -31,6 +31,9 @@ void VoxelWorld::ResetChunkLookup()
 int VoxelWorld::FindChunkIndex(int chunkX, int chunkY) const
 {
   if (!AreChunkCoordsInBounds(chunkX, chunkY)) return -1;
+
+  // Chunk lookup uses open addressing so steady-state random access stays O(1) without
+  // allocating per-chunk nodes or paying map overhead in the hot voxel path.
   unsigned int slot = HashChunkCoords(chunkX, chunkY);
   for (int probe = 0; probe < CHUNK_LOOKUP_CAPACITY; probe++)
   {
@@ -151,6 +154,8 @@ void VoxelWorld::MarkVoxelNeighborsDirty(int voxelX, int voxelY, int voxelZ)
   int localY = PositiveModulo(voxelY, CHUNK_SIZE_XZ);
   int sectionHeight = GetChunkSectionVoxelHeight(sectionIndex);
 
+  // Neighbor sections share visible faces across chunk/section borders, so edits at the edge
+  // need to invalidate every touching mesh snapshot, not just the voxel's owning section.
   MarkChunkSectionDirtyByCoords(chunkX, chunkY, sectionIndex);
   if (localX == 0) MarkChunkSectionDirtyByCoords(chunkX - 1, chunkY, sectionIndex);
   if (localX == CHUNK_SIZE_XZ - 1) MarkChunkSectionDirtyByCoords(chunkX + 1, chunkY, sectionIndex);
@@ -217,24 +222,26 @@ bool VoxelWorld::IsPlayerColliding(Vector3 playerPosition) const
   return IsAabbCollidingWithVoxels(minBounds, maxBounds);
 }
 
-float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBounds, int axisIndex, float delta, bool* collided) const
+float VoxelWorld::ClampMovementAgainstVoxels(const MovementSweep& sweep, bool* collided) const
 {
   const float epsilon = 0.001f;
-  if (delta == 0.0f) return 0.0f;
+  if (sweep.delta == 0.0f) return 0.0f;
 
-  float allowedDelta = delta;
+  // Sweep the player bounds one axis at a time so collision resolution stays deterministic
+  // and the caller can preserve simple grounded / wall-hit semantics.
+  float allowedDelta = sweep.delta;
 
-  if (axisIndex == 0)
+  if (sweep.axisIndex == 0)
   {
-    int minVoxelY = (int)floorf(minBounds.y / BLOCK_GRID_SIZE);
-    int maxVoxelY = (int)floorf((maxBounds.y - epsilon) / BLOCK_GRID_SIZE);
-    int minVoxelZ = (int)floorf(minBounds.z / BLOCK_GRID_SIZE);
-    int maxVoxelZ = (int)floorf((maxBounds.z - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelY = (int)floorf(sweep.minBounds.y / BLOCK_GRID_SIZE);
+    int maxVoxelY = (int)floorf((sweep.maxBounds.y - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelZ = (int)floorf(sweep.minBounds.z / BLOCK_GRID_SIZE);
+    int maxVoxelZ = (int)floorf((sweep.maxBounds.z - epsilon) / BLOCK_GRID_SIZE);
 
-    if (delta > 0.0f)
+    if (sweep.delta > 0.0f)
     {
-      int startVoxelX = (int)floorf((maxBounds.x - epsilon) / BLOCK_GRID_SIZE) + 1;
-      int endVoxelX = (int)floorf((maxBounds.x + delta - epsilon) / BLOCK_GRID_SIZE);
+      int startVoxelX = (int)floorf((sweep.maxBounds.x - epsilon) / BLOCK_GRID_SIZE) + 1;
+      int endVoxelX = (int)floorf((sweep.maxBounds.x + sweep.delta - epsilon) / BLOCK_GRID_SIZE);
       for (int voxelX = startVoxelX; voxelX <= endVoxelX; voxelX++)
       {
         for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; voxelZ++)
@@ -243,7 +250,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMin = (float)voxelX * BLOCK_GRID_SIZE;
-            float maxAllowed = voxelMin - maxBounds.x;
+            float maxAllowed = voxelMin - sweep.maxBounds.x;
             if (maxAllowed < allowedDelta) allowedDelta = maxAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta > 0.0f ? allowedDelta : 0.0f;
@@ -253,8 +260,8 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
     }
     else
     {
-      int startVoxelX = (int)floorf(minBounds.x / BLOCK_GRID_SIZE) - 1;
-      int endVoxelX = (int)floorf((minBounds.x + delta) / BLOCK_GRID_SIZE);
+      int startVoxelX = (int)floorf(sweep.minBounds.x / BLOCK_GRID_SIZE) - 1;
+      int endVoxelX = (int)floorf((sweep.minBounds.x + sweep.delta) / BLOCK_GRID_SIZE);
       for (int voxelX = startVoxelX; voxelX >= endVoxelX; voxelX--)
       {
         for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; voxelZ++)
@@ -263,7 +270,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMax = ((float)voxelX + 1.0f) * BLOCK_GRID_SIZE;
-            float minAllowed = voxelMax - minBounds.x;
+            float minAllowed = voxelMax - sweep.minBounds.x;
             if (minAllowed > allowedDelta) allowedDelta = minAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta < 0.0f ? allowedDelta : 0.0f;
@@ -272,17 +279,17 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
       }
     }
   }
-  else if (axisIndex == 1)
+  else if (sweep.axisIndex == 1)
   {
-    int minVoxelX = (int)floorf(minBounds.x / BLOCK_GRID_SIZE);
-    int maxVoxelX = (int)floorf((maxBounds.x - epsilon) / BLOCK_GRID_SIZE);
-    int minVoxelZ = (int)floorf(minBounds.z / BLOCK_GRID_SIZE);
-    int maxVoxelZ = (int)floorf((maxBounds.z - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelX = (int)floorf(sweep.minBounds.x / BLOCK_GRID_SIZE);
+    int maxVoxelX = (int)floorf((sweep.maxBounds.x - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelZ = (int)floorf(sweep.minBounds.z / BLOCK_GRID_SIZE);
+    int maxVoxelZ = (int)floorf((sweep.maxBounds.z - epsilon) / BLOCK_GRID_SIZE);
 
-    if (delta > 0.0f)
+    if (sweep.delta > 0.0f)
     {
-      int startVoxelY = (int)floorf((maxBounds.y - epsilon) / BLOCK_GRID_SIZE) + 1;
-      int endVoxelY = (int)floorf((maxBounds.y + delta - epsilon) / BLOCK_GRID_SIZE);
+      int startVoxelY = (int)floorf((sweep.maxBounds.y - epsilon) / BLOCK_GRID_SIZE) + 1;
+      int endVoxelY = (int)floorf((sweep.maxBounds.y + sweep.delta - epsilon) / BLOCK_GRID_SIZE);
       for (int voxelY = startVoxelY; voxelY <= endVoxelY; voxelY++)
       {
         for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; voxelZ++)
@@ -291,7 +298,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMin = (float)voxelY * BLOCK_GRID_SIZE;
-            float maxAllowed = voxelMin - maxBounds.y;
+            float maxAllowed = voxelMin - sweep.maxBounds.y;
             if (maxAllowed < allowedDelta) allowedDelta = maxAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta > 0.0f ? allowedDelta : 0.0f;
@@ -301,8 +308,8 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
     }
     else
     {
-      int startVoxelY = (int)floorf(minBounds.y / BLOCK_GRID_SIZE) - 1;
-      int endVoxelY = (int)floorf((minBounds.y + delta) / BLOCK_GRID_SIZE);
+      int startVoxelY = (int)floorf(sweep.minBounds.y / BLOCK_GRID_SIZE) - 1;
+      int endVoxelY = (int)floorf((sweep.minBounds.y + sweep.delta) / BLOCK_GRID_SIZE);
       for (int voxelY = startVoxelY; voxelY >= endVoxelY; voxelY--)
       {
         for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; voxelZ++)
@@ -311,7 +318,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMax = ((float)voxelY + 1.0f) * BLOCK_GRID_SIZE;
-            float minAllowed = voxelMax - minBounds.y;
+            float minAllowed = voxelMax - sweep.minBounds.y;
             if (minAllowed > allowedDelta) allowedDelta = minAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta < 0.0f ? allowedDelta : 0.0f;
@@ -322,15 +329,15 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
   }
   else
   {
-    int minVoxelX = (int)floorf(minBounds.x / BLOCK_GRID_SIZE);
-    int maxVoxelX = (int)floorf((maxBounds.x - epsilon) / BLOCK_GRID_SIZE);
-    int minVoxelY = (int)floorf(minBounds.y / BLOCK_GRID_SIZE);
-    int maxVoxelY = (int)floorf((maxBounds.y - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelX = (int)floorf(sweep.minBounds.x / BLOCK_GRID_SIZE);
+    int maxVoxelX = (int)floorf((sweep.maxBounds.x - epsilon) / BLOCK_GRID_SIZE);
+    int minVoxelY = (int)floorf(sweep.minBounds.y / BLOCK_GRID_SIZE);
+    int maxVoxelY = (int)floorf((sweep.maxBounds.y - epsilon) / BLOCK_GRID_SIZE);
 
-    if (delta > 0.0f)
+    if (sweep.delta > 0.0f)
     {
-      int startVoxelZ = (int)floorf((maxBounds.z - epsilon) / BLOCK_GRID_SIZE) + 1;
-      int endVoxelZ = (int)floorf((maxBounds.z + delta - epsilon) / BLOCK_GRID_SIZE);
+      int startVoxelZ = (int)floorf((sweep.maxBounds.z - epsilon) / BLOCK_GRID_SIZE) + 1;
+      int endVoxelZ = (int)floorf((sweep.maxBounds.z + sweep.delta - epsilon) / BLOCK_GRID_SIZE);
       for (int voxelZ = startVoxelZ; voxelZ <= endVoxelZ; voxelZ++)
       {
         for (int voxelY = minVoxelY; voxelY <= maxVoxelY; voxelY++)
@@ -339,7 +346,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMin = (float)voxelZ * BLOCK_GRID_SIZE;
-            float maxAllowed = voxelMin - maxBounds.z;
+            float maxAllowed = voxelMin - sweep.maxBounds.z;
             if (maxAllowed < allowedDelta) allowedDelta = maxAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta > 0.0f ? allowedDelta : 0.0f;
@@ -349,8 +356,8 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
     }
     else
     {
-      int startVoxelZ = (int)floorf(minBounds.z / BLOCK_GRID_SIZE) - 1;
-      int endVoxelZ = (int)floorf((minBounds.z + delta) / BLOCK_GRID_SIZE);
+      int startVoxelZ = (int)floorf(sweep.minBounds.z / BLOCK_GRID_SIZE) - 1;
+      int endVoxelZ = (int)floorf((sweep.minBounds.z + sweep.delta) / BLOCK_GRID_SIZE);
       for (int voxelZ = startVoxelZ; voxelZ >= endVoxelZ; voxelZ--)
       {
         for (int voxelY = minVoxelY; voxelY <= maxVoxelY; voxelY++)
@@ -359,7 +366,7 @@ float VoxelWorld::ClampMovementAgainstVoxels(Vector3 minBounds, Vector3 maxBound
           {
             if (GetVoxel(voxelX, voxelY, voxelZ) == 0) continue;
             float voxelMax = ((float)voxelZ + 1.0f) * BLOCK_GRID_SIZE;
-            float minAllowed = voxelMax - minBounds.z;
+            float minAllowed = voxelMax - sweep.minBounds.z;
             if (minAllowed > allowedDelta) allowedDelta = minAllowed;
             if (collided != nullptr) *collided = true;
             return allowedDelta < 0.0f ? allowedDelta : 0.0f;
@@ -380,7 +387,15 @@ CollisionMoveResult VoxelWorld::MovePlayerAlongAxis(Vector3* playerPosition, int
   Vector3 minBounds;
   Vector3 maxBounds;
   GetPlayerBounds(*playerPosition, &minBounds, &maxBounds);
-  result.movedDelta = ClampMovementAgainstVoxels(minBounds, maxBounds, axisIndex, delta, &result.collided);
+  // Reuse the same sweep query shape for every axis so collision tests can grow without
+  // making each caller re-thread another bundle of scalar arguments.
+  MovementSweep sweep = {
+      .minBounds = minBounds,
+      .maxBounds = maxBounds,
+      .axisIndex = axisIndex,
+      .delta = delta,
+  };
+  result.movedDelta = ClampMovementAgainstVoxels(sweep, &result.collided);
 
   if (axisIndex == 0) playerPosition->x += result.movedDelta;
   else if (axisIndex == 1)

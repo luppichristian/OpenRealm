@@ -2,20 +2,15 @@
 
 #include <string>
 
-struct WalletState
-{
-  bool connected = false;
-  std::string accountAddress = {};
-  std::string runtimeSignerAddress = {};
-};
-
 class Wallet
 {
  public:
   Wallet() = default;
-  explicit Wallet(WalletState walletState);
+  explicit Wallet(std::string accountAddress, std::string runtimeSignerAddress = {});
 
-  const WalletState& GetState() const;
+  void Connect(std::string accountAddress, std::string runtimeSignerAddress = {});
+  void Disconnect();
+
   bool IsConnected() const;
   bool CanTransact() const;
   const std::string& GetAccountAddress() const;
@@ -25,5 +20,7 @@ class Wallet
   std::string DescribeWallet() const;
 
  private:
-  WalletState state = {};
+  bool connected = false;
+  std::string accountAddress = {};
+  std::string runtimeSignerAddress = {};
 };

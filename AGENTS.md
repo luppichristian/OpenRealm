@@ -79,12 +79,14 @@ Do not describe this repo as if it already contains distributed networking or co
   - Submits chunk mesh jobs into the shared `TaskManager` and owns only the completed-result queue.
 - `node/client/ChunkMesher.*`
   - Actual chunk mesh generation implementation.
+  - Greedy-meshing helper state now travels through small local parameter structs (`GreedyQuadParams`, `GreedyPlaneParams`, `FaceSampleQuery`) instead of long helper argument lists.
 - `node/client/ChunkMeshBuilder.*`
   - Raw mesh buffer builder.
 - `node/client/ChunkMeshJobResult.*`
   - Move-only mesh job result container.
 - `node/client/WorldRenderer.*`
   - Free-function world rendering path.
+  - Uses `PlayerSystem::CameraVectors` plus small file-local render/culling structs instead of long camera-argument helper signatures.
 - `node/Utils.h`
   - Header-only utilities used across world/render/gameplay code.
   - Defines the shared `NonCopyable` base used by resource-owning/client/world coordinator types.
@@ -99,8 +101,10 @@ Do not describe this repo as if it already contains distributed networking or co
   - Owns voxel data, player system, and event queue only.
 - `node/world/VoxelWorld.*`
   - Authoritative local voxel/chunk storage and collision/raycast logic.
+  - Axis sweep collision queries now travel through `VoxelWorld::MovementSweep` instead of passing raw bounds/axis/delta scalars around together.
 - `node/world/PlayerSystem.*`
   - Player state management and movement/look/edit simulation.
+  - Builds camera basis data through `PlayerSystem::CameraVectors BuildCameraVectors(...)` instead of multi-pointer output arguments.
 - `node/world/WorldEvent.h`
   - World event enum and payload struct.
 - `node/world/WorldConfig.h`
@@ -235,12 +239,14 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - This codebase is comfortable with POD-style structs that expose public fields directly.
 - `WorldData.h`, `WorldEvent.h`, and `ChunkMeshJob` are the model for this style.
 - Use simple structs with defaults for state carriers instead of over-encapsulating them.
+- Reserve `*State` structs for plain data carriers and read models returned from systems/contracts; do not make callers build or toggle internal lifecycle flags for owning classes through external `*State` structs.
 - Designated initializers are already used and are acceptable where supported by the current compiler setup.
 
 ### Class Design
 
 - Classes tend to be concrete and stateful.
 - Ownership is direct by value where practical.
+- Keep connection/lifecycle flags owned by the class itself; expose explicit methods such as connect/disconnect instead of requiring external code to assemble an internal state blob.
 - Do not introduce smart pointers by default.
 - Prefer direct ownership, stack allocation, plain members, or explicit raw-pointer/non-owning pointer usage consistent with the existing codebase.
 - If a heap allocation is genuinely necessary, justify it with a concrete ownership/lifetime need instead of reaching for `std::unique_ptr` or `std::shared_ptr` automatically.

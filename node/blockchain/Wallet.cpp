@@ -4,65 +4,69 @@
 
 #include <utility>
 
-Wallet::Wallet(WalletState walletState)
-    : state(std::move(walletState))
+Wallet::Wallet(std::string accountAddress, std::string runtimeSignerAddress)
 {
+  Connect(std::move(accountAddress), std::move(runtimeSignerAddress));
 }
 
-const WalletState& Wallet::GetState() const
+void Wallet::Connect(std::string accountAddressValue, std::string runtimeSignerAddressValue)
 {
-  return state;
+  accountAddress = std::move(accountAddressValue);
+  runtimeSignerAddress = std::move(runtimeSignerAddressValue);
+  connected = !IsZeroBlockchainAddress(accountAddress);
+}
+
+void Wallet::Disconnect()
+{
+  connected = false;
+  accountAddress.clear();
+  runtimeSignerAddress.clear();
 }
 
 bool Wallet::IsConnected() const
 {
-  return state.connected;
+  return connected;
 }
 
 bool Wallet::CanTransact() const
 {
-  return state.connected && !IsZeroBlockchainAddress(state.accountAddress);
+  return connected && !IsZeroBlockchainAddress(accountAddress);
 }
 
 const std::string& Wallet::GetAccountAddress() const
 {
-  return state.accountAddress;
+  return accountAddress;
 }
 
 const std::string& Wallet::GetRuntimeSignerAddress() const
 {
-  return state.runtimeSignerAddress;
+  return runtimeSignerAddress;
 }
 
 std::string Wallet::GetActiveSignerAddress() const
 {
-  if (!IsZeroBlockchainAddress(state.runtimeSignerAddress))
+  if (!IsZeroBlockchainAddress(runtimeSignerAddress))
   {
-    return NormalizeBlockchainAddress(state.runtimeSignerAddress);
+    return NormalizeBlockchainAddress(runtimeSignerAddress);
   }
 
-  return NormalizeBlockchainAddress(state.accountAddress);
+  return NormalizeBlockchainAddress(accountAddress);
 }
 
 std::string Wallet::GetTransactionSenderAddress() const
 {
-  return NormalizeBlockchainAddress(state.accountAddress);
+  return NormalizeBlockchainAddress(accountAddress);
 }
 
 std::string Wallet::DescribeWallet() const
 {
-  if (!state.connected)
+  if (!connected || IsZeroBlockchainAddress(accountAddress))
   {
     return "wallet disconnected";
   }
 
-  if (IsZeroBlockchainAddress(state.accountAddress))
-  {
-    return "wallet connected without account";
-  }
-
-  if (IsZeroBlockchainAddress(state.runtimeSignerAddress) ||
-      NormalizeBlockchainAddress(state.runtimeSignerAddress) == NormalizeBlockchainAddress(state.accountAddress))
+  if (IsZeroBlockchainAddress(runtimeSignerAddress) ||
+      NormalizeBlockchainAddress(runtimeSignerAddress) == NormalizeBlockchainAddress(accountAddress))
   {
     return "wallet connected";
   }
