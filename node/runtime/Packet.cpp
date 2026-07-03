@@ -6,6 +6,8 @@ static constexpr uint32_t RUNTIME_PACKET_MAGIC = 0x4f524c4d;
 static constexpr uint8_t RUNTIME_PACKET_VERSION = 1;
 static constexpr size_t PACKET_HEADER_SIZE = 16;
 static constexpr size_t HANDSHAKE_PAYLOAD_SIZE = 16;
+static constexpr size_t MAX_PEER_DISCOVERY_NODES = 64;
+static constexpr size_t MAX_PEER_DISCOVERY_HOST_BYTES = 255;
 
 static void AppendU32(std::vector<uint8_t>* bytes, uint32_t value)
 {
@@ -23,6 +25,17 @@ static void AppendU64(std::vector<uint8_t>* bytes, uint64_t value)
   {
     bytes->push_back((uint8_t)((value >> shift) & 0xff));
   }
+}
+
+static void AppendString(std::vector<uint8_t>* bytes, const std::string& value)
+{
+  if (bytes == nullptr) return;
+
+  const size_t stringSize = value.size() > MAX_PEER_DISCOVERY_HOST_BYTES
+      ? MAX_PEER_DISCOVERY_HOST_BYTES
+      : value.size();
+  bytes->push_back((uint8_t)stringSize);
+  bytes->insert(bytes->end(), value.begin(), value.begin() + stringSize);
 }
 
 static uint16_t ReadU16(const std::vector<uint8_t>& bytes, size_t offset)
@@ -46,6 +59,20 @@ static uint64_t ReadU64(const std::vector<uint8_t>& bytes, size_t offset)
     value |= ((uint64_t)bytes[offset + (shift / 8)]) << shift;
   }
   return value;
+}
+
+static bool TryReadString(const std::vector<uint8_t>& bytes, size_t* offset, std::string* value)
+{
+  if (offset == nullptr || value == nullptr) return false;
+  if (*offset >= bytes.size()) return false;
+
+  const size_t stringSize = bytes[*offset];
+  *offset += 1;
+  if (*offset + stringSize > bytes.size()) return false;
+
+  value->assign((const char*)&bytes[*offset], stringSize);
+  *offset += stringSize;
+  return true;
 }
 
 bool IsPacketTypeSupported(PacketType type)
@@ -80,6 +107,63 @@ bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handsha
   handshake->nodeId = ReadU32(packet.payload, 4);
   handshake->realmHash = ReadU64(packet.payload, 8);
   return true;
+}
+
+Packet MakePeerDiscoveryPacket(const PeerDiscoveryPacketData& peerDiscovery)
+{
+  Packet packet = {};
+  packet.type = PacketType::PeerDiscovery;
+  AppendU32(&packet.payload, peerDiscovery.requestingNodeId);
+  AppendU32(&packet.payload, (uint32_t)peerDiscovery.nodes.size());
+
+  for (const PeerDiscoveryNodeState& node : peerDiscovery.nodes)
+  {
+    AppendU32(&packet.payload, node.nodeId);
+    AppendU32(&packet.payload, node.protocolVersion);
+    AppendU64(&packet.payload, node.realmHash);
+    AppendU32(&packet.payload, (uint32_t)node.peerAddress.port);
+    AppendString(&packet.payload, node.peerAddress.host);
+  }
+
+  return packet;
+}
+
+bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery)
+{
+  if (peerDiscovery == nullptr) return false;
+  if (packet.type != PacketType::PeerDiscovery) return false;
+  if (packet.payload.size() < 8) return false;
+
+  size_t offset = 0;
+  peerDiscovery->requestingNodeId = ReadU32(packet.payload, offset);
+  offset += 4;
+
+  const uint32_t nodeCount = ReadU32(packet.payload, offset);
+  offset += 4;
+  if (nodeCount > MAX_PEER_DISCOVERY_NODES) return false;
+
+  peerDiscovery->nodes.clear();
+  peerDiscovery->nodes.reserve(nodeCount);
+
+  for (uint32_t i = 0; i < nodeCount; ++i)
+  {
+    if (offset + 20 > packet.payload.size()) return false;
+
+    PeerDiscoveryNodeState node = {};
+    node.nodeId = ReadU32(packet.payload, offset);
+    offset += 4;
+    node.protocolVersion = ReadU32(packet.payload, offset);
+    offset += 4;
+    node.realmHash = ReadU64(packet.payload, offset);
+    offset += 8;
+    node.peerAddress.port = (int)ReadU32(packet.payload, offset);
+    offset += 4;
+    if (!TryReadString(packet.payload, &offset, &node.peerAddress.host)) return false;
+
+    peerDiscovery->nodes.push_back(node);
+  }
+
+  return offset == packet.payload.size();
 }
 
 uint32_t ComputePacketChecksum(const PacketHeader& header, const std::vector<uint8_t>& payload)

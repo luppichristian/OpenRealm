@@ -43,7 +43,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/runtime/`
   - Runtime node-to-node transport code only.
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
-  - `Packet.*` owns the current runtime binary packet header/payload helpers.
+  - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
   - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
   - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces realm-hash matching, and rejects duplicate/self node ids.
   - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from blockchain config + fetched global params so peers can confirm they are on the same environment.
@@ -183,6 +183,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Runtime permission enforcement is expected to cache ownership/permission state from the orchestration layer, reject unauthorized edits, and bind important actions to runtime identities linked to wallet-backed ownership where relevant.
 - Runtime identity delegation is currently expected to use wallet-authorized expiring runtime-session keys recorded in `PlayerRegistry`; runtime code should resolve incoming signers through the registry before applying ownership/permission rules.
 - Current runtime handshake validation is intentionally environment-aware: nodes advertise a realm hash derived from blockchain config plus fetched `GlobalParams`, and handshake acceptance also rejects duplicate node ids coming from different peer addresses.
+- Peer discovery packets currently advertise the requester's node id plus a filtered list of known same-realm peers from `ActiveNodeBucket`; the relay smoke target exercises discovery by excluding the requester and returning the remaining compatible peers.
 - Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.

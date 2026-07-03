@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RuntimeClient.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -37,8 +39,24 @@ struct HandshakePacketData
   uint64_t realmHash = 0;
 };
 
+struct PeerDiscoveryNodeState
+{
+  uint32_t nodeId = 0;
+  uint32_t protocolVersion = 0;
+  uint64_t realmHash = 0;
+  RuntimePeerAddress peerAddress = {};
+};
+
+struct PeerDiscoveryPacketData
+{
+  uint32_t requestingNodeId = 0;
+  std::vector<PeerDiscoveryNodeState> nodes = {};
+};
+
 Packet MakeHandshakePacket(const HandshakePacketData& handshake);
 bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake);
+Packet MakePeerDiscoveryPacket(const PeerDiscoveryPacketData& peerDiscovery);
+bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery);
 std::vector<uint8_t> SerializePacket(const Packet& packet);
 bool TryParsePacket(const std::vector<uint8_t>& bytes, Packet* packet);
 uint32_t ComputePacketChecksum(const PacketHeader& header, const std::vector<uint8_t>& payload);
