@@ -1,0 +1,73 @@
+#include "PacketValidator.h"
+
+std::string DescribePacketValidationCode(PacketValidationCode code)
+{
+  switch (code)
+  {
+    case PacketValidationCode::Accepted: return "accepted";
+    case PacketValidationCode::PacketParseFailed: return "packet_parse_failed";
+    case PacketValidationCode::InvalidHandshakePayload: return "invalid_handshake_payload";
+    case PacketValidationCode::SelfNodeId: return "self_node_id";
+    case PacketValidationCode::RealmMismatch: return "realm_mismatch";
+    case PacketValidationCode::DuplicateNodeId: return "duplicate_node_id";
+    case PacketValidationCode::DuplicatePeerAddress: return "duplicate_peer_address";
+    case PacketValidationCode::MissingActiveNodeBucket: return "missing_active_node_bucket";
+    default: return "unknown";
+  }
+}
+
+PacketValidationResult ValidateIncomingPacket(
+    const std::vector<uint8_t>& bytes,
+    const RuntimePeerAddress& peerAddress,
+    const PacketValidationContext& context
+)
+{
+  PacketValidationResult result = {};
+  if (!TryParsePacket(bytes, &result.packet)) return result;
+
+  result.packetChecksum = result.packet.checksum;
+
+  if (result.packet.type != PacketType::Handshake)
+  {
+    result.accepted = true;
+    result.code = PacketValidationCode::Accepted;
+    return result;
+  }
+
+  if (!TryDecodeHandshakePacket(result.packet, &result.handshake))
+  {
+    result.code = PacketValidationCode::InvalidHandshakePayload;
+    return result;
+  }
+
+  if (result.handshake.nodeId == context.localNodeId)
+  {
+    result.code = PacketValidationCode::SelfNodeId;
+    return result;
+  }
+
+  if (result.handshake.realmHash != context.expectedRealmHash)
+  {
+    result.code = PacketValidationCode::RealmMismatch;
+    return result;
+  }
+
+  if (context.activeNodes == nullptr)
+  {
+    result.code = PacketValidationCode::MissingActiveNodeBucket;
+    return result;
+  }
+
+  result.activeNode = context.activeNodes->RegisterHandshake(peerAddress, result.handshake, result.packet.checksum);
+  if (!result.activeNode.accepted)
+  {
+    result.code = result.activeNode.code == ActiveNodeBucketCode::DuplicateNodeId
+        ? PacketValidationCode::DuplicateNodeId
+        : PacketValidationCode::DuplicatePeerAddress;
+    return result;
+  }
+
+  result.accepted = true;
+  result.code = PacketValidationCode::Accepted;
+  return result;
+}
