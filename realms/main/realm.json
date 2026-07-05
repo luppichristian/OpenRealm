@@ -1,0 +1,13 @@
+{
+  "name": "main",
+  "blockchain": {
+    "rpcUrl": "https://rpc.example.invalid",
+    "globalParamsAddress": "0x0000000000000000000000000000000000000000",
+    "playerRegistryAddress": "0x0000000000000000000000000000000000000000",
+    "chunkClaimsAddress": "0x0000000000000000000000000000000000000000",
+    "marketplaceAddress": "0x0000000000000000000000000000000000000000",
+    "connectionTimeoutSeconds": 2,
+    "readTimeoutSeconds": 2,
+    "writeTimeoutSeconds": 2
+  }
+}

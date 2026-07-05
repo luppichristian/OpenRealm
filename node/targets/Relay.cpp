@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -15,6 +16,7 @@
 #include "../runtime/Packet.h"
 #include "../runtime/PacketValidator.h"
 #include "../runtime/RuntimeClient.h"
+#include "../runtime/RuntimeConfigFiles.h"
 #include "../runtime/RuntimeHash.h"
 #include "../runtime/RuntimeRealm.h"
 #include "../world/WorldEvent.h"
@@ -46,6 +48,12 @@ struct ReceivedWorldEventState
   bool decoded = false;
 };
 
+struct RelayBootConfig
+{
+  std::string configPath = "config.json";
+  std::string realmDirectory = {};
+};
+
 struct RelayConfig
 {
   bool smoke = false;
@@ -53,6 +61,12 @@ struct RelayConfig
   uint32_t localNodeId = 9001;
   uint32_t receiveTimeoutMs = 100;
   int ticks = 0;
+  std::string configPath = "config.json";
+  std::string realmDirectory = "realms/test";
+  std::string realmName = {};
+  size_t jumpNodeCount = 0;
+  BlockchainConfig blockchainConfig = {};
+  Wallet wallet = {};
 };
 
 struct RelayRuntimeStats
@@ -75,69 +89,95 @@ static int ParseIntArgument(const char* value, int fallback)
   return (int)parsedValue;
 }
 
-static RelayConfig ParseRelayConfig(int argc, char** argv)
+static RelayBootConfig ParseRelayBootConfig(int argc, char** argv)
 {
-  RelayConfig config = {};
+  RelayBootConfig config = {};
 
   for (int i = 1; i < argc; ++i)
   {
+    if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
+    {
+      config.configPath = argv[++i];
+      continue;
+    }
+
+    if (std::strcmp(argv[i], "--realm-dir") == 0 && i + 1 < argc)
+    {
+      config.realmDirectory = argv[++i];
+      continue;
+    }
+  }
+
+  return config;
+}
+
+static RelayConfig BuildRelayConfigFromFiles(const RuntimeNodeFilesConfig& nodeFiles, const RuntimeRealmFiles& realmFiles)
+{
+  RelayConfig config = {};
+  config.bindAddress = nodeFiles.relayBindAddress;
+  config.localNodeId = nodeFiles.relayNodeId;
+  config.receiveTimeoutMs = nodeFiles.relayReceiveTimeoutMs;
+  config.ticks = nodeFiles.relayTicks;
+  config.configPath = nodeFiles.configPath;
+  config.realmDirectory = realmFiles.directory;
+  config.realmName = realmFiles.realmName;
+  config.jumpNodeCount = realmFiles.jumpNodes.size();
+  config.blockchainConfig = realmFiles.blockchainConfig;
+  config.wallet = nodeFiles.wallet;
+  return config;
+}
+
+static void ApplyRelayArguments(int argc, char** argv, RelayConfig* config)
+{
+  if (config == nullptr) return;
+
+  for (int i = 1; i < argc; ++i)
+  {
+    if ((std::strcmp(argv[i], "--config") == 0 || std::strcmp(argv[i], "--realm-dir") == 0) && i + 1 < argc)
+    {
+      ++i;
+      continue;
+    }
+
     if (std::strcmp(argv[i], "--smoke") == 0)
     {
-      config.smoke = true;
+      config->smoke = true;
       continue;
     }
 
     if (std::strcmp(argv[i], "--host") == 0 && i + 1 < argc)
     {
-      config.bindAddress.host = argv[++i];
+      config->bindAddress.host = argv[++i];
       continue;
     }
 
     if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc)
     {
-      config.bindAddress.port = ParseIntArgument(argv[++i], config.bindAddress.port);
+      config->bindAddress.port = ParseIntArgument(argv[++i], config->bindAddress.port);
       continue;
     }
 
     if (std::strcmp(argv[i], "--node-id") == 0 && i + 1 < argc)
     {
-      config.localNodeId = (uint32_t)ParseIntArgument(argv[++i], (int)config.localNodeId);
+      config->localNodeId = (uint32_t)ParseIntArgument(argv[++i], (int)config->localNodeId);
       continue;
     }
 
     if (std::strcmp(argv[i], "--ticks") == 0 && i + 1 < argc)
     {
-      config.ticks = ParseIntArgument(argv[++i], config.ticks);
+      config->ticks = ParseIntArgument(argv[++i], config->ticks);
       continue;
     }
 
     if (std::strcmp(argv[i], "--timeout-ms") == 0 && i + 1 < argc)
     {
-      config.receiveTimeoutMs = (uint32_t)ParseIntArgument(argv[++i], (int)config.receiveTimeoutMs);
+      config->receiveTimeoutMs = (uint32_t)ParseIntArgument(argv[++i], (int)config->receiveTimeoutMs);
       continue;
     }
   }
 
-  if (config.bindAddress.port <= 0) config.bindAddress.port = 46001;
-  if (config.receiveTimeoutMs == 0) config.receiveTimeoutMs = 100;
-  return config;
-}
-
-static BlockchainConfig BuildRelayBlockchainConfig()
-{
-  BlockchainConfig blockchainConfig = {};
-  blockchainConfig.rpcUrl = "http://127.0.0.1:8545";
-  blockchainConfig.globalParamsAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.playerRegistryAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.chunkClaimsAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.marketplaceAddress = "0x0000000000000000000000000000000000000000";
-  return blockchainConfig;
-}
-
-static Wallet BuildRelayWallet()
-{
-  return Wallet("0x0000000000000000000000000000000000000001",
-                "0x0000000000000000000000000000000000000001");
+  if (config->bindAddress.port <= 0) config->bindAddress.port = 46001;
+  if (config->receiveTimeoutMs == 0) config->receiveTimeoutMs = 100;
 }
 
 static RuntimeRealmState BuildRelayRealmState(Blockchain& blockchain, const BlockchainConfig& blockchainConfig)
@@ -308,11 +348,9 @@ static int RunRelaySmoke(const RelayConfig& config)
   const bool duplicatePeerStarted = duplicatePeer.Start(duplicatePeerBindAddress);
   const bool mismatchedRealmPeerStarted = mismatchedRealmPeer.Start(mismatchedRealmPeerBindAddress);
 
-  BlockchainConfig blockchainConfig = BuildRelayBlockchainConfig();
-  Wallet wallet = BuildRelayWallet();
-  Blockchain blockchain(blockchainConfig, std::move(wallet));
+  Blockchain blockchain(config.blockchainConfig, config.wallet);
 
-  const RuntimeRealmState realmState = BuildRelayRealmState(blockchain, blockchainConfig);
+  const RuntimeRealmState realmState = BuildRelayRealmState(blockchain, config.blockchainConfig);
   const uint64_t realmHash = ComputeRuntimeRealmHash(realmState);
   const std::string chainId = realmState.chainId;
   const GlobalParamsState globalParamsState = realmState.globalParams;
@@ -425,6 +463,14 @@ static int RunRelaySmoke(const RelayConfig& config)
 
   std::cout << "OpenRealm relay stack\n";
   std::cout << "- relay mode: smoke\n";
+  std::cout << "- runtime config load: ok\n";
+  std::cout << "- runtime config path: " << config.configPath << "\n";
+  std::cout << "- runtime realm directory: " << config.realmDirectory << "\n";
+  std::cout << "- runtime realm name: " << config.realmName << "\n";
+  std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
+  std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
+  std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
+  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
   std::cout << "- runtime networking: " << relayListener.DescribeStack() << "\n";
   std::cout << "- relay listener startup: " << (relayStarted ? "ok" : "failed") << "\n";
   std::cout << "- accepted peer startup: " << (acceptedPeerStarted ? "ok" : "failed") << "\n";
@@ -546,14 +592,15 @@ static int RunRelayService(const RelayConfig& config)
   {
     std::cout << "OpenRealm relay stack\n";
     std::cout << "- relay mode: service\n";
+    std::cout << "- runtime config load: ok\n";
+    std::cout << "- runtime config path: " << config.configPath << "\n";
+    std::cout << "- runtime realm directory: " << config.realmDirectory << "\n";
     std::cout << "- relay listener startup: failed\n";
     return 1;
   }
 
-  BlockchainConfig blockchainConfig = BuildRelayBlockchainConfig();
-  Wallet wallet = BuildRelayWallet();
-  Blockchain blockchain(blockchainConfig, std::move(wallet));
-  const RuntimeRealmState realmState = BuildRelayRealmState(blockchain, blockchainConfig);
+  Blockchain blockchain(config.blockchainConfig, config.wallet);
+  const RuntimeRealmState realmState = BuildRelayRealmState(blockchain, config.blockchainConfig);
   const uint64_t realmHash = ComputeRuntimeRealmHash(realmState);
 
   ActiveNodeBucket activeNodes = {};
@@ -579,6 +626,14 @@ static int RunRelayService(const RelayConfig& config)
 
   std::cout << "OpenRealm relay stack\n";
   std::cout << "- relay mode: service\n";
+  std::cout << "- runtime config load: ok\n";
+  std::cout << "- runtime config path: " << config.configPath << "\n";
+  std::cout << "- runtime realm directory: " << config.realmDirectory << "\n";
+  std::cout << "- runtime realm name: " << config.realmName << "\n";
+  std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
+  std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
+  std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
+  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
   std::cout << "- runtime networking: " << relay.DescribeStack() << "\n";
   std::cout << "- relay listener startup: ok\n";
   std::cout << "- relay bind address: " << DescribeRuntimePeerAddress(relay.GetBindAddress()) << "\n";
@@ -599,7 +654,34 @@ static int RunRelayService(const RelayConfig& config)
 
 int main(int argc, char** argv)
 {
-  const RelayConfig config = ParseRelayConfig(argc, argv);
+  const RelayBootConfig bootConfig = ParseRelayBootConfig(argc, argv);
+
+  RuntimeNodeFilesConfig nodeFiles = {};
+  std::string loadError = {};
+  if (!LoadRuntimeNodeFilesConfig(bootConfig.configPath, &nodeFiles, &loadError))
+  {
+    std::cout << "OpenRealm relay stack\n";
+    std::cout << "- runtime config load: failed\n";
+    std::cout << "- runtime config path: " << bootConfig.configPath << "\n";
+    std::cout << "- runtime config error: " << loadError << "\n";
+    return 1;
+  }
+
+  const std::string realmDirectory = bootConfig.realmDirectory.empty() ? nodeFiles.selectedRealm : bootConfig.realmDirectory;
+  RuntimeRealmFiles realmFiles = {};
+  if (!LoadRuntimeRealmFiles(realmDirectory, &realmFiles, &loadError))
+  {
+    std::cout << "OpenRealm relay stack\n";
+    std::cout << "- runtime config load: failed\n";
+    std::cout << "- runtime config path: " << nodeFiles.configPath << "\n";
+    std::cout << "- runtime realm directory: " << realmDirectory << "\n";
+    std::cout << "- runtime config error: " << loadError << "\n";
+    return 1;
+  }
+
+  RelayConfig config = BuildRelayConfigFromFiles(nodeFiles, realmFiles);
+  ApplyRelayArguments(argc, argv, &config);
+
   if (config.smoke) return RunRelaySmoke(config);
   return RunRelayService(config);
 }

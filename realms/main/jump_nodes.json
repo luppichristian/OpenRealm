@@ -1,0 +1,9 @@
+{
+  "jumpNodes": [
+    {
+      "host": "127.0.0.1",
+      "port": 46001,
+      "label": "main-local-jump"
+    }
+  ]
+}

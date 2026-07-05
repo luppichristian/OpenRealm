@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -13,11 +14,18 @@
 #include "../runtime/ActiveNodeBucket.h"
 #include "../runtime/Packet.h"
 #include "../runtime/RuntimeClient.h"
+#include "../runtime/RuntimeConfigFiles.h"
 #include "../runtime/RuntimeHash.h"
 #include "../runtime/RuntimeRealm.h"
 #include "../world/World.h"
 #include "../world/WorldConfig.h"
 #include "../world/WorldEvent.h"
+
+struct SimulatorBootConfig
+{
+  std::string configPath = "config.json";
+  std::string realmDirectory = {};
+};
 
 struct SimulatorConfig
 {
@@ -34,6 +42,12 @@ struct SimulatorConfig
   uint32_t interestRadius = 1;
   uint8_t placeVoxelValue = 255;
   uint32_t receiveTimeoutMs = 1000;
+  std::string configPath = "config.json";
+  std::string realmDirectory = "realms/test";
+  std::string realmName = {};
+  size_t jumpNodeCount = 0;
+  BlockchainConfig blockchainConfig = {};
+  Wallet wallet = {};
 };
 
 struct ReceivedPeerDiscoveryState
@@ -83,143 +97,183 @@ static float ParseFloatArgument(const char* value, float fallback)
   return parsedValue;
 }
 
-static SimulatorConfig ParseSimulatorConfig(int argc, char** argv)
+static SimulatorBootConfig ParseSimulatorBootConfig(int argc, char** argv)
 {
-  SimulatorConfig config = {};
+  SimulatorBootConfig config = {};
 
   for (int i = 1; i < argc; ++i)
   {
+    if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
+    {
+      config.configPath = argv[++i];
+      continue;
+    }
+
+    if (std::strcmp(argv[i], "--realm-dir") == 0 && i + 1 < argc)
+    {
+      config.realmDirectory = argv[++i];
+      continue;
+    }
+  }
+
+  return config;
+}
+
+static SimulatorConfig BuildSimulatorConfigFromFiles(const RuntimeNodeFilesConfig& nodeFiles, const RuntimeRealmFiles& realmFiles)
+{
+  SimulatorConfig config = {};
+  config.frameTime = nodeFiles.simulatorFrameTime;
+  config.sleepMs = nodeFiles.simulatorSleepMs;
+  config.bindAddress = nodeFiles.simulatorBindAddress;
+  config.localNodeId = nodeFiles.simulatorNodeId;
+  config.interestChunkX = nodeFiles.simulatorInterestChunkX;
+  config.interestChunkY = nodeFiles.simulatorInterestChunkY;
+  config.interestRadius = nodeFiles.simulatorInterestRadius;
+  config.placeVoxelValue = nodeFiles.simulatorPlaceVoxelValue;
+  config.receiveTimeoutMs = nodeFiles.simulatorReceiveTimeoutMs;
+  config.configPath = nodeFiles.configPath;
+  config.realmDirectory = realmFiles.directory;
+  config.realmName = realmFiles.realmName;
+  config.jumpNodeCount = realmFiles.jumpNodes.size();
+  config.blockchainConfig = realmFiles.blockchainConfig;
+  config.wallet = nodeFiles.wallet;
+
+  if (!realmFiles.jumpNodes.empty())
+  {
+    int jumpNodeIndex = nodeFiles.simulatorJumpNodeIndex;
+    if (jumpNodeIndex < 0) jumpNodeIndex = 0;
+    if ((size_t)jumpNodeIndex >= realmFiles.jumpNodes.size()) jumpNodeIndex = 0;
+    config.relayAddress = realmFiles.jumpNodes[(size_t)jumpNodeIndex].peerAddress;
+  }
+
+  return config;
+}
+
+static void ApplySimulatorArguments(int argc, char** argv, SimulatorConfig* config)
+{
+  if (config == nullptr) return;
+
+  for (int i = 1; i < argc; ++i)
+  {
+    if ((std::strcmp(argv[i], "--config") == 0 || std::strcmp(argv[i], "--realm-dir") == 0) && i + 1 < argc)
+    {
+      ++i;
+      continue;
+    }
+
     if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc)
     {
-      config.frames = ParseIntArgument(argv[++i], config.frames);
+      config->frames = ParseIntArgument(argv[++i], config->frames);
       continue;
     }
 
     if (std::strcmp(argv[i], "--frame-time") == 0 && i + 1 < argc)
     {
-      config.frameTime = ParseFloatArgument(argv[++i], config.frameTime);
+      config->frameTime = ParseFloatArgument(argv[++i], config->frameTime);
       continue;
     }
 
     if (std::strcmp(argv[i], "--sleep-ms") == 0 && i + 1 < argc)
     {
-      config.sleepMs = ParseIntArgument(argv[++i], config.sleepMs);
+      config->sleepMs = ParseIntArgument(argv[++i], config->sleepMs);
       continue;
     }
 
     if (std::strcmp(argv[i], "--no-sleep") == 0)
     {
-      config.sleepMs = 0;
+      config->sleepMs = 0;
       continue;
     }
 
     if (std::strcmp(argv[i], "--runtime") == 0)
     {
-      config.runtimeEnabled = true;
+      config->runtimeEnabled = true;
       continue;
     }
 
     if (std::strcmp(argv[i], "--bind-host") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.bindAddress.host = argv[++i];
+      config->runtimeEnabled = true;
+      config->bindAddress.host = argv[++i];
       continue;
     }
 
     if (std::strcmp(argv[i], "--bind-port") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.bindAddress.port = ParseIntArgument(argv[++i], config.bindAddress.port);
+      config->runtimeEnabled = true;
+      config->bindAddress.port = ParseIntArgument(argv[++i], config->bindAddress.port);
       continue;
     }
 
     if (std::strcmp(argv[i], "--relay-host") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.relayAddress.host = argv[++i];
+      config->runtimeEnabled = true;
+      config->relayAddress.host = argv[++i];
       continue;
     }
 
     if (std::strcmp(argv[i], "--relay-port") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.relayAddress.port = ParseIntArgument(argv[++i], config.relayAddress.port);
+      config->runtimeEnabled = true;
+      config->relayAddress.port = ParseIntArgument(argv[++i], config->relayAddress.port);
       continue;
     }
 
     if (std::strcmp(argv[i], "--node-id") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.localNodeId = (uint32_t)ParseIntArgument(argv[++i], (int)config.localNodeId);
+      config->runtimeEnabled = true;
+      config->localNodeId = (uint32_t)ParseIntArgument(argv[++i], (int)config->localNodeId);
       continue;
     }
 
     if (std::strcmp(argv[i], "--interest-x") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.interestChunkX = ParseIntArgument(argv[++i], config.interestChunkX);
+      config->runtimeEnabled = true;
+      config->interestChunkX = ParseIntArgument(argv[++i], config->interestChunkX);
       continue;
     }
 
     if (std::strcmp(argv[i], "--interest-y") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.interestChunkY = ParseIntArgument(argv[++i], config.interestChunkY);
+      config->runtimeEnabled = true;
+      config->interestChunkY = ParseIntArgument(argv[++i], config->interestChunkY);
       continue;
     }
 
     if (std::strcmp(argv[i], "--interest-radius") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.interestRadius = (uint32_t)ParseIntArgument(argv[++i], (int)config.interestRadius);
+      config->runtimeEnabled = true;
+      config->interestRadius = (uint32_t)ParseIntArgument(argv[++i], (int)config->interestRadius);
       continue;
     }
 
     if (std::strcmp(argv[i], "--emit-place") == 0)
     {
-      config.runtimeEnabled = true;
-      config.emitPlaceEvent = true;
+      config->runtimeEnabled = true;
+      config->emitPlaceEvent = true;
       continue;
     }
 
     if (std::strcmp(argv[i], "--place-voxel") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.placeVoxelValue = (uint8_t)ParseIntArgument(argv[++i], (int)config.placeVoxelValue);
+      config->runtimeEnabled = true;
+      config->placeVoxelValue = (uint8_t)ParseIntArgument(argv[++i], (int)config->placeVoxelValue);
       continue;
     }
 
     if (std::strcmp(argv[i], "--timeout-ms") == 0 && i + 1 < argc)
     {
-      config.runtimeEnabled = true;
-      config.receiveTimeoutMs = (uint32_t)ParseIntArgument(argv[++i], (int)config.receiveTimeoutMs);
+      config->runtimeEnabled = true;
+      config->receiveTimeoutMs = (uint32_t)ParseIntArgument(argv[++i], (int)config->receiveTimeoutMs);
       continue;
     }
   }
 
-  if (config.frameTime <= 0.0f) config.frameTime = 1.0f / 60.0f;
-  if (config.sleepMs < 0) config.sleepMs = 0;
-  if (config.bindAddress.port <= 0) config.bindAddress.port = 46010;
-  if (config.relayAddress.port <= 0) config.relayAddress.port = 46001;
-  if (config.receiveTimeoutMs == 0) config.receiveTimeoutMs = 1000;
-  return config;
-}
-
-static BlockchainConfig BuildSimulatorBlockchainConfig()
-{
-  BlockchainConfig blockchainConfig = {};
-  blockchainConfig.rpcUrl = "http://127.0.0.1:8545";
-  blockchainConfig.globalParamsAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.playerRegistryAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.chunkClaimsAddress = "0x0000000000000000000000000000000000000000";
-  blockchainConfig.marketplaceAddress = "0x0000000000000000000000000000000000000000";
-  return blockchainConfig;
-}
-
-static Wallet BuildSimulatorWallet()
-{
-  return Wallet("0x0000000000000000000000000000000000000001",
-                "0x0000000000000000000000000000000000000001");
+  if (config->frameTime <= 0.0f) config->frameTime = 1.0f / 60.0f;
+  if (config->sleepMs < 0) config->sleepMs = 0;
+  if (config->bindAddress.port <= 0) config->bindAddress.port = 46010;
+  if (config->relayAddress.port <= 0) config->relayAddress.port = 46001;
+  if (config->receiveTimeoutMs == 0) config->receiveTimeoutMs = 1000;
 }
 
 static RuntimeRealmState BuildSimulatorRealmState(Blockchain& blockchain, const BlockchainConfig& blockchainConfig)
@@ -300,10 +354,8 @@ static bool StartRuntimeSession(
   runtimeState->runtimeStarted = runtimeClient->Start(config.bindAddress);
   if (!runtimeState->runtimeStarted) return false;
 
-  BlockchainConfig blockchainConfig = BuildSimulatorBlockchainConfig();
-  Wallet wallet = BuildSimulatorWallet();
-  Blockchain blockchain(blockchainConfig, std::move(wallet));
-  const RuntimeRealmState realmState = BuildSimulatorRealmState(blockchain, blockchainConfig);
+  Blockchain blockchain(config.blockchainConfig, config.wallet);
+  const RuntimeRealmState realmState = BuildSimulatorRealmState(blockchain, config.blockchainConfig);
   runtimeState->realmHash = ComputeRuntimeRealmHash(realmState);
 
   HandshakePacketData handshake = {};
@@ -391,7 +443,33 @@ static void PumpRuntimePackets(
 
 int main(int argc, char** argv)
 {
-  const SimulatorConfig config = ParseSimulatorConfig(argc, argv);
+  const SimulatorBootConfig bootConfig = ParseSimulatorBootConfig(argc, argv);
+
+  RuntimeNodeFilesConfig nodeFiles = {};
+  std::string loadError = {};
+  if (!LoadRuntimeNodeFilesConfig(bootConfig.configPath, &nodeFiles, &loadError))
+  {
+    std::cout << "OpenRealm simulator node\n";
+    std::cout << "- runtime config load: failed\n";
+    std::cout << "- runtime config path: " << bootConfig.configPath << "\n";
+    std::cout << "- runtime config error: " << loadError << "\n";
+    return 1;
+  }
+
+  const std::string realmDirectory = bootConfig.realmDirectory.empty() ? nodeFiles.selectedRealm : bootConfig.realmDirectory;
+  RuntimeRealmFiles realmFiles = {};
+  if (!LoadRuntimeRealmFiles(realmDirectory, &realmFiles, &loadError))
+  {
+    std::cout << "OpenRealm simulator node\n";
+    std::cout << "- runtime config load: failed\n";
+    std::cout << "- runtime config path: " << nodeFiles.configPath << "\n";
+    std::cout << "- runtime realm directory: " << realmDirectory << "\n";
+    std::cout << "- runtime config error: " << loadError << "\n";
+    return 1;
+  }
+
+  SimulatorConfig config = BuildSimulatorConfigFromFiles(nodeFiles, realmFiles);
+  ApplySimulatorArguments(argc, argv, &config);
 
   static TaskManager taskManager = {};
   if (!taskManager.Start(MESH_WORKER_COUNT))
@@ -453,6 +531,14 @@ int main(int argc, char** argv)
   std::cout << "- sleep ms: " << config.sleepMs << "\n";
   std::cout << "- task manager running: " << (taskManager.IsRunning() ? "yes" : "no") << "\n";
   std::cout << "- player count before shutdown: " << playerCount << "\n";
+  std::cout << "- runtime config load: ok\n";
+  std::cout << "- runtime config path: " << config.configPath << "\n";
+  std::cout << "- runtime realm directory: " << config.realmDirectory << "\n";
+  std::cout << "- runtime realm name: " << config.realmName << "\n";
+  std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
+  std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
+  std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
+  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
   std::cout << "- runtime mode: " << (config.runtimeEnabled ? "enabled" : "disabled") << "\n";
   std::cout << "- runtime bind address: " << DescribeRuntimePeerAddress(config.bindAddress) << "\n";
   std::cout << "- runtime relay address: " << DescribeRuntimePeerAddress(config.relayAddress) << "\n";

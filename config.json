@@ -1,0 +1,31 @@
+{
+  "realm": "realms/test",
+  "wallet": {
+    "accountAddress": "0x0000000000000000000000000000000000000001",
+    "runtimeSignerAddress": "0x0000000000000000000000000000000000000001"
+  },
+  "simulator": {
+    "bindAddress": {
+      "host": "127.0.0.1",
+      "port": 46010
+    },
+    "jumpNodeIndex": 0,
+    "nodeId": 7001,
+    "interestChunkX": 0,
+    "interestChunkY": 0,
+    "interestRadius": 1,
+    "placeVoxelValue": 255,
+    "receiveTimeoutMs": 1000,
+    "frameTime": 0.016666667,
+    "sleepMs": 16
+  },
+  "relay": {
+    "bindAddress": {
+      "host": "127.0.0.1",
+      "port": 46001
+    },
+    "nodeId": 9001,
+    "receiveTimeoutMs": 100,
+    "ticks": 0
+  }
+}

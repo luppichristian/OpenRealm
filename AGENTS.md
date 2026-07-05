@@ -38,8 +38,8 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/targets/`
   - Executable entry points for the distinct node types.
   - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
-  - `Simulator.cpp` owns the headless simulator node entrypoint and runs a real world-update loop; it supports finite verification runs via CLI flags like `--frames`, `--frame-time`, and `--no-sleep`, and it now also supports a runtime sim-node mode that can handshake with a relay, receive peer discovery, publish chunk-interest, emit a demo world event, and apply forwarded remote runtime world-events back into `World`/`VoxelWorld` while the simulation loop is live via flags like `--runtime`, `--relay-host`, `--relay-port`, `--node-id`, `--interest-x`, `--interest-y`, `--interest-radius`, and `--emit-place`.
-  - `Relay.cpp` owns the lightweight relay node entrypoint; it now supports a real service mode by default plus a focused `--smoke` mode that exercises the runtime-networking/blockchain integration scaffolds, chunk-interest registration, and world-event forwarding between compatible peers.
+  - `Simulator.cpp` owns the headless simulator node entrypoint and runs a real world-update loop; it supports finite verification runs via CLI flags like `--frames`, `--frame-time`, and `--no-sleep`, and it now also supports a runtime sim-node mode that loads `config.json` plus the selected realm folder (`--config`, `--realm-dir`), derives blockchain params from `<realm>/realm.json`, derives its default relay target from `<realm>/jump_nodes.json`, can handshake with a relay, receive peer discovery, publish chunk-interest, emit a demo world event, and apply forwarded remote runtime world-events back into `World`/`VoxelWorld` while the simulation loop is live via flags like `--runtime`, `--relay-host`, `--relay-port`, `--node-id`, `--interest-x`, `--interest-y`, `--interest-radius`, and `--emit-place`.
+  - `Relay.cpp` owns the lightweight relay node entrypoint; it now supports a real service mode by default plus a focused `--smoke` mode that exercises the runtime-networking/blockchain integration scaffolds, chunk-interest registration, and world-event forwarding between compatible peers, and it now also loads wallet/blockchain realm data from `config.json` plus the selected realm folder instead of hardcoded native-side defaults.
   - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
 - `node/runtime/`
   - Runtime node-to-node transport code only.
@@ -47,6 +47,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
   - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
   - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces realm-hash matching, and rejects duplicate/self node ids.
+  - `RuntimeConfigFiles.*` loads the selected realm's `realm.json` / `jump_nodes.json` plus root `config.json` so simulator/relay runtime targets can source blockchain params, wallet addresses, and jump-node defaults from JSON files instead of hardcoded literals.
   - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from blockchain config + fetched global params so peers can confirm they are on the same environment.
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
 - `node/blockchain/`
@@ -124,6 +125,13 @@ Do not describe this repo as if it already contains distributed networking or co
   - Local build artifacts.
 - `dist/`
   - Output/distribution artifacts.
+- `realms/`
+  - Root folder for runtime realm-data directories.
+  - `realms/main/` stores one runtime environment's `realm.json` and `jump_nodes.json`.
+  - `realms/test/` stores the local/test runtime environment with the same file shape.
+- `config.json`
+  - Root runtime node configuration file.
+  - Stores the selected default realm plus node-local settings such as wallet addresses and simulator/relay bind/node defaults.
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
@@ -147,8 +155,8 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - The `project.bbs` native targets are split by node type:
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
-  - `openrealm_simulator` builds `openrealm-simulator` from the task-manager + runtime + blockchain + world folders plus `node/targets/Simulator.cpp`.
-  - `openrealm_relay` builds `openrealm-relay` from the runtime/blockchain folders plus `node/targets/Relay.cpp`.
+  - `openrealm_simulator` builds `openrealm-simulator` from the task-manager + runtime + blockchain + world folders plus `node/targets/Simulator.cpp`; it currently lists `node/runtime/RuntimeConfigFiles.cpp` explicitly alongside `node/runtime/*.cpp` so the generated backend picks up the JSON realm-config loader reliably.
+  - `openrealm_relay` builds `openrealm-relay` from the runtime/blockchain folders plus `node/targets/Relay.cpp`; it also lists `node/runtime/RuntimeConfigFiles.cpp` explicitly alongside `node/runtime/*.cpp` for the same generated-backend reason.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
@@ -165,6 +173,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - World continuity/fidelity is expected to scale with active node coverage: fewer nodes means thinner replication and lower continuity, while more nodes means stronger continuity and resilience.
 - Non-client nodes are expected to stay cheap/lightweight to run so world continuity can emerge from many active participants rather than a few heavy hosts.
 - Runtime nodes are expected to join the wider network through one or more known "jump nodes" that act as discoverable entry points; project-hosted jump nodes are acceptable, but player-hosted jump nodes should also remain possible.
+- The current native runtime targets source realm-scoped blockchain/jump-node data from JSON files: `realms/<name>/realm.json` for blockchain config and `realms/<name>/jump_nodes.json` for known entry nodes, with root `config.json` selecting the default realm path (for example `realms/test`) and providing node-local wallet/bind settings.
 - A jump node is a public entry/discovery role layered on top of a known node address; it should provide first contact, peer-list sharing, handshake/compatibility checks, and optional relay fallback, but should not imply gameplay authority.
 - The decentralized node graph should preserve reachability across the same world/network even when peers do not all connect directly.
 - Peer neighborhood design should prefer locality-aware connectivity: nodes responsible for nearby world regions should connect more directly, while distant regions do not need dense direct links.
