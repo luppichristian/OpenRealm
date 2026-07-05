@@ -76,9 +76,18 @@ targets(
     output(openrealm-simulator)
     lang(cpp)
     stdver(c++20)
-    dependencies(raylib tracy)
+    include_dirs(
+      "$DEP(enet.package.resolved_dir)/include"
+    )
+    dependencies(raylib tracy httplib nlohmann_json enet)
+    link_libs(
+      ws2_32
+      winmm
+    )
     units(
       node/TaskManager.cpp
+      node/runtime/*.cpp
+      node/blockchain/*.cpp
       node/world/*.cpp
       node/targets/Simulator.cpp
     )

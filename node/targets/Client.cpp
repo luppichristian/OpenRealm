@@ -3,7 +3,7 @@
 
 int main()
 {
-  TaskManager taskManager = {};
-  Game game = {};
+  static TaskManager taskManager = {};
+  static Game game = {};
   return game.Run(taskManager);
 }

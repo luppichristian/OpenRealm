@@ -2,10 +2,14 @@
 
 #include <enet/enet.h>
 
+#include <cstring>
+
 static constexpr uint32_t RUNTIME_PACKET_MAGIC = 0x4f524c4d;
 static constexpr uint8_t RUNTIME_PACKET_VERSION = 1;
 static constexpr size_t PACKET_HEADER_SIZE = 16;
 static constexpr size_t HANDSHAKE_PAYLOAD_SIZE = 16;
+static constexpr size_t CHUNK_INTEREST_PAYLOAD_SIZE = 16;
+static constexpr size_t WORLD_EVENT_PAYLOAD_SIZE = 58;
 static constexpr size_t MAX_PEER_DISCOVERY_NODES = 64;
 static constexpr size_t MAX_PEER_DISCOVERY_HOST_BYTES = 255;
 
@@ -25,6 +29,19 @@ static void AppendU64(std::vector<uint8_t>* bytes, uint64_t value)
   {
     bytes->push_back((uint8_t)((value >> shift) & 0xff));
   }
+}
+
+static void AppendI32(std::vector<uint8_t>* bytes, int32_t value)
+{
+  AppendU32(bytes, (uint32_t)value);
+}
+
+static void AppendF32(std::vector<uint8_t>* bytes, float value)
+{
+  uint32_t rawValue = 0;
+  static_assert(sizeof(rawValue) == sizeof(value));
+  memcpy(&rawValue, &value, sizeof(rawValue));
+  AppendU32(bytes, rawValue);
 }
 
 static void AppendString(std::vector<uint8_t>* bytes, const std::string& value)
@@ -61,6 +78,20 @@ static uint64_t ReadU64(const std::vector<uint8_t>& bytes, size_t offset)
   return value;
 }
 
+static int32_t ReadI32(const std::vector<uint8_t>& bytes, size_t offset)
+{
+  return (int32_t)ReadU32(bytes, offset);
+}
+
+static float ReadF32(const std::vector<uint8_t>& bytes, size_t offset)
+{
+  const uint32_t rawValue = ReadU32(bytes, offset);
+  float value = 0.0f;
+  static_assert(sizeof(rawValue) == sizeof(value));
+  memcpy(&value, &rawValue, sizeof(value));
+  return value;
+}
+
 static bool TryReadString(const std::vector<uint8_t>& bytes, size_t* offset, std::string* value)
 {
   if (offset == nullptr || value == nullptr) return false;
@@ -81,6 +112,7 @@ bool IsPacketTypeSupported(PacketType type)
   {
     case PacketType::Handshake:
     case PacketType::PeerDiscovery:
+    case PacketType::ChunkInterest:
     case PacketType::ChunkDelta:
     case PacketType::WorldEvent: return true;
     default: return false;
@@ -166,6 +198,95 @@ bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData*
   return offset == packet.payload.size();
 }
 
+Packet MakeChunkInterestPacket(const ChunkInterestPacketData& chunkInterest)
+{
+  Packet packet = {};
+  packet.type = PacketType::ChunkInterest;
+  AppendU32(&packet.payload, chunkInterest.nodeId);
+  AppendI32(&packet.payload, chunkInterest.chunkX);
+  AppendI32(&packet.payload, chunkInterest.chunkY);
+  AppendU32(&packet.payload, chunkInterest.radius);
+  return packet;
+}
+
+bool TryDecodeChunkInterestPacket(const Packet& packet, ChunkInterestPacketData* chunkInterest)
+{
+  if (chunkInterest == nullptr) return false;
+  if (packet.type != PacketType::ChunkInterest) return false;
+  if (packet.payload.size() != CHUNK_INTEREST_PAYLOAD_SIZE) return false;
+
+  chunkInterest->nodeId = ReadU32(packet.payload, 0);
+  chunkInterest->chunkX = ReadI32(packet.payload, 4);
+  chunkInterest->chunkY = ReadI32(packet.payload, 8);
+  chunkInterest->radius = ReadU32(packet.payload, 12);
+  return true;
+}
+
+Packet MakeWorldEventPacket(const WorldEventPacketData& worldEvent)
+{
+  Packet packet = {};
+  packet.type = PacketType::WorldEvent;
+  AppendU32(&packet.payload, worldEvent.nodeId);
+  packet.payload.push_back(worldEvent.event.type);
+  AppendU32(&packet.payload, (uint32_t)worldEvent.event.playerId);
+  packet.payload.push_back(worldEvent.event.voxelValue);
+  AppendI32(&packet.payload, worldEvent.event.voxelX);
+  AppendI32(&packet.payload, worldEvent.event.voxelY);
+  AppendI32(&packet.payload, worldEvent.event.voxelZ);
+  AppendF32(&packet.payload, worldEvent.event.playerX);
+  AppendF32(&packet.payload, worldEvent.event.playerY);
+  AppendF32(&packet.payload, worldEvent.event.playerZ);
+  AppendF32(&packet.payload, worldEvent.event.playerYaw);
+  AppendF32(&packet.payload, worldEvent.event.playerPitch);
+  AppendF32(&packet.payload, worldEvent.event.moveX);
+  AppendF32(&packet.payload, worldEvent.event.moveY);
+  AppendF32(&packet.payload, worldEvent.event.lookDeltaX);
+  AppendF32(&packet.payload, worldEvent.event.lookDeltaY);
+  return packet;
+}
+
+bool TryDecodeWorldEventPacket(const Packet& packet, WorldEventPacketData* worldEvent)
+{
+  if (worldEvent == nullptr) return false;
+  if (packet.type != PacketType::WorldEvent) return false;
+  if (packet.payload.size() != WORLD_EVENT_PAYLOAD_SIZE) return false;
+
+  size_t offset = 0;
+  worldEvent->nodeId = ReadU32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.type = packet.payload[offset];
+  offset += 1;
+  worldEvent->event.playerId = (int)ReadU32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.voxelValue = packet.payload[offset];
+  offset += 1;
+  worldEvent->event.voxelX = ReadI32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.voxelY = ReadI32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.voxelZ = ReadI32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.playerX = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.playerY = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.playerZ = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.playerYaw = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.playerPitch = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.moveX = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.moveY = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.lookDeltaX = ReadF32(packet.payload, offset);
+  offset += 4;
+  worldEvent->event.lookDeltaY = ReadF32(packet.payload, offset);
+  offset += 4;
+  return offset == packet.payload.size();
+}
+
 uint32_t ComputePacketChecksum(const PacketHeader& header, const std::vector<uint8_t>& payload)
 {
   std::vector<uint8_t> checksumHeader = {};
@@ -244,6 +365,7 @@ std::string DescribePacketType(PacketType type)
   {
     case PacketType::Handshake: return "handshake";
     case PacketType::PeerDiscovery: return "peer_discovery";
+    case PacketType::ChunkInterest: return "chunk_interest";
     case PacketType::ChunkDelta: return "chunk_delta";
     case PacketType::WorldEvent: return "world_event";
     default: return "invalid";

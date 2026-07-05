@@ -44,6 +44,7 @@ class ActiveNodeBucket
   size_t GetCount() const;
   const ActiveNodeState* FindByNodeId(uint32_t nodeId) const;
   const ActiveNodeState* FindByPeerAddress(const RuntimePeerAddress& peerAddress) const;
+  std::vector<RuntimePeerAddress> BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash) const;
   std::vector<PeerDiscoveryNodeState> BuildPeerDiscoveryNodes(uint32_t requestingNodeId, uint64_t realmHash) const;
 
  private:

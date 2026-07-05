@@ -96,6 +96,20 @@ const ActiveNodeState* ActiveNodeBucket::FindByPeerAddress(const RuntimePeerAddr
   return nullptr;
 }
 
+std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash) const
+{
+  std::vector<RuntimePeerAddress> peerAddresses = {};
+
+  for (const ActiveNodeState& node : nodes)
+  {
+    if (node.nodeId == excludedNodeId) continue;
+    if (node.realmHash != realmHash) continue;
+    peerAddresses.push_back(node.peerAddress);
+  }
+
+  return peerAddresses;
+}
+
 std::vector<PeerDiscoveryNodeState> ActiveNodeBucket::BuildPeerDiscoveryNodes(
     uint32_t requestingNodeId,
     uint64_t realmHash

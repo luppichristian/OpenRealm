@@ -38,8 +38,9 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/targets/`
   - Executable entry points for the distinct node types.
   - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
-  - `Simulator.cpp` owns the headless simulator node entrypoint.
-  - `Relay.cpp` owns the lightweight relay node entrypoint and currently exercises the runtime-networking/blockchain integration scaffolds.
+  - `Simulator.cpp` owns the headless simulator node entrypoint and runs a real world-update loop; it supports finite verification runs via CLI flags like `--frames`, `--frame-time`, and `--no-sleep`, and it now also supports a runtime sim-node mode that can handshake with a relay, receive peer discovery, publish chunk-interest, and emit a demo world event via flags like `--runtime`, `--relay-host`, `--relay-port`, `--interest-x`, `--interest-y`, `--interest-radius`, and `--emit-place`.
+  - `Relay.cpp` owns the lightweight relay node entrypoint; it now supports a real service mode by default plus a focused `--smoke` mode that exercises the runtime-networking/blockchain integration scaffolds, chunk-interest registration, and world-event forwarding between compatible peers.
+  - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
 - `node/runtime/`
   - Runtime node-to-node transport code only.
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
@@ -146,7 +147,7 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - The `project.bbs` native targets are split by node type:
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
-  - `openrealm_simulator` builds `openrealm-simulator` from the world/task-manager folders plus `node/targets/Simulator.cpp`.
+  - `openrealm_simulator` builds `openrealm-simulator` from the task-manager + runtime + blockchain + world folders plus `node/targets/Simulator.cpp`.
   - `openrealm_relay` builds `openrealm-relay` from the runtime/blockchain folders plus `node/targets/Relay.cpp`.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
@@ -184,6 +185,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Runtime identity delegation is currently expected to use wallet-authorized expiring runtime-session keys recorded in `PlayerRegistry`; runtime code should resolve incoming signers through the registry before applying ownership/permission rules.
 - Current runtime handshake validation is intentionally environment-aware: nodes advertise a realm hash derived from blockchain config plus fetched `GlobalParams`, and handshake acceptance also rejects duplicate node ids coming from different peer addresses.
 - Peer discovery packets currently advertise the requester's node id plus a filtered list of known same-realm peers from `ActiveNodeBucket`; the relay smoke target exercises discovery by excluding the requester and returning the remaining compatible peers.
+- Runtime chunk-interest packets currently advertise a node id plus center chunk/radius subscription data; the relay keeps the latest interest per node and uses it to prefer locality-aware forwarding of runtime world-event packets, with a same-realm peer fallback when no explicit interest match is available yet.
 - Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
@@ -297,7 +299,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - When adding source files, check which node target should own them; the current `project.bbs` console targets select source folders directly rather than routing through repo-local static libraries.
 - Current target folder mapping is:
   - `openrealm_client`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, `node/targets/Client.cpp`
-  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
+  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
   - `openrealm_relay`: `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
