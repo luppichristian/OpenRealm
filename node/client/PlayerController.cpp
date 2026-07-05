@@ -16,7 +16,7 @@ void SendSpawnEvent(World& world)
   world.SendEvent(spawnLocalPlayerEvent);
 }
 
-void HandleFrameInput(World& world, ColorMenu& colorMenu)
+void HandleFrameInput(World& world, ColorMenu& colorMenu, const PlayerInputOptions& inputOptions)
 {
   if (!colorMenu.IsOpen())
   {
@@ -26,8 +26,8 @@ void HandleFrameInput(World& world, ColorMenu& colorMenu)
       WorldEvent event = {
           .type = WorldEventType::Look,
           .playerId = LOCAL_PLAYER_ID,
-          .lookDeltaX = mouseDelta.x,
-          .lookDeltaY = mouseDelta.y,
+          .lookDeltaX = mouseDelta.x * inputOptions.mouseSensitivity,
+          .lookDeltaY = mouseDelta.y * inputOptions.mouseSensitivity * (inputOptions.invertMouseY ? -1.0f : 1.0f),
       };
       world.SendEvent(event);
     }
@@ -88,5 +88,5 @@ void DrawHud(const ColorMenu& colorMenu)
   DrawRectangle(16, 16, 52, 52, Fade(BLACK, 0.55f));
   DrawRectangle(24, 24, 36, 36, selectedColor);
   DrawRectangleLines(23, 23, 38, 38, RAYWHITE);
-  DrawText("TAB color", 16, 74, 18, RAYWHITE);
+  DrawText("TAB color  ESC pause", 16, 74, 18, RAYWHITE);
 }

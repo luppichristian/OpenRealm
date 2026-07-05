@@ -4,32 +4,81 @@
 
 void Game::Initialize(TaskManager& taskManager)
 {
+  if (initialized) return;
+
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
   InitWindow(kScreenWidth, kScreenHeight, "openrealm");
+  SetExitKey(KEY_NULL);
   InitAudioDevice();
-  if (!taskManager.Start(MESH_WORKER_COUNT))
+  taskManagerStarted = taskManager.Start(MESH_WORKER_COUNT);
+  if (!taskManagerStarted)
   {
     TraceLog(LOG_WARNING, "Failed to start global task manager; background tasks will be disabled.");
   }
-  world.Initialize();
-  clientWorld.Initialize(taskManager);
-  DisableCursor();
-  SendSpawnEvent(world);
+
+  clientMenu.Initialize("config.json");
+  clientMenu.OpenMainMenu();
+  UpdateCursorState();
+  initialized = true;
 }
 
 void Game::Shutdown(TaskManager& taskManager)
 {
-  taskManager.Stop();
-  clientWorld.Shutdown();
-  world.Shutdown();
+  if (!initialized) return;
+
+  StopGameplay();
+  if (taskManagerStarted)
+  {
+    taskManager.Stop();
+    taskManagerStarted = false;
+  }
   CloseAudioDevice();
   CloseWindow();
+  initialized = false;
 }
 
-void Game::ToggleColorMenu()
+void Game::StartGameplay(TaskManager& taskManager)
 {
-  colorMenu.Toggle();
-  if (colorMenu.IsOpen())
+  StopGameplay();
+  world.Initialize();
+  clientWorld.Initialize(taskManager);
+  colorMenu = {};
+  SendSpawnEvent(world);
+  gameplayActive = true;
+  clientMenu.SetPlaying(true);
+  ResumeGameplay();
+}
+
+void Game::StopGameplay()
+{
+  if (!gameplayActive) return;
+
+  colorMenu = {};
+  clientWorld.Shutdown();
+  world.Shutdown();
+  gameplayActive = false;
+  clientMenu.SetPlaying(false);
+  UpdateCursorState();
+}
+
+void Game::ResumeGameplay()
+{
+  if (!gameplayActive) return;
+  clientMenu.SetPlaying(true);
+  UpdateCursorState();
+}
+
+void Game::OpenPauseMenu()
+{
+  if (!gameplayActive) return;
+  colorMenu = {};
+  clientMenu.OpenPauseMenu();
+  UpdateCursorState();
+}
+
+void Game::UpdateCursorState()
+{
+  if (clientMenu.IsOpen() || !gameplayActive || colorMenu.IsOpen())
   {
     EnableCursor();
   }
@@ -39,24 +88,74 @@ void Game::ToggleColorMenu()
   }
 }
 
+void Game::ToggleColorMenu()
+{
+  if (!gameplayActive || clientMenu.IsOpen()) return;
+  colorMenu.Toggle();
+  UpdateCursorState();
+}
+
 int Game::Run(TaskManager& taskManager)
 {
   Initialize(taskManager);
 
   while (!WindowShouldClose())
   {
-    if (IsKeyPressed(KEY_TAB)) ToggleColorMenu();
+    const ClientMenuAction menuAction = clientMenu.Update();
+    switch (menuAction)
+    {
+      case ClientMenuAction::StartGame:
+        StartGameplay(taskManager);
+        break;
+      case ClientMenuAction::ResumeGame:
+        ResumeGameplay();
+        break;
+      case ClientMenuAction::ReturnToMainMenu:
+        StopGameplay();
+        clientMenu.OpenMainMenu();
+        break;
+      case ClientMenuAction::ExitGame:
+        Shutdown(taskManager);
+        return 0;
+      case ClientMenuAction::None: break;
+    }
 
-    HandleFrameInput(world, colorMenu);
-    world.Update(GetFrameTime());
-    clientWorld.Update(world);
+    if (gameplayActive && !clientMenu.IsOpen())
+    {
+      if (IsKeyPressed(KEY_ESCAPE))
+      {
+        OpenPauseMenu();
+      }
+      else
+      {
+        if (IsKeyPressed(KEY_TAB)) ToggleColorMenu();
+
+        PlayerInputOptions inputOptions = {
+            .mouseSensitivity = clientMenu.GetConfig().mouseSensitivity,
+            .invertMouseY = clientMenu.GetConfig().invertMouseY,
+        };
+        HandleFrameInput(world, colorMenu, inputOptions);
+        world.Update(GetFrameTime());
+        clientWorld.Update(world);
+      }
+    }
 
     BeginDrawing();
-    clientWorld.Render(world, LOCAL_PLAYER_ID);
-    DrawFPS(GetScreenWidth() - 200, 16);
-    DrawHud(colorMenu);
-    colorMenu.Draw();
+    if (gameplayActive)
+    {
+      clientWorld.Render(world, LOCAL_PLAYER_ID);
+      if (clientMenu.GetConfig().showFps) DrawFPS(GetScreenWidth() - 200, 16);
+      DrawHud(colorMenu);
+      colorMenu.Draw();
+    }
+    else
+    {
+      ClearBackground(BLACK);
+    }
+
+    clientMenu.Draw(gameplayActive);
     EndDrawing();
+    UpdateCursorState();
   }
 
   Shutdown(taskManager);

@@ -67,8 +67,16 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/client/Game.*`
   - App shell and frame loop.
   - Owns window/audio init and shutdown.
-  - Owns the top-level `World`, `ClientWorld`, and `ColorMenu`.
+  - Owns the top-level `World`, `ClientWorld`, `ClientMenu`, and `ColorMenu`.
   - Receives the shared `TaskManager` from the entrypoint instead of owning it.
+  - Initializes the window/audio/task-manager shell up front, keeps the client main menu open before gameplay starts, and creates/shuts down the playable world session when entering or leaving play.
+- `node/client/ClientMenu.*`
+  - In-game GUI menu flow for client nodes.
+  - Owns the main menu, play/network selection menu, options menu, credits screen, and pause menu.
+  - Persists client-only settings and selected realm/jump node through `config.json`.
+- `node/client/ClientConfigFiles.*`
+  - Client-only config/realm file helpers.
+  - Loads/saves the `client` block in root `config.json` and discovers playable realms from `realms/*`.
 - `node/client/ClientWorld.*`
   - Client-only composition root.
   - Owns asset/audio caches, GPU upload state, and render orchestration for a `World`.
@@ -76,6 +84,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/client/PlayerController.*`
   - Free-function input layer.
   - Converts mouse/keyboard input into `WorldEvent`s.
+  - Applies client-configured mouse sensitivity and invert-Y options before sending look events.
   - Draws HUD elements.
 - `node/client/ColorMenu.*`
 
@@ -137,6 +146,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `config.json`
   - Root runtime node configuration file.
   - Stores the selected default realm plus node-local settings such as wallet addresses and simulator/relay bind/node defaults.
+  - Now also stores a `client` object for client-node menu settings (`realm`, `jumpNodeIndex`, `masterVolume`, `mouseSensitivity`, `invertMouseY`, `showFps`).
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
   - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
@@ -213,6 +223,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `ClientWorld` is the main composition root for client-only systems that consume `World`.
 - The code favors direct ownership and explicit orchestration over abstract interfaces.
 - Background task execution is centralized in `TaskManager`, owned outside both `Game` and `World` at the entrypoint layer; client mesh jobs submit directly into it from `WorldMeshSystem`, and other systems can reuse the same manager.
+- Client node menu flow is GUI-driven inside the raylib window: the app boots into a main menu, the play submenu persists the selected realm/jump node, and gameplay can be suspended with `ESC` into a pause menu that can resume, open options, or return to the main menu.
 - Voxel data is chunked and sectioned. Meshing is asynchronous and client-owned, while gameplay/world mutation remains local and immediate.
 - Chunk storage/lookup ignores any chunk coordinates outside the inclusive X/Y bounds `[-30000, 30000]`.
 - Rendering is a mix of:

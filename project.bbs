@@ -61,7 +61,7 @@ targets(
     output(openrealm-client)
     lang(cpp)
     stdver(c++20)
-    dependencies(raylib tracy)
+    dependencies(raylib tracy nlohmann_json)
     units(
       node/TaskManager.cpp
       node/world/*.cpp

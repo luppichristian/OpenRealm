@@ -22,6 +22,14 @@
     "runtimeEnabled": false,
     "emitPlaceEvent": false
   },
+  "client": {
+    "realm": "realms/test",
+    "jumpNodeIndex": 0,
+    "masterVolume": 1.0,
+    "mouseSensitivity": 1.0,
+    "invertMouseY": false,
+    "showFps": true
+  },
   "relay": {
     "bindAddress": {
       "host": "127.0.0.1",
