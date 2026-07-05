@@ -39,7 +39,6 @@ static bool HasArgument(int argc, char** argv, const char* argument)
 
 bool ShouldRunNodeCli(int argc, char** argv)
 {
-  if (HasArgument(argc, argv, "--cli")) return true;
   if (HasArgument(argc, argv, "--no-cli")) return false;
   if (HasArgument(argc, argv, "--smoke")) return false;
   return IsInputInteractive();
