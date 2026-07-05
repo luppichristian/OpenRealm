@@ -86,9 +86,6 @@ targets(
     )
     units(
       node/TaskManager.cpp
-      node/NodeConfigFiles.cpp
-      node/NodeRuntime.cpp
-      node/SimulatorNode.cpp
       node/runtime/*.cpp
       node/blockchain/*.cpp
       node/world/*.cpp
@@ -111,9 +108,6 @@ targets(
       winmm
     )
     units(
-      node/NodeConfigFiles.cpp
-      node/NodeRuntime.cpp
-      node/RelayNode.cpp
       node/runtime/*.cpp
       node/blockchain/*.cpp
       node/targets/Relay.cpp

@@ -1,25 +1,10 @@
 #pragma once
 
-#include "blockchain/BlockchainConfig.h"
-#include "blockchain/Wallet.h"
-#include "runtime/RuntimeClient.h"
+#include "../blockchain/Wallet.h"
+#include "RuntimeClient.h"
 
+#include <cstdint>
 #include <string>
-#include <vector>
-
-struct NodeJumpNodeState
-{
-  RuntimePeerAddress peerAddress = {};
-  std::string label = {};
-};
-
-struct NodeRealmFiles
-{
-  std::string directory = {};
-  std::string realmName = {};
-  BlockchainConfig blockchainConfig = {};
-  std::vector<NodeJumpNodeState> jumpNodes = {};
-};
 
 struct NodeFilesConfig
 {
@@ -47,5 +32,11 @@ struct NodeFilesConfig
   int relayTicks = 0;
 };
 
+struct NodeBootConfig
+{
+  std::string configPath = "config.json";
+  std::string realmDirectory = {};
+};
+
+NodeBootConfig ParseNodeBootConfig(int argc, char** argv);
 bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config, std::string* errorMessage);
-bool LoadNodeRealmFiles(const std::string& realmDirectory, NodeRealmFiles* realmFiles, std::string* errorMessage);

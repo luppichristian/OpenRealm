@@ -1,4 +1,4 @@
-#include "NodeConfigFiles.h"
+#include "RealmConfigFiles.h"
 
 #include <fstream>
 #include <utility>
@@ -53,18 +53,6 @@ static uint32_t ReadU32Value(const nlohmann::json& json, const char* key, uint32
   return json[key].get<uint32_t>();
 }
 
-static float ReadFloatValue(const nlohmann::json& json, const char* key, float fallback)
-{
-  if (!json.is_object() || key == nullptr || !json.contains(key) || !json[key].is_number()) return fallback;
-  return json[key].get<float>();
-}
-
-static bool ReadBoolValue(const nlohmann::json& json, const char* key, bool fallback)
-{
-  if (!json.is_object() || key == nullptr || !json.contains(key) || !json[key].is_boolean()) return fallback;
-  return json[key].get<bool>();
-}
-
 static RuntimePeerAddress ReadPeerAddressValue(const nlohmann::json& json, const RuntimePeerAddress& fallback)
 {
   RuntimePeerAddress peerAddress = fallback;
@@ -74,57 +62,11 @@ static RuntimePeerAddress ReadPeerAddressValue(const nlohmann::json& json, const
   return peerAddress;
 }
 
-bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config, std::string* errorMessage)
-{
-  if (config == nullptr)
-  {
-    if (errorMessage != nullptr) *errorMessage = "node config output was null";
-    return false;
-  }
-
-  nlohmann::json root = {};
-  if (!LoadJsonFile(configPath, &root, errorMessage)) return false;
-
-  config->configPath = configPath;
-  config->selectedRealm = ReadStringValue(root, "realm", config->selectedRealm);
-
-  const nlohmann::json walletJson = root.value("wallet", nlohmann::json::object());
-  config->wallet.Connect(
-      ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress()),
-      ReadStringValue(walletJson, "runtimeSignerAddress", config->wallet.GetRuntimeSignerAddress()));
-
-  const nlohmann::json simulatorJson = root.value("simulator", nlohmann::json::object());
-  config->simulatorBindAddress = ReadPeerAddressValue(
-      simulatorJson.value("bindAddress", nlohmann::json::object()),
-      config->simulatorBindAddress);
-  config->simulatorJumpNodeIndex = ReadIntValue(simulatorJson, "jumpNodeIndex", config->simulatorJumpNodeIndex);
-  config->simulatorNodeId = ReadU32Value(simulatorJson, "nodeId", config->simulatorNodeId);
-  config->simulatorInterestChunkX = ReadIntValue(simulatorJson, "interestChunkX", config->simulatorInterestChunkX);
-  config->simulatorInterestChunkY = ReadIntValue(simulatorJson, "interestChunkY", config->simulatorInterestChunkY);
-  config->simulatorInterestRadius = ReadU32Value(simulatorJson, "interestRadius", config->simulatorInterestRadius);
-  config->simulatorPlaceVoxelValue = (uint8_t)ReadIntValue(simulatorJson, "placeVoxelValue", (int)config->simulatorPlaceVoxelValue);
-  config->simulatorReceiveTimeoutMs = ReadU32Value(simulatorJson, "receiveTimeoutMs", config->simulatorReceiveTimeoutMs);
-  config->simulatorFrames = ReadIntValue(simulatorJson, "frames", config->simulatorFrames);
-  config->simulatorFrameTime = ReadFloatValue(simulatorJson, "frameTime", config->simulatorFrameTime);
-  config->simulatorSleepMs = ReadIntValue(simulatorJson, "sleepMs", config->simulatorSleepMs);
-  config->simulatorRuntimeEnabled = ReadBoolValue(simulatorJson, "runtimeEnabled", config->simulatorRuntimeEnabled);
-  config->simulatorEmitPlaceEvent = ReadBoolValue(simulatorJson, "emitPlaceEvent", config->simulatorEmitPlaceEvent);
-
-  const nlohmann::json relayJson = root.value("relay", nlohmann::json::object());
-  config->relayBindAddress = ReadPeerAddressValue(
-      relayJson.value("bindAddress", nlohmann::json::object()),
-      config->relayBindAddress);
-  config->relayNodeId = ReadU32Value(relayJson, "nodeId", config->relayNodeId);
-  config->relayReceiveTimeoutMs = ReadU32Value(relayJson, "receiveTimeoutMs", config->relayReceiveTimeoutMs);
-  config->relayTicks = ReadIntValue(relayJson, "ticks", config->relayTicks);
-  return true;
-}
-
-bool LoadNodeRealmFiles(const std::string& realmDirectory, NodeRealmFiles* realmFiles, std::string* errorMessage)
+bool LoadRealmConfigFiles(const std::string& realmDirectory, RealmConfigFiles* realmFiles, std::string* errorMessage)
 {
   if (realmFiles == nullptr)
   {
-    if (errorMessage != nullptr) *errorMessage = "node realm output was null";
+    if (errorMessage != nullptr) *errorMessage = "realm config output was null";
     return false;
   }
 
@@ -178,7 +120,7 @@ bool LoadNodeRealmFiles(const std::string& realmDirectory, NodeRealmFiles* realm
 
   for (const nlohmann::json& jumpNodeJson : jumpNodesArray)
   {
-    NodeJumpNodeState jumpNode = {};
+    RealmJumpNodeState jumpNode = {};
     jumpNode.peerAddress = ReadPeerAddressValue(jumpNodeJson, jumpNode.peerAddress);
     jumpNode.label = ReadStringValue(jumpNodeJson, "label", jumpNode.label);
     if (jumpNode.peerAddress.host.empty() || jumpNode.peerAddress.port <= 0) continue;
@@ -186,4 +128,14 @@ bool LoadNodeRealmFiles(const std::string& realmDirectory, NodeRealmFiles* realm
   }
 
   return true;
+}
+
+RuntimeRealmState BuildRuntimeRealmState(Blockchain& blockchain, const BlockchainConfig& blockchainConfig)
+{
+  RuntimeRealmState realmState = {};
+  const std::string chainId = blockchain.GetRpcClient().EthChainId();
+  realmState.chainId = chainId.empty() ? "unavailable" : chainId;
+  realmState.blockchainConfig = blockchainConfig;
+  realmState.globalParams = blockchain.GetGlobalParams().GetState();
+  return realmState;
 }
