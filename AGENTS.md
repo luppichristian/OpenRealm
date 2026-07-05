@@ -50,6 +50,10 @@ Do not describe this repo as if it already contains distributed networking or co
   - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces realm-hash matching, and rejects duplicate/self node ids.
   - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from blockchain config + fetched global params so peers can confirm they are on the same environment.
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
+- `node/cli/`
+  - Shared console configuration UI for non-client nodes.
+  - `NodeCli.*` lets relay/simulator users view node and realm values, pick the selected realm, edit role-specific config values, edit wallet values, save to `config.json`, then launch.
+  - Client nodes should not use this CLI because they are expected to get in-game GUI configuration later.
 - `node/blockchain/`
   - Native-side orchestration-layer / JSON-RPC integration code.
   - `RealmConfigFiles.*` loads selected realm data from `<realm>/realm.json` and `<realm>/jump_nodes.json`, including blockchain config, realm name, and jump-node defaults.
@@ -156,8 +160,8 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - The `project.bbs` native targets are split by node type:
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
-  - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
-  - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/blockchain/*.cpp`, and `node/targets/Relay.cpp`.
+  - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
+  - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, and `node/targets/Relay.cpp`.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
@@ -310,8 +314,8 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - When adding source files, check which node target should own them; the current `project.bbs` console targets select source folders directly rather than routing through repo-local static libraries.
 - Current target folder mapping is:
   - `openrealm_client`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, `node/targets/Client.cpp`
-  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
-  - `openrealm_relay`: `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
+  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
+  - `openrealm_relay`: `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - In `project.bbs`, do not hardcode machine-local package cache paths (for example `C:/Users/.../packages/...`); package include/link data must flow from declared `dependencies(...)` or from repo-relative/generated paths derived at build time.

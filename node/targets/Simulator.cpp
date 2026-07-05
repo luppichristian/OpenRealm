@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "../runtime/NodeConfigFiles.h"
+#include "../cli/NodeCli.h"
 #include "../blockchain/RealmConfigFiles.h"
 #include "../TaskManager.h"
 #include "../blockchain/Blockchain.h"
@@ -280,6 +281,13 @@ static void PumpRuntimePackets(
 int main(int argc, char** argv)
 {
   const NodeBootConfig bootConfig = ParseNodeBootConfig(argc, argv);
+  if (ShouldRunNodeCli(argc, argv))
+  {
+    NodeCliOptions cliOptions = {};
+    cliOptions.role = NodeCliRole::Simulator;
+    cliOptions.configPath = bootConfig.configPath;
+    if (!RunNodeCli(cliOptions)) return 0;
+  }
 
   NodeFilesConfig nodeFiles = {};
   std::string loadError = {};

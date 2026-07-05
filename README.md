@@ -103,6 +103,7 @@ flowchart LR
 - `node/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
 - `node/world/` — headless simulation-side world systems, voxel data, player system, world events
 - `node/runtime/` — node-to-node runtime transport code
+- `node/cli/` — console configuration UI for relay and simulator nodes
 - `node/blockchain/` — orchestration-layer / JSON-RPC integration code used by native nodes
 - `node/TaskManager.*` — generic background worker queue
 - `assets/` — shaders and sounds used at runtime

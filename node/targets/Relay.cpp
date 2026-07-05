@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../runtime/NodeConfigFiles.h"
+#include "../cli/NodeCli.h"
 #include "../blockchain/RealmConfigFiles.h"
 #include "../blockchain/Blockchain.h"
 #include "../blockchain/BlockchainConfig.h"
@@ -523,6 +524,13 @@ static int RunRelayService(const RelayConfig& config)
 int main(int argc, char** argv)
 {
   const NodeBootConfig bootConfig = ParseNodeBootConfig(argc, argv);
+  if (ShouldRunNodeCli(argc, argv))
+  {
+    NodeCliOptions cliOptions = {};
+    cliOptions.role = NodeCliRole::Relay;
+    cliOptions.configPath = bootConfig.configPath;
+    if (!RunNodeCli(cliOptions)) return 0;
+  }
 
   NodeFilesConfig nodeFiles = {};
   std::string loadError = {};
