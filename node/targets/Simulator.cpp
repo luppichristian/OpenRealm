@@ -4,6 +4,7 @@
 #include <cstring>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 #include "../TaskManager.h"
 #include "../blockchain/Blockchain.h"
@@ -16,6 +17,7 @@
 #include "../runtime/RuntimeRealm.h"
 #include "../world/World.h"
 #include "../world/WorldConfig.h"
+#include "../world/WorldEvent.h"
 
 struct SimulatorConfig
 {
@@ -55,6 +57,10 @@ struct SimulatorRuntimeState
   bool worldEventSent = false;
   uint64_t realmHash = 0;
   size_t discoveredNodes = 0;
+  int runtimePacketsReceived = 0;
+  int runtimeWorldEventsReceived = 0;
+  int runtimeWorldEventsApplied = 0;
+  int runtimePlaceEventsApplied = 0;
 };
 
 static int ParseIntArgument(const char* value, int fallback)
@@ -238,12 +244,60 @@ static ReceivedPeerDiscoveryState ReceivePeerDiscovery(RuntimeClient& client, ui
   return state;
 }
 
-static bool RunRuntimeSession(const SimulatorConfig& config, SimulatorRuntimeState* runtimeState)
+static bool TryBuildWorldEvent(const RuntimeWorldEventState& runtimeEvent, WorldEvent* worldEvent)
+{
+  if (worldEvent == nullptr) return false;
+  if (runtimeEvent.type > (uint8_t)WorldEventType::Place) return false;
+
+  *worldEvent = {
+      .type = (WorldEventType)runtimeEvent.type,
+      .playerId = runtimeEvent.playerId,
+      .voxelValue = runtimeEvent.voxelValue,
+      .voxelX = runtimeEvent.voxelX,
+      .voxelY = runtimeEvent.voxelY,
+      .voxelZ = runtimeEvent.voxelZ,
+      .playerX = runtimeEvent.playerX,
+      .playerY = runtimeEvent.playerY,
+      .playerZ = runtimeEvent.playerZ,
+      .playerYaw = runtimeEvent.playerYaw,
+      .playerPitch = runtimeEvent.playerPitch,
+      .moveX = runtimeEvent.moveX,
+      .moveY = runtimeEvent.moveY,
+      .lookDeltaX = runtimeEvent.lookDeltaX,
+      .lookDeltaY = runtimeEvent.lookDeltaY,
+  };
+  return true;
+}
+
+static bool ApplyRuntimeWorldEvent(World& world, const WorldEventPacketData& runtimeWorldEvent, SimulatorRuntimeState* runtimeState)
 {
   if (runtimeState == nullptr) return false;
 
-  RuntimeClient runtimeClient = {};
-  runtimeState->runtimeStarted = runtimeClient.Start(config.bindAddress);
+  WorldEvent worldEvent = {};
+  if (!TryBuildWorldEvent(runtimeWorldEvent.event, &worldEvent)) return false;
+
+  if (worldEvent.type == WorldEventType::Place)
+  {
+    world.GetVoxelWorld().SetVoxel(worldEvent.voxelX, worldEvent.voxelY, worldEvent.voxelZ, worldEvent.voxelValue);
+    runtimeState->runtimeWorldEventsApplied += 1;
+    runtimeState->runtimePlaceEventsApplied += 1;
+    return true;
+  }
+
+  world.SendEvent(worldEvent);
+  runtimeState->runtimeWorldEventsApplied += 1;
+  return true;
+}
+
+static bool StartRuntimeSession(
+    const SimulatorConfig& config,
+    RuntimeClient* runtimeClient,
+    SimulatorRuntimeState* runtimeState
+)
+{
+  if (runtimeClient == nullptr || runtimeState == nullptr) return false;
+
+  runtimeState->runtimeStarted = runtimeClient->Start(config.bindAddress);
   if (!runtimeState->runtimeStarted) return false;
 
   BlockchainConfig blockchainConfig = BuildSimulatorBlockchainConfig();
@@ -256,11 +310,11 @@ static bool RunRuntimeSession(const SimulatorConfig& config, SimulatorRuntimeSta
   handshake.protocolVersion = 1;
   handshake.nodeId = config.localNodeId;
   handshake.realmHash = runtimeState->realmHash;
-  runtimeState->handshakeSent = runtimeClient.SendPacket(
+  runtimeState->handshakeSent = runtimeClient->SendPacket(
       config.relayAddress,
       SerializePacket(MakeHandshakePacket(handshake)));
 
-  ReceivedPeerDiscoveryState peerDiscovery = ReceivePeerDiscovery(runtimeClient, config.receiveTimeoutMs);
+  ReceivedPeerDiscoveryState peerDiscovery = ReceivePeerDiscovery(*runtimeClient, config.receiveTimeoutMs);
   runtimeState->discoveryReceived = peerDiscovery.received;
   runtimeState->discoveryParsed = peerDiscovery.parsed;
   runtimeState->discoveryDecoded = peerDiscovery.decoded;
@@ -271,7 +325,7 @@ static bool RunRuntimeSession(const SimulatorConfig& config, SimulatorRuntimeSta
   chunkInterest.chunkX = config.interestChunkX;
   chunkInterest.chunkY = config.interestChunkY;
   chunkInterest.radius = config.interestRadius;
-  runtimeState->interestSent = runtimeClient.SendPacket(
+  runtimeState->interestSent = runtimeClient->SendPacket(
       config.relayAddress,
       SerializePacket(MakeChunkInterestPacket(chunkInterest)));
 
@@ -285,13 +339,54 @@ static bool RunRuntimeSession(const SimulatorConfig& config, SimulatorRuntimeSta
     worldEvent.event.voxelX = config.interestChunkX * CHUNK_SIZE_XZ;
     worldEvent.event.voxelY = config.interestChunkY * CHUNK_SIZE_XZ;
     worldEvent.event.voxelZ = 1;
-    runtimeState->worldEventSent = runtimeClient.SendPacket(
+    runtimeState->worldEventSent = runtimeClient->SendPacket(
         config.relayAddress,
         SerializePacket(MakeWorldEventPacket(worldEvent)));
   }
 
   return runtimeState->handshakeSent && runtimeState->interestSent
       && (!config.emitPlaceEvent || runtimeState->worldEventSent);
+}
+
+static void PumpRuntimePackets(
+    RuntimeClient& runtimeClient,
+    const SimulatorConfig& config,
+    World& world,
+    SimulatorRuntimeState* runtimeState
+)
+{
+  if (runtimeState == nullptr) return;
+
+  for (;;)
+  {
+    std::vector<uint8_t> bytes = {};
+    RuntimePeerAddress peerAddress = {};
+    if (!runtimeClient.ReceivePacket(&bytes, &peerAddress, 0)) break;
+
+    runtimeState->runtimePacketsReceived += 1;
+    if (!RuntimePeerAddressEquals(peerAddress, config.relayAddress)) continue;
+
+    Packet packet = {};
+    if (!TryParsePacket(bytes, &packet)) continue;
+
+    if (packet.type == PacketType::PeerDiscovery)
+    {
+      PeerDiscoveryPacketData peerDiscovery = {};
+      runtimeState->discoveryReceived = true;
+      runtimeState->discoveryParsed = true;
+      runtimeState->discoveryDecoded = TryDecodePeerDiscoveryPacket(packet, &peerDiscovery);
+      runtimeState->discoveredNodes = runtimeState->discoveryDecoded ? peerDiscovery.nodes.size() : runtimeState->discoveredNodes;
+      continue;
+    }
+
+    if (packet.type != PacketType::WorldEvent) continue;
+
+    WorldEventPacketData worldEvent = {};
+    if (!TryDecodeWorldEventPacket(packet, &worldEvent)) continue;
+
+    runtimeState->runtimeWorldEventsReceived += 1;
+    ApplyRuntimeWorldEvent(world, worldEvent, runtimeState);
+  }
 }
 
 int main(int argc, char** argv)
@@ -307,9 +402,22 @@ int main(int argc, char** argv)
   static World world = {};
   world.Initialize();
 
+  RuntimeClient runtimeClient = {};
+  SimulatorRuntimeState runtimeState = {};
+  bool runtimeOk = true;
+  if (config.runtimeEnabled)
+  {
+    runtimeOk = StartRuntimeSession(config, &runtimeClient, &runtimeState);
+  }
+
   int simulatedFrames = 0;
   while (config.frames <= 0 || simulatedFrames < config.frames)
   {
+    if (config.runtimeEnabled && runtimeState.runtimeStarted)
+    {
+      PumpRuntimePackets(runtimeClient, config, world, &runtimeState);
+    }
+
     world.Update(config.frameTime);
     simulatedFrames += 1;
 
@@ -319,18 +427,23 @@ int main(int argc, char** argv)
     }
   }
 
-  SimulatorRuntimeState runtimeState = {};
-  bool runtimeOk = true;
-  if (config.runtimeEnabled)
+  if (config.runtimeEnabled && runtimeState.runtimeStarted)
   {
-    runtimeOk = RunRuntimeSession(config, &runtimeState);
+    PumpRuntimePackets(runtimeClient, config, world, &runtimeState);
   }
+
+  const uint8_t remoteInterestVoxel = world.GetVoxelWorld().GetVoxel(
+      config.interestChunkX * CHUNK_SIZE_XZ,
+      config.interestChunkY * CHUNK_SIZE_XZ,
+      1);
 
   int playerCount = 0;
   for (const PlayerState& player : world.GetPlayerSystem().GetPlayers())
   {
     if (player.active) playerCount += 1;
   }
+
+  runtimeClient.Stop();
   world.Shutdown();
   taskManager.Stop();
 
@@ -353,5 +466,10 @@ int main(int argc, char** argv)
   std::cout << "- runtime discovered nodes: " << runtimeState.discoveredNodes << "\n";
   std::cout << "- runtime chunk interest send: " << (runtimeState.interestSent ? "ok" : "failed") << "\n";
   std::cout << "- runtime place event send: " << (config.emitPlaceEvent ? (runtimeState.worldEventSent ? "ok" : "failed") : "skipped") << "\n";
+  std::cout << "- runtime packets received: " << runtimeState.runtimePacketsReceived << "\n";
+  std::cout << "- runtime world events received: " << runtimeState.runtimeWorldEventsReceived << "\n";
+  std::cout << "- runtime world events applied: " << runtimeState.runtimeWorldEventsApplied << "\n";
+  std::cout << "- runtime place events applied: " << runtimeState.runtimePlaceEventsApplied << "\n";
+  std::cout << "- runtime interest voxel value: " << (int)remoteInterestVoxel << "\n";
   return runtimeOk ? 0 : 1;
 }
