@@ -38,16 +38,25 @@ Do not describe this repo as if it already contains distributed networking or co
 - `node/targets/`
   - Executable entry points for the distinct node types.
   - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
-  - `Simulator.cpp` owns the headless simulator node entrypoint and runs a real world-update loop; it supports finite verification runs via CLI flags like `--frames`, `--frame-time`, and `--no-sleep`, and it now also supports a runtime sim-node mode that loads `config.json` plus the selected realm folder (`--config`, `--realm-dir`), derives blockchain params from `<realm>/realm.json`, derives its default relay target from `<realm>/jump_nodes.json`, can handshake with a relay, receive peer discovery, publish chunk-interest, emit a demo world event, and apply forwarded remote runtime world-events back into `World`/`VoxelWorld` while the simulation loop is live via flags like `--runtime`, `--relay-host`, `--relay-port`, `--node-id`, `--interest-x`, `--interest-y`, `--interest-radius`, and `--emit-place`.
-  - `Relay.cpp` owns the lightweight relay node entrypoint; it now supports a real service mode by default plus a focused `--smoke` mode that exercises the runtime-networking/blockchain integration scaffolds, chunk-interest registration, and world-event forwarding between compatible peers, and it now also loads wallet/blockchain realm data from `config.json` plus the selected realm folder instead of hardcoded native-side defaults.
+  - `Simulator.cpp` is a thin launcher that delegates to `RunSimulatorNode(...)` in `node/SimulatorNode.*`.
+  - `Relay.cpp` is a thin launcher that delegates to `RunRelayNode(...)` in `node/RelayNode.*`.
   - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
+- `node/NodeConfigFiles.*`
+  - Loads root `config.json` plus the selected realm's `realm.json` / `jump_nodes.json` so simulator/relay nodes can source wallet, bind, runtime, blockchain, and jump-node defaults from JSON files instead of hardcoded literals or verbose CLI flags.
+- `node/NodeRuntime.*`
+  - Shared node-level helpers for minimal boot argument parsing (`--config`, `--realm-dir`) and runtime realm-state construction used by simulator and relay nodes.
+- `node/SimulatorNode.*`
+  - Owns the headless simulator node implementation and real world-update loop.
+  - Loads `config.json` plus the selected realm folder (`--config`, `--realm-dir` are the only generic boot overrides), derives blockchain params from `<realm>/realm.json`, derives the default relay target from `<realm>/jump_nodes.json`, can handshake with a relay, receive peer discovery, publish chunk-interest, emit a configured demo world event, and apply forwarded remote runtime world-events back into `World`/`VoxelWorld` while the simulation loop is live.
+- `node/RelayNode.*`
+  - Owns the lightweight relay node implementation.
+  - Supports real service mode by default plus focused `--smoke` verification mode that exercises runtime networking, blockchain integration scaffolds, chunk-interest registration, and world-event forwarding between compatible peers.
 - `node/runtime/`
   - Runtime node-to-node transport code only.
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
   - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
   - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
   - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces realm-hash matching, and rejects duplicate/self node ids.
-  - `RuntimeConfigFiles.*` loads the selected realm's `realm.json` / `jump_nodes.json` plus root `config.json` so simulator/relay runtime targets can source blockchain params, wallet addresses, and jump-node defaults from JSON files instead of hardcoded literals.
   - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from blockchain config + fetched global params so peers can confirm they are on the same environment.
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
 - `node/blockchain/`
@@ -155,8 +164,8 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - The `project.bbs` native targets are split by node type:
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
-  - `openrealm_simulator` builds `openrealm-simulator` from the task-manager + runtime + blockchain + world folders plus `node/targets/Simulator.cpp`; it currently lists `node/runtime/RuntimeConfigFiles.cpp` explicitly alongside `node/runtime/*.cpp` so the generated backend picks up the JSON realm-config loader reliably.
-  - `openrealm_relay` builds `openrealm-relay` from the runtime/blockchain folders plus `node/targets/Relay.cpp`; it also lists `node/runtime/RuntimeConfigFiles.cpp` explicitly alongside `node/runtime/*.cpp` for the same generated-backend reason.
+  - `openrealm_simulator` builds `openrealm-simulator` from `node/NodeConfigFiles.cpp`, `node/NodeRuntime.cpp`, `node/SimulatorNode.cpp`, the task-manager/runtime/blockchain/world folders, and the thin `node/targets/Simulator.cpp` launcher.
+  - `openrealm_relay` builds `openrealm-relay` from `node/NodeConfigFiles.cpp`, `node/NodeRuntime.cpp`, `node/RelayNode.cpp`, the runtime/blockchain folders, and the thin `node/targets/Relay.cpp` launcher.
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
@@ -195,7 +204,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Current runtime handshake validation is intentionally environment-aware: nodes advertise a realm hash derived from blockchain config plus fetched `GlobalParams`, and handshake acceptance also rejects duplicate node ids coming from different peer addresses.
 - Peer discovery packets currently advertise the requester's node id plus a filtered list of known same-realm peers from `ActiveNodeBucket`; the relay smoke target exercises discovery by excluding the requester and returning the remaining compatible peers.
 - Runtime chunk-interest packets currently advertise a node id plus center chunk/radius subscription data; the relay keeps the latest interest per node and uses it to prefer locality-aware forwarding of runtime world-event packets, with a same-realm peer fallback when no explicit interest match is available yet.
-- The current runtime sim-node verification path uses unique `--node-id` values per simulator process; with two simulator nodes on the same relay, one simulator can now publish a place event and another interested simulator can receive and apply that forwarded runtime world-event into its live world state.
+- The current runtime sim-node verification path uses per-process config files with unique simulator `nodeId` and bind-port values; with two simulator nodes on the same relay, one simulator can publish a configured place event and another interested simulator can receive and apply that forwarded runtime world-event into its live world state.
 - Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
@@ -309,8 +318,8 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - When adding source files, check which node target should own them; the current `project.bbs` console targets select source folders directly rather than routing through repo-local static libraries.
 - Current target folder mapping is:
   - `openrealm_client`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, `node/targets/Client.cpp`
-  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
-  - `openrealm_relay`: `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
+  - `openrealm_simulator`: `node/TaskManager.cpp`, `node/NodeConfigFiles.cpp`, `node/NodeRuntime.cpp`, `node/SimulatorNode.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
+  - `openrealm_relay`: `node/NodeConfigFiles.cpp`, `node/NodeRuntime.cpp`, `node/RelayNode.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - In `project.bbs`, do not hardcode machine-local package cache paths (for example `C:/Users/.../packages/...`); package include/link data must flow from declared `dependencies(...)` or from repo-relative/generated paths derived at build time.

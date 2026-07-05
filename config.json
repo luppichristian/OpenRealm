@@ -16,8 +16,11 @@
     "interestRadius": 1,
     "placeVoxelValue": 255,
     "receiveTimeoutMs": 1000,
+    "frames": 0,
     "frameTime": 0.016666667,
-    "sleepMs": 16
+    "sleepMs": 16,
+    "runtimeEnabled": false,
+    "emitPlaceEvent": false
   },
   "relay": {
     "bindAddress": {

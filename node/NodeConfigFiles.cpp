@@ -1,4 +1,4 @@
-#include "RuntimeConfigFiles.h"
+#include "NodeConfigFiles.h"
 
 #include <fstream>
 #include <utility>
@@ -59,6 +59,12 @@ static float ReadFloatValue(const nlohmann::json& json, const char* key, float f
   return json[key].get<float>();
 }
 
+static bool ReadBoolValue(const nlohmann::json& json, const char* key, bool fallback)
+{
+  if (!json.is_object() || key == nullptr || !json.contains(key) || !json[key].is_boolean()) return fallback;
+  return json[key].get<bool>();
+}
+
 static RuntimePeerAddress ReadPeerAddressValue(const nlohmann::json& json, const RuntimePeerAddress& fallback)
 {
   RuntimePeerAddress peerAddress = fallback;
@@ -68,11 +74,11 @@ static RuntimePeerAddress ReadPeerAddressValue(const nlohmann::json& json, const
   return peerAddress;
 }
 
-bool LoadRuntimeNodeFilesConfig(const std::string& configPath, RuntimeNodeFilesConfig* config, std::string* errorMessage)
+bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config, std::string* errorMessage)
 {
   if (config == nullptr)
   {
-    if (errorMessage != nullptr) *errorMessage = "runtime node config output was null";
+    if (errorMessage != nullptr) *errorMessage = "node config output was null";
     return false;
   }
 
@@ -98,8 +104,11 @@ bool LoadRuntimeNodeFilesConfig(const std::string& configPath, RuntimeNodeFilesC
   config->simulatorInterestRadius = ReadU32Value(simulatorJson, "interestRadius", config->simulatorInterestRadius);
   config->simulatorPlaceVoxelValue = (uint8_t)ReadIntValue(simulatorJson, "placeVoxelValue", (int)config->simulatorPlaceVoxelValue);
   config->simulatorReceiveTimeoutMs = ReadU32Value(simulatorJson, "receiveTimeoutMs", config->simulatorReceiveTimeoutMs);
+  config->simulatorFrames = ReadIntValue(simulatorJson, "frames", config->simulatorFrames);
   config->simulatorFrameTime = ReadFloatValue(simulatorJson, "frameTime", config->simulatorFrameTime);
   config->simulatorSleepMs = ReadIntValue(simulatorJson, "sleepMs", config->simulatorSleepMs);
+  config->simulatorRuntimeEnabled = ReadBoolValue(simulatorJson, "runtimeEnabled", config->simulatorRuntimeEnabled);
+  config->simulatorEmitPlaceEvent = ReadBoolValue(simulatorJson, "emitPlaceEvent", config->simulatorEmitPlaceEvent);
 
   const nlohmann::json relayJson = root.value("relay", nlohmann::json::object());
   config->relayBindAddress = ReadPeerAddressValue(
@@ -111,11 +120,11 @@ bool LoadRuntimeNodeFilesConfig(const std::string& configPath, RuntimeNodeFilesC
   return true;
 }
 
-bool LoadRuntimeRealmFiles(const std::string& realmDirectory, RuntimeRealmFiles* realmFiles, std::string* errorMessage)
+bool LoadNodeRealmFiles(const std::string& realmDirectory, NodeRealmFiles* realmFiles, std::string* errorMessage)
 {
   if (realmFiles == nullptr)
   {
-    if (errorMessage != nullptr) *errorMessage = "runtime realm output was null";
+    if (errorMessage != nullptr) *errorMessage = "node realm output was null";
     return false;
   }
 
@@ -169,7 +178,7 @@ bool LoadRuntimeRealmFiles(const std::string& realmDirectory, RuntimeRealmFiles*
 
   for (const nlohmann::json& jumpNodeJson : jumpNodesArray)
   {
-    RuntimeJumpNodeState jumpNode = {};
+    NodeJumpNodeState jumpNode = {};
     jumpNode.peerAddress = ReadPeerAddressValue(jumpNodeJson, jumpNode.peerAddress);
     jumpNode.label = ReadStringValue(jumpNodeJson, "label", jumpNode.label);
     if (jumpNode.peerAddress.host.empty() || jumpNode.peerAddress.port <= 0) continue;
