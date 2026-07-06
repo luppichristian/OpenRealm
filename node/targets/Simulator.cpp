@@ -22,29 +22,20 @@
 #include "../world/World.h"
 #include "../world/WorldConfig.h"
 #include "../world/WorldEvent.h"
+#include "RuntimeNodeConfigBase.h"
 
-struct SimulatorConfig
+struct SimulatorConfig : RuntimeNodeConfigBase
 {
   int frames = 0;
   float frameTime = 1.0f / 60.0f;
   int sleepMs = 16;
   bool runtimeEnabled = false;
   bool emitPlaceEvent = false;
-  RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
   RuntimePeerAddress relayAddress = {"127.0.0.1", 46001};
-  uint32_t localNodeId = DEFAULT_RUNTIME_NODE_ID;
   int interestChunkX = 0;
   int interestChunkY = 0;
   uint32_t interestRadius = DEFAULT_RUNTIME_INTEREST_RADIUS;
   uint8_t placeVoxelValue = 255;
-  uint32_t receiveTimeoutMs = DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS;
-  size_t maxPeerDiscoveryNodes = DEFAULT_RUNTIME_MAX_PEER_DISCOVERY_NODES;
-  std::string configPath = "config.json";
-  std::string realmDirectory = "realms/test";
-  std::string realmName = {};
-  size_t jumpNodeCount = 0;
-  BlockchainConfig blockchainConfig = {};
-  Wallet wallet = {};
 };
 
 struct ReceivedPeerDiscoveryState
@@ -72,6 +63,15 @@ struct SimulatorRuntimeState
   int runtimeWorldEventsReceived = 0;
   int runtimeWorldEventsApplied = 0;
   int runtimePlaceEventsApplied = 0;
+};
+
+struct SimulatorRuntimeSession
+{
+  const SimulatorConfig& config;
+  RuntimeClient& runtimeClient;
+  World& world;
+  TaskManager& taskManager;
+  SimulatorRuntimeState& runtimeState;
 };
 
 static SimulatorConfig BuildSimulatorConfigFromFiles(const NodeFilesConfig& nodeFiles, const RealmConfigFiles& realmFiles)
@@ -184,43 +184,44 @@ static bool ApplyRuntimeWorldEvent(World& world, const WorldEventPacketData& run
   return true;
 }
 
-static bool StartRuntimeSession(
-    const SimulatorConfig& config,
-    RuntimeClient* runtimeClient,
-    SimulatorRuntimeState* runtimeState)
+static bool StartRuntimeSession(SimulatorRuntimeSession* session)
 {
-  if (runtimeClient == nullptr || runtimeState == nullptr) return false;
+  if (session == nullptr) return false;
 
-  runtimeState->runtimeStarted = runtimeClient->Start(config.bindAddress);
-  if (!runtimeState->runtimeStarted) return false;
+  const SimulatorConfig& config = session->config;
+  RuntimeClient& runtimeClient = session->runtimeClient;
+  SimulatorRuntimeState& runtimeState = session->runtimeState;
+
+  runtimeState.runtimeStarted = runtimeClient.Start(config.bindAddress);
+  if (!runtimeState.runtimeStarted) return false;
 
   Blockchain blockchain(config.blockchainConfig, config.wallet);
   const RuntimeRealmState realmState = BuildRuntimeRealmState(blockchain, config.blockchainConfig);
-  runtimeState->realmHash = ComputeRuntimeRealmHash(realmState);
+  runtimeState.realmHash = ComputeRuntimeRealmHash(realmState);
 
   HandshakePacketData handshake = {};
   handshake.protocolVersion = 1;
   handshake.nodeId = config.localNodeId;
-  handshake.realmHash = runtimeState->realmHash;
-  runtimeState->handshakeSent = runtimeClient->SendPacket(
+  handshake.realmHash = runtimeState.realmHash;
+  runtimeState.handshakeSent = runtimeClient.SendPacket(
       config.relayAddress,
       SerializePacket(MakeHandshakePacket(handshake)));
 
-  ReceivedPeerDiscoveryState peerDiscovery = ReceivePeerDiscovery(*runtimeClient, config.receiveTimeoutMs);
-  runtimeState->discoveryReceived = peerDiscovery.received;
-  runtimeState->discoveryParsed = peerDiscovery.parsed;
-  runtimeState->discoveryDecoded = peerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
+  ReceivedPeerDiscoveryState peerDiscovery = ReceivePeerDiscovery(runtimeClient, config.receiveTimeoutMs);
+  runtimeState.discoveryReceived = peerDiscovery.received;
+  runtimeState.discoveryParsed = peerDiscovery.parsed;
+  runtimeState.discoveryDecoded = peerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
       peerDiscovery.packet,
       &peerDiscovery.peerDiscovery,
       config.maxPeerDiscoveryNodes);
-  runtimeState->discoveredNodes = peerDiscovery.peerDiscovery.nodes.size();
+  runtimeState.discoveredNodes = peerDiscovery.peerDiscovery.nodes.size();
 
   ChunkInterestPacketData chunkInterest = {};
   chunkInterest.nodeId = config.localNodeId;
   chunkInterest.chunkX = config.interestChunkX;
   chunkInterest.chunkY = config.interestChunkY;
   chunkInterest.radius = config.interestRadius;
-  runtimeState->interestSent = runtimeClient->SendPacket(
+  runtimeState.interestSent = runtimeClient.SendPacket(
       config.relayAddress,
       SerializePacket(MakeChunkInterestPacket(chunkInterest)));
 
@@ -234,21 +235,22 @@ static bool StartRuntimeSession(
     worldEvent.event.voxelX = config.interestChunkX * CHUNK_SIZE_XZ;
     worldEvent.event.voxelY = config.interestChunkY * CHUNK_SIZE_XZ;
     worldEvent.event.voxelZ = 1;
-    runtimeState->worldEventSent = runtimeClient->SendPacket(
+    runtimeState.worldEventSent = runtimeClient.SendPacket(
         config.relayAddress,
         SerializePacket(MakeWorldEventPacket(worldEvent)));
   }
 
-  return runtimeState->handshakeSent && runtimeState->interestSent && (!config.emitPlaceEvent || runtimeState->worldEventSent);
+  return runtimeState.handshakeSent && runtimeState.interestSent && (!config.emitPlaceEvent || runtimeState.worldEventSent);
 }
 
-static void PumpRuntimePackets(
-    RuntimeClient& runtimeClient,
-    const SimulatorConfig& config,
-    World& world,
-    SimulatorRuntimeState* runtimeState)
+static void PumpRuntimePackets(SimulatorRuntimeSession* session)
 {
-  if (runtimeState == nullptr) return;
+  if (session == nullptr) return;
+
+  RuntimeClient& runtimeClient = session->runtimeClient;
+  const SimulatorConfig& config = session->config;
+  World& world = session->world;
+  SimulatorRuntimeState& runtimeState = session->runtimeState;
 
   for (;;)
   {
@@ -256,7 +258,7 @@ static void PumpRuntimePackets(
     RuntimePeerAddress peerAddress = {};
     if (!runtimeClient.ReceivePacket(&bytes, &peerAddress, 0)) break;
 
-    runtimeState->runtimePacketsReceived += 1;
+    runtimeState.runtimePacketsReceived += 1;
     if (!RuntimePeerAddressEquals(peerAddress, config.relayAddress)) continue;
 
     Packet packet = {};
@@ -265,10 +267,10 @@ static void PumpRuntimePackets(
     if (packet.type == PacketType::PeerDiscovery)
     {
       PeerDiscoveryPacketData peerDiscovery = {};
-      runtimeState->discoveryReceived = true;
-      runtimeState->discoveryParsed = true;
-      runtimeState->discoveryDecoded = TryDecodePeerDiscoveryPacket(packet, &peerDiscovery, config.maxPeerDiscoveryNodes);
-      runtimeState->discoveredNodes = runtimeState->discoveryDecoded ? peerDiscovery.nodes.size() : runtimeState->discoveredNodes;
+      runtimeState.discoveryReceived = true;
+      runtimeState.discoveryParsed = true;
+      runtimeState.discoveryDecoded = TryDecodePeerDiscoveryPacket(packet, &peerDiscovery, config.maxPeerDiscoveryNodes);
+      runtimeState.discoveredNodes = runtimeState.discoveryDecoded ? peerDiscovery.nodes.size() : runtimeState.discoveredNodes;
       continue;
     }
 
@@ -277,38 +279,35 @@ static void PumpRuntimePackets(
     WorldEventPacketData worldEvent = {};
     if (!TryDecodeWorldEventPacket(packet, &worldEvent)) continue;
 
-    runtimeState->runtimeWorldEventsReceived += 1;
-    ApplyRuntimeWorldEvent(world, worldEvent, runtimeState);
+    runtimeState.runtimeWorldEventsReceived += 1;
+    ApplyRuntimeWorldEvent(world, worldEvent, &runtimeState);
   }
 }
 
 static std::vector<NodeRuntimeViewLine> BuildSimulatorRuntimeViewLines(
-    const SimulatorConfig& config,
-    const SimulatorRuntimeState& runtimeState,
-    int simulatedFrames,
-    const RuntimeClient& runtimeClient,
-    const TaskManager& taskManager)
+    const SimulatorRuntimeSession& session,
+    int simulatedFrames)
 {
   return {
-      {"Config path", config.configPath},
-      {"Realm", config.realmDirectory},
-      {"Bind", DescribeRuntimePeerAddress(config.bindAddress)},
-      {"Relay", DescribeRuntimePeerAddress(config.relayAddress)},
+      {"Config path", session.config.configPath},
+      {"Realm", session.config.realmDirectory},
+      {"Bind", DescribeRuntimePeerAddress(session.config.bindAddress)},
+      {"Relay", DescribeRuntimePeerAddress(session.config.relayAddress)},
       {"Frames", std::to_string(simulatedFrames)},
-      {"Frame time", std::to_string(config.frameTime)},
-      {"Sleep ms", std::to_string(config.sleepMs)},
-      {"Task manager", taskManager.IsRunning() ? "running" : "stopped"},
-      {"Runtime mode", config.runtimeEnabled ? "enabled" : "disabled"},
-      {"Runtime listener", runtimeClient.IsRunning() ? "running" : "stopped"},
-      {"Handshake", runtimeState.handshakeSent ? "sent" : "pending"},
-      {"Discovery", runtimeState.discoveryDecoded ? "decoded" : (runtimeState.discoveryReceived ? "received" : "waiting")},
-      {"Discovered nodes", std::to_string(runtimeState.discoveredNodes)},
-      {"Interest send", runtimeState.interestSent ? "sent" : "pending"},
-      {"Place event", config.emitPlaceEvent ? (runtimeState.worldEventSent ? "sent" : "pending") : "disabled"},
-      {"Packets received", std::to_string(runtimeState.runtimePacketsReceived)},
-      {"World events recv", std::to_string(runtimeState.runtimeWorldEventsReceived)},
-      {"World events applied", std::to_string(runtimeState.runtimeWorldEventsApplied)},
-      {"Place events applied", std::to_string(runtimeState.runtimePlaceEventsApplied)},
+      {"Frame time", std::to_string(session.config.frameTime)},
+      {"Sleep ms", std::to_string(session.config.sleepMs)},
+      {"Task manager", session.taskManager.IsRunning() ? "running" : "stopped"},
+      {"Runtime mode", session.config.runtimeEnabled ? "enabled" : "disabled"},
+      {"Runtime listener", session.runtimeClient.IsRunning() ? "running" : "stopped"},
+      {"Handshake", session.runtimeState.handshakeSent ? "sent" : "pending"},
+      {"Discovery", session.runtimeState.discoveryDecoded ? "decoded" : (session.runtimeState.discoveryReceived ? "received" : "waiting")},
+      {"Discovered nodes", std::to_string(session.runtimeState.discoveredNodes)},
+      {"Interest send", session.runtimeState.interestSent ? "sent" : "pending"},
+      {"Place event", session.config.emitPlaceEvent ? (session.runtimeState.worldEventSent ? "sent" : "pending") : "disabled"},
+      {"Packets received", std::to_string(session.runtimeState.runtimePacketsReceived)},
+      {"World events recv", std::to_string(session.runtimeState.runtimeWorldEventsReceived)},
+      {"World events applied", std::to_string(session.runtimeState.runtimeWorldEventsApplied)},
+      {"Place events applied", std::to_string(session.runtimeState.runtimePlaceEventsApplied)},
   };
 }
 
@@ -362,10 +361,11 @@ int main(int argc, char** argv)
 
   RuntimeClient runtimeClient = {};
   SimulatorRuntimeState runtimeState = {};
+  SimulatorRuntimeSession runtimeSession = {config, runtimeClient, world, taskManager, runtimeState};
   bool runtimeOk = true;
   if (config.runtimeEnabled)
   {
-    runtimeOk = StartRuntimeSession(config, &runtimeClient, &runtimeState);
+    runtimeOk = StartRuntimeSession(&runtimeSession);
   }
 
   bool runtimeViewActive = false;
@@ -384,14 +384,14 @@ int main(int argc, char** argv)
   {
     if (config.runtimeEnabled && runtimeState.runtimeStarted)
     {
-      PumpRuntimePackets(runtimeClient, config, world, &runtimeState);
+      PumpRuntimePackets(&runtimeSession);
     }
 
     if (runtimeViewActive)
     {
       stopRequested = PumpNodeRuntimeView(
           "Simulator running. Press Q or Esc to stop cleanly.",
-          BuildSimulatorRuntimeViewLines(config, runtimeState, simulatedFrames, runtimeClient, taskManager));
+          BuildSimulatorRuntimeViewLines(runtimeSession, simulatedFrames));
       if (stopRequested) break;
     }
 
@@ -406,7 +406,7 @@ int main(int argc, char** argv)
 
   if (config.runtimeEnabled && runtimeState.runtimeStarted)
   {
-    PumpRuntimePackets(runtimeClient, config, world, &runtimeState);
+    PumpRuntimePackets(&runtimeSession);
   }
 
   const uint8_t remoteInterestVoxel = world.GetVoxelWorld().GetVoxel(

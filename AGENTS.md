@@ -41,10 +41,12 @@ Do not describe this repo as if it already contains distributed networking or co
   - `Client.cpp` owns the playable client node entrypoint, creates the shared `TaskManager`, creates `Game`, and passes the manager into `Run()`.
   - `Simulator.cpp` owns the headless simulator node entrypoint and real world-update/runtime-session loop.
   - `Relay.cpp` owns the lightweight relay node entrypoint and relay service/smoke verification modes.
+  - `RuntimeNodeConfigBase.h` holds the shared relay/simulator runtime config fields so the native node targets do not duplicate wallet/bind/node-id/realm defaults.
   - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
 - `node/runtime/`
   - Runtime node-to-node transport code and node-local runtime configuration.
   - `NodeConfigFiles.*` loads root `config.json` so simulator/relay nodes can source wallet, bind, node-id, runtime-loop, and local node defaults from JSON instead of verbose CLI flags.
+  - Root `config.json` should stay target-agnostic for shared runtime settings: common runtime fields belong under shared sections like `runtime`, `runtime.interest`, and `runtime.limits` instead of being split per target type.
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
   - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
   - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
@@ -197,7 +199,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - World continuity/fidelity is expected to scale with active node coverage: fewer nodes means thinner replication and lower continuity, while more nodes means stronger continuity and resilience.
 - Non-client nodes are expected to stay cheap/lightweight to run so world continuity can emerge from many active participants rather than a few heavy hosts.
 - Runtime nodes are expected to join the wider network through one or more known "jump nodes" that act as discoverable entry points; project-hosted jump nodes are acceptable, but player-hosted jump nodes should also remain possible.
-- The current native runtime targets source realm-scoped blockchain/jump-node data from JSON files: `realms/<name>/realm.json` for blockchain config and `realms/<name>/jump_nodes.json` for known entry nodes, with root `config.json` selecting the default realm path (for example `realms/test`) and providing node-local wallet/bind settings.
+- The current native runtime targets source realm-scoped blockchain/jump-node data from JSON files: `realms/<name>/realm.json` for blockchain config and `realms/<name>/jump_nodes.json` for known entry nodes, with root `config.json` selecting the default realm path (for example `realms/test`) and providing node-local wallet/bind settings plus shared target-agnostic runtime defaults.
 - A jump node is a public entry/discovery role layered on top of a known node address; it should provide first contact, peer-list sharing, handshake/compatibility checks, and optional relay fallback, but should not imply gameplay authority.
 
 - Peer neighborhood design should prefer locality-aware connectivity: nodes responsible for nearby world regions should connect more directly, while distant regions do not need dense direct links.

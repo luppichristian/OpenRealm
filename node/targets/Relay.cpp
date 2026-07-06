@@ -22,25 +22,16 @@
 #include "../runtime/RuntimeHash.h"
 #include "../runtime/RuntimeRealm.h"
 #include "../world/WorldEvent.h"
+#include "RuntimeNodeConfigBase.h"
 
-struct RelayConfig
+struct RelayConfig : RuntimeNodeConfigBase
 {
   bool smoke = false;
-  RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
-  uint32_t localNodeId = DEFAULT_RUNTIME_NODE_ID;
-  uint32_t receiveTimeoutMs = DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS;
   RuntimeWorldNodeSelection worldNodeSelection = RuntimeWorldNodeSelection::InterestOrBroadcast;
   size_t maxNodeConnections = DEFAULT_RUNTIME_MAX_NODE_CONNECTIONS;
-  size_t maxPeerDiscoveryNodes = DEFAULT_RUNTIME_MAX_PEER_DISCOVERY_NODES;
   size_t maxChunkInterests = DEFAULT_RUNTIME_MAX_CHUNK_INTERESTS;
   size_t maxWorldEventRecipients = DEFAULT_RUNTIME_MAX_WORLD_EVENT_RECIPIENTS;
   int ticks = 0;
-  std::string configPath = "config.json";
-  std::string realmDirectory = "realms/test";
-  std::string realmName = {};
-  size_t jumpNodeCount = 0;
-  BlockchainConfig blockchainConfig = {};
-  Wallet wallet = {};
 };
 
 struct RelayRuntimeStats
@@ -78,6 +69,16 @@ struct ReceivedWorldEventState
   WorldEventPacketData worldEvent = {};
   bool parsed = false;
   bool decoded = false;
+};
+
+struct RelayRuntimeSession
+{
+  const RelayConfig& config;
+  RuntimeClient& relay;
+  ActiveNodeBucket& activeNodes;
+  ChunkInterestBucket& chunkInterests;
+  RelayRuntimeStats& stats;
+  uint64_t realmHash = 0;
 };
 
 static RelayConfig BuildRelayConfigFromFiles(const NodeFilesConfig& nodeFiles, const RealmConfigFiles& realmFiles)
@@ -184,47 +185,43 @@ static bool TryDecodeKnownWorldEvent(
   return worldEvent->nodeId == activeNode.nodeId;
 }
 
-static void ProcessRelayPacket(
-    RuntimeClient& relay,
-    const RelayConfig& config,
-    const ReceivedPacketState& state,
-    uint64_t realmHash,
-    ActiveNodeBucket* activeNodes,
-    ChunkInterestBucket* chunkInterests,
-    RelayRuntimeStats* stats)
+static void ProcessRelayPacket(const RelayRuntimeSession& session, const ReceivedPacketState& state)
 {
-  if (activeNodes == nullptr || chunkInterests == nullptr || stats == nullptr) return;
   if (!state.received) return;
 
-  stats->processedPackets += 1;
+  RelayRuntimeStats& stats = session.stats;
+  ActiveNodeBucket& activeNodes = session.activeNodes;
+  ChunkInterestBucket& chunkInterests = session.chunkInterests;
+
+  stats.processedPackets += 1;
   if (!state.validation.accepted) return;
-  stats->acceptedPackets += 1;
+  stats.acceptedPackets += 1;
 
   if (state.validation.packet.type == PacketType::Handshake)
   {
     PeerDiscoveryPacketData peerDiscovery = {};
     peerDiscovery.requestingNodeId = state.validation.handshake.nodeId;
-    peerDiscovery.nodes = activeNodes->BuildPeerDiscoveryNodes(
+    peerDiscovery.nodes = activeNodes.BuildPeerDiscoveryNodes(
         state.validation.handshake.nodeId,
-        realmHash,
-        config.maxPeerDiscoveryNodes);
+        session.realmHash,
+        session.config.maxPeerDiscoveryNodes);
     const std::vector<uint8_t> discoveryBytes = SerializePacket(MakePeerDiscoveryPacket(peerDiscovery));
-    if (relay.SendPacket(state.peerAddress, discoveryBytes))
+    if (session.relay.SendPacket(state.peerAddress, discoveryBytes))
     {
-      stats->sentDiscoveryPackets += 1;
+      stats.sentDiscoveryPackets += 1;
     }
     return;
   }
 
-  const ActiveNodeState* activeNode = FindKnownPeer(*activeNodes, state.peerAddress);
+  const ActiveNodeState* activeNode = FindKnownPeer(activeNodes, state.peerAddress);
   if (activeNode == nullptr) return;
 
   if (state.validation.packet.type == PacketType::ChunkInterest)
   {
     ChunkInterestPacketData chunkInterest = {};
     if (!TryDecodeKnownChunkInterest(state.validation.packet, *activeNode, &chunkInterest)) return;
-    if (!chunkInterests->RegisterInterest(chunkInterest)) return;
-    stats->acceptedInterestPackets += 1;
+    if (!chunkInterests.RegisterInterest(chunkInterest)) return;
+    stats.acceptedInterestPackets += 1;
     return;
   }
 
@@ -235,21 +232,24 @@ static void ProcessRelayPacket(
 
   int chunkX = 0;
   int chunkY = 0;
-  if (!chunkInterests->TryResolveWorldEventChunk(worldEvent, &chunkX, &chunkY)) return;
+  if (!chunkInterests.TryResolveWorldEventChunk(worldEvent, &chunkX, &chunkY)) return;
 
   std::vector<RuntimePeerAddress> forwardingRecipients = {};
-  if (config.worldNodeSelection != RuntimeWorldNodeSelection::Broadcast)
+  if (session.config.worldNodeSelection != RuntimeWorldNodeSelection::Broadcast)
   {
-    forwardingRecipients = chunkInterests->BuildInterestedPeerAddresses(
-        *activeNodes,
+    forwardingRecipients = chunkInterests.BuildInterestedPeerAddresses(
+        activeNodes,
         worldEvent.nodeId,
         chunkX,
         chunkY,
-        config.maxWorldEventRecipients);
+        session.config.maxWorldEventRecipients);
   }
-  if (forwardingRecipients.empty() && config.worldNodeSelection != RuntimeWorldNodeSelection::Interest)
+  if (forwardingRecipients.empty() && session.config.worldNodeSelection != RuntimeWorldNodeSelection::Interest)
   {
-    forwardingRecipients = activeNodes->BuildPeerAddresses(worldEvent.nodeId, realmHash, config.maxWorldEventRecipients);
+    forwardingRecipients = activeNodes.BuildPeerAddresses(
+        worldEvent.nodeId,
+        session.realmHash,
+        session.config.maxWorldEventRecipients);
   }
   if (forwardingRecipients.empty()) return;
 
@@ -257,40 +257,33 @@ static void ProcessRelayPacket(
   bool forwardedAny = false;
   for (const RuntimePeerAddress& recipient : forwardingRecipients)
   {
-    if (!relay.SendPacket(recipient, bytes)) continue;
-    stats->forwardedWorldEventRecipients += 1;
+    if (!session.relay.SendPacket(recipient, bytes)) continue;
+    stats.forwardedWorldEventRecipients += 1;
     forwardedAny = true;
   }
 
-  if (forwardedAny) stats->forwardedWorldEvents += 1;
+  if (forwardedAny) stats.forwardedWorldEvents += 1;
 }
 
-static std::vector<NodeRuntimeViewLine> BuildRelayRuntimeViewLines(
-    const RelayConfig& config,
-    const RuntimeClient& relay,
-    const RelayRuntimeStats& stats,
-    const ActiveNodeBucket& activeNodes,
-    const ChunkInterestBucket& chunkInterests,
-    uint64_t realmHash,
-    int idleTicks)
+static std::vector<NodeRuntimeViewLine> BuildRelayRuntimeViewLines(const RelayRuntimeSession& session, int idleTicks)
 {
   return {
-      {"Config path", config.configPath},
-      {"Realm", config.realmDirectory},
-      {"Bind", DescribeRuntimePeerAddress(relay.GetBindAddress())},
-      {"Stack", relay.DescribeStack()},
-      {"Node id", std::to_string(config.localNodeId)},
-      {"Realm hash", FormatHash64(realmHash)},
-      {"Ticks budget", std::to_string(config.ticks)},
+      {"Config path", session.config.configPath},
+      {"Realm", session.config.realmDirectory},
+      {"Bind", DescribeRuntimePeerAddress(session.relay.GetBindAddress())},
+      {"Stack", session.relay.DescribeStack()},
+      {"Node id", std::to_string(session.config.localNodeId)},
+      {"Realm hash", FormatHash64(session.realmHash)},
+      {"Ticks budget", std::to_string(session.config.ticks)},
       {"Idle ticks", std::to_string(idleTicks)},
-      {"Processed packets", std::to_string(stats.processedPackets)},
-      {"Accepted packets", std::to_string(stats.acceptedPackets)},
-      {"Discovery packets", std::to_string(stats.sentDiscoveryPackets)},
-      {"Interest packets", std::to_string(stats.acceptedInterestPackets)},
-      {"World events", std::to_string(stats.forwardedWorldEvents)},
-      {"World event recipients", std::to_string(stats.forwardedWorldEventRecipients)},
-      {"Active nodes", std::to_string(activeNodes.GetCount())},
-      {"Chunk interests", std::to_string(chunkInterests.GetCount())},
+      {"Processed packets", std::to_string(session.stats.processedPackets)},
+      {"Accepted packets", std::to_string(session.stats.acceptedPackets)},
+      {"Discovery packets", std::to_string(session.stats.sentDiscoveryPackets)},
+      {"Interest packets", std::to_string(session.stats.acceptedInterestPackets)},
+      {"World events", std::to_string(session.stats.forwardedWorldEvents)},
+      {"World event recipients", std::to_string(session.stats.forwardedWorldEventRecipients)},
+      {"Active nodes", std::to_string(session.activeNodes.GetCount())},
+      {"Chunk interests", std::to_string(session.chunkInterests.GetCount())},
   };
 }
 
@@ -331,6 +324,7 @@ static int RunRelaySmoke(const RelayConfig& config)
   ActiveNodeBucket activeNodes(config.maxNodeConnections);
   ChunkInterestBucket chunkInterests(config.maxChunkInterests);
   RelayRuntimeStats stats = {};
+  RelayRuntimeSession session = {config, relayListener, activeNodes, chunkInterests, stats, realmHash};
   PacketValidationContext validationContext = {};
 
   validationContext.localNodeId = config.localNodeId;
@@ -361,7 +355,7 @@ static int RunRelaySmoke(const RelayConfig& config)
 
   const bool sentAcceptedPacket = acceptedPeerStarted && acceptedPeer.SendPacket(relayBindAddress, acceptedBytes);
   ReceivedPacketState acceptedPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, acceptedPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, acceptedPacket);
   ReceivedPeerDiscoveryState initialAcceptedPeerDiscovery = ReceivePeerDiscovery(acceptedPeer, 1000);
   initialAcceptedPeerDiscovery.decoded = initialAcceptedPeerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
       initialAcceptedPeerDiscovery.packet,
@@ -370,7 +364,7 @@ static int RunRelaySmoke(const RelayConfig& config)
 
   const bool sentDiscoveredPacket = discoveredPeerStarted && discoveredPeer.SendPacket(relayBindAddress, discoveredBytes);
   ReceivedPacketState discoveredPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, discoveredPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, discoveredPacket);
   ReceivedPeerDiscoveryState discoveredPeerDiscovery = ReceivePeerDiscovery(discoveredPeer, 1000);
   discoveredPeerDiscovery.decoded = discoveredPeerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
       discoveredPeerDiscovery.packet,
@@ -379,7 +373,7 @@ static int RunRelaySmoke(const RelayConfig& config)
 
   const bool sentAcceptedRefreshPacket = acceptedPeer.SendPacket(relayBindAddress, acceptedBytes);
   ReceivedPacketState acceptedRefreshPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, acceptedRefreshPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, acceptedRefreshPacket);
   ReceivedPeerDiscoveryState acceptedPeerDiscovery = ReceivePeerDiscovery(acceptedPeer, 1000);
   acceptedPeerDiscovery.decoded = acceptedPeerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
       acceptedPeerDiscovery.packet,
@@ -388,11 +382,11 @@ static int RunRelaySmoke(const RelayConfig& config)
 
   const bool sentDuplicatePacket = duplicatePeerStarted && duplicatePeer.SendPacket(relayBindAddress, duplicateBytes);
   ReceivedPacketState duplicatePacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, duplicatePacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, duplicatePacket);
 
   const bool sentMismatchedRealmPacket = mismatchedRealmPeerStarted && mismatchedRealmPeer.SendPacket(relayBindAddress, mismatchedRealmBytes);
   ReceivedPacketState mismatchedRealmPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, mismatchedRealmPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, mismatchedRealmPacket);
 
   ChunkInterestPacketData acceptedInterest = {};
   acceptedInterest.nodeId = acceptedHandshake.nodeId;
@@ -410,13 +404,13 @@ static int RunRelaySmoke(const RelayConfig& config)
       relayBindAddress,
       SerializePacket(MakeChunkInterestPacket(acceptedInterest)));
   ReceivedPacketState acceptedInterestPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, acceptedInterestPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, acceptedInterestPacket);
 
   const bool sentDiscoveredInterest = discoveredPeer.SendPacket(
       relayBindAddress,
       SerializePacket(MakeChunkInterestPacket(discoveredInterest)));
   ReceivedPacketState discoveredInterestPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, discoveredInterestPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, discoveredInterestPacket);
 
   WorldEventPacketData discoveredWorldEvent = {};
   discoveredWorldEvent.nodeId = discoveredHandshake.nodeId;
@@ -431,7 +425,7 @@ static int RunRelaySmoke(const RelayConfig& config)
       relayBindAddress,
       SerializePacket(MakeWorldEventPacket(discoveredWorldEvent)));
   ReceivedPacketState worldEventPacket = ReceiveAndValidate(relayListener, validationContext, 1000);
-  ProcessRelayPacket(relayListener, config, worldEventPacket, realmHash, &activeNodes, &chunkInterests, &stats);
+  ProcessRelayPacket(session, worldEventPacket);
   ReceivedWorldEventState forwardedWorldEvent = ReceiveWorldEvent(acceptedPeer, 1000);
   ReceivedWorldEventState senderEchoWorldEvent = ReceiveWorldEvent(discoveredPeer, 100);
 
@@ -534,6 +528,7 @@ static int RunRelayService(const RelayConfig& config, bool interactiveLaunch)
   ActiveNodeBucket activeNodes(config.maxNodeConnections);
   ChunkInterestBucket chunkInterests(config.maxChunkInterests);
   RelayRuntimeStats stats = {};
+  RelayRuntimeSession session = {config, relay, activeNodes, chunkInterests, stats, realmHash};
   PacketValidationContext validationContext = {};
 
   validationContext.localNodeId = config.localNodeId;
@@ -561,14 +556,14 @@ static int RunRelayService(const RelayConfig& config, bool interactiveLaunch)
     }
     else
     {
-      ProcessRelayPacket(relay, config, state, realmHash, &activeNodes, &chunkInterests, &stats);
+      ProcessRelayPacket(session, state);
     }
 
     if (runtimeViewActive)
     {
       stopRequested = PumpNodeRuntimeView(
           "Relay running. Press Q or Esc to stop cleanly.",
-          BuildRelayRuntimeViewLines(config, relay, stats, activeNodes, chunkInterests, realmHash, idleTicks));
+          BuildRelayRuntimeViewLines(session, idleTicks));
     }
   }
 

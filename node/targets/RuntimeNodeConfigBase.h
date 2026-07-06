@@ -1,0 +1,23 @@
+#pragma once
+
+#include "../runtime/NodeConfigFiles.h"
+#include "../blockchain/BlockchainConfig.h"
+#include "../blockchain/Wallet.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+struct RuntimeNodeConfigBase
+{
+  RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
+  uint32_t localNodeId = DEFAULT_RUNTIME_NODE_ID;
+  uint32_t receiveTimeoutMs = DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS;
+  size_t maxPeerDiscoveryNodes = DEFAULT_RUNTIME_MAX_PEER_DISCOVERY_NODES;
+  std::string configPath = "config.json";
+  std::string realmDirectory = "realms/test";
+  std::string realmName = {};
+  size_t jumpNodeCount = 0;
+  BlockchainConfig blockchainConfig = {};
+  Wallet wallet = {};
+};
