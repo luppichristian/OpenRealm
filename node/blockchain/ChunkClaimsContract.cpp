@@ -36,8 +36,6 @@ static constexpr const char* SIGNATURE_GET_CLAIM_BY_TOKEN_ID = "GetClaimByTokenI
 static constexpr const char* SELECTOR_GET_CLAIM_BY_TOKEN_ID = "0x7f56cb56";
 static constexpr const char* SIGNATURE_CAN_EDIT = "CanEdit(int32,int32,address)";
 static constexpr const char* SELECTOR_CAN_EDIT = "0x07f809c4";
-static constexpr const char* SIGNATURE_CAN_EDIT_WITH_RUNTIME_SIGNER = "CanEditWithRuntimeSigner(int32,int32,address)";
-static constexpr const char* SELECTOR_CAN_EDIT_WITH_RUNTIME_SIGNER = "0x87e364ab";
 static constexpr const char* SIGNATURE_EDITOR_EPOCH_OF_CHUNK = "EditorEpochOfChunk(int32,int32)";
 static constexpr const char* SELECTOR_EDITOR_EPOCH_OF_CHUNK = "0x23011b9d";
 static constexpr const char* SIGNATURE_GET_CHUNK_RUNTIME_STATE = "GetChunkRuntimeState(int32,int32,address)";
@@ -298,27 +296,6 @@ bool ChunkClaimsContract::CanEdit(int32_t x, int32_t y, const std::string& accou
     return false;
   }
   return DecodeBlockchainWordAsBool(words[0]);
-}
-
-ChunkEditState ChunkClaimsContract::CanEditWithRuntimeSigner(int32_t x, int32_t y, const std::string& actor) const
-{
-  ChunkEditState state = {};
-  std::vector<std::string> words = {};
-  if (!CallWords(
-          BuildBlockchainCallData(
-              SELECTOR_CAN_EDIT_WITH_RUNTIME_SIGNER,
-              {EncodeBlockchainInt32Argument(x), EncodeBlockchainInt32Argument(y), EncodeBlockchainAddressArgument(actor)}),
-          &words) ||
-      words.size() < 3)
-  {
-    return state;
-  }
-
-  state.available = true;
-  state.allowed = DecodeBlockchainWordAsBool(words[0]);
-  state.resolvedActor = DecodeBlockchainWordAsAddress(words[1]);
-  state.actorUsesRuntimeSession = DecodeBlockchainWordAsBool(words[2]);
-  return state;
 }
 
 uint64_t ChunkClaimsContract::EditorEpochOfChunk(int32_t x, int32_t y) const

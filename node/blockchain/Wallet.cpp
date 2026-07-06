@@ -4,20 +4,14 @@
 
 #include <utility>
 
-Wallet::Wallet(std::string accountAddress, std::string runtimeSignerAddress)
+Wallet::Wallet(std::string accountAddress)
 {
-  Connect(std::move(accountAddress), std::move(runtimeSignerAddress));
+  Connect(std::move(accountAddress));
 }
 
-void Wallet::Connect(std::string accountAddressValue, std::string runtimeSignerAddressValue)
+void Wallet::Connect(std::string accountAddressValue)
 {
   accountAddress = std::move(accountAddressValue);
-  runtimeSignerAddress = std::move(runtimeSignerAddressValue);
-  if (IsZeroBlockchainAddress(runtimeSignerAddress) ||
-      NormalizeBlockchainAddress(runtimeSignerAddress) == NormalizeBlockchainAddress(accountAddress))
-  {
-    runtimeSignerAddress.clear();
-  }
   connected = !IsZeroBlockchainAddress(accountAddress);
 }
 
@@ -25,7 +19,6 @@ void Wallet::Disconnect()
 {
   connected = false;
   accountAddress.clear();
-  runtimeSignerAddress.clear();
 }
 
 bool Wallet::IsConnected() const
@@ -43,21 +36,6 @@ const std::string& Wallet::GetAccountAddress() const
   return accountAddress;
 }
 
-const std::string& Wallet::GetRuntimeSignerAddress() const
-{
-  return runtimeSignerAddress;
-}
-
-std::string Wallet::GetActiveSignerAddress() const
-{
-  if (!IsZeroBlockchainAddress(runtimeSignerAddress))
-  {
-    return NormalizeBlockchainAddress(runtimeSignerAddress);
-  }
-
-  return NormalizeBlockchainAddress(accountAddress);
-}
-
 std::string Wallet::GetTransactionSenderAddress() const
 {
   return NormalizeBlockchainAddress(accountAddress);
@@ -70,11 +48,5 @@ std::string Wallet::DescribeWallet() const
     return "wallet disconnected";
   }
 
-  if (IsZeroBlockchainAddress(runtimeSignerAddress) ||
-      NormalizeBlockchainAddress(runtimeSignerAddress) == NormalizeBlockchainAddress(accountAddress))
-  {
-    return "wallet connected";
-  }
-
-  return "wallet connected with delegated runtime signer";
+  return "wallet connected";
 }

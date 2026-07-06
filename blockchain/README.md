@@ -97,7 +97,6 @@ Responsibilities:
 
 Primary runtime-facing reads:
 - `CanEdit(x, y, account)`
-- `CanEditWithRuntimeSigner(x, y, actor)`
 - `EditorEpochOfChunk(x, y)`
 - `GetChunkRuntimeState(x, y, actor)`
 - `GetClaim(x, y)` / `GetClaimByTokenId(tokenId)`

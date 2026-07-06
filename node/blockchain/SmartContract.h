@@ -22,7 +22,6 @@ class SmartContract
   const Wallet* GetWallet() const;
   bool HasContractAddress() const;
   std::string GetWalletTransactionSender() const;
-  std::string GetWalletActiveSigner() const;
   bool Call(
       const std::string& callData,
       std::string* resultHex,

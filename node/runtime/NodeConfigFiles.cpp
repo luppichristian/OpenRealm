@@ -152,12 +152,7 @@ bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config,
 
   const nlohmann::json walletJson = root.value("wallet", nlohmann::json::object());
   const std::string accountAddress = ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress());
-  std::string signerAddress = ReadStringValue(walletJson, "signerAddress", config->wallet.GetRuntimeSignerAddress());
-  if (signerAddress.empty())
-  {
-    signerAddress = ReadStringValue(walletJson, "runtimeSignerAddress", config->wallet.GetRuntimeSignerAddress());
-  }
-  config->wallet.Connect(accountAddress, signerAddress);
+  config->wallet.Connect(accountAddress);
 
   const nlohmann::json runtimeJson = root.value("runtime", nlohmann::json::object());
   const nlohmann::json simulationJson = root.value("simulation", nlohmann::json::object());
@@ -165,19 +160,14 @@ bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config,
   const nlohmann::json limitsJson = runtimeJson.value("limits", nlohmann::json::object());
   const nlohmann::json interestJson = runtimeJson.value("interest", nlohmann::json::object());
 
-  const nlohmann::json legacySimulatorJson = root.value("simulator", nlohmann::json::object());
-  const nlohmann::json legacyRelayJson = root.value("relay", nlohmann::json::object());
-
-  config->runtimeBindAddress = ReadPeerAddressValue(
-      runtimeJson.value("bindAddress", legacySimulatorJson.value("bindAddress", legacyRelayJson.value("bindAddress", nlohmann::json::object()))),
-      config->runtimeBindAddress);
-  config->runtimeJumpNodeIndex = ReadIntValue(runtimeJson, "jumpNodeIndex", ReadIntValue(legacySimulatorJson, "jumpNodeIndex", config->runtimeJumpNodeIndex));
-  config->runtimeNodeId = ReadU32Value(runtimeJson, "nodeId", ReadU32Value(legacySimulatorJson, "nodeId", ReadU32Value(legacyRelayJson, "nodeId", config->runtimeNodeId)));
-  config->runtimeInterestChunkX = ReadIntValue(interestJson, "chunkX", ReadIntValue(legacySimulatorJson, "interestChunkX", config->runtimeInterestChunkX));
-  config->runtimeInterestChunkY = ReadIntValue(interestJson, "chunkY", ReadIntValue(legacySimulatorJson, "interestChunkY", config->runtimeInterestChunkY));
-  config->runtimeInterestRadius = ReadU32Value(interestJson, "radius", ReadU32Value(legacySimulatorJson, "interestRadius", config->runtimeInterestRadius));
-  config->runtimeReceiveTimeoutMs = ReadU32Value(runtimeJson, "receiveTimeoutMs", ReadU32Value(legacySimulatorJson, "receiveTimeoutMs", ReadU32Value(legacyRelayJson, "receiveTimeoutMs", config->runtimeReceiveTimeoutMs)));
-  config->runtimeEnabled = ReadBoolValue(runtimeJson, "enabled", ReadBoolValue(legacySimulatorJson, "runtimeEnabled", config->runtimeEnabled));
+  config->runtimeBindAddress = ReadPeerAddressValue(runtimeJson.value("bindAddress", nlohmann::json::object()), config->runtimeBindAddress);
+  config->runtimeJumpNodeIndex = ReadIntValue(runtimeJson, "jumpNodeIndex", config->runtimeJumpNodeIndex);
+  config->runtimeNodeId = ReadU32Value(runtimeJson, "nodeId", config->runtimeNodeId);
+  config->runtimeInterestChunkX = ReadIntValue(interestJson, "chunkX", config->runtimeInterestChunkX);
+  config->runtimeInterestChunkY = ReadIntValue(interestJson, "chunkY", config->runtimeInterestChunkY);
+  config->runtimeInterestRadius = ReadU32Value(interestJson, "radius", config->runtimeInterestRadius);
+  config->runtimeReceiveTimeoutMs = ReadU32Value(runtimeJson, "receiveTimeoutMs", config->runtimeReceiveTimeoutMs);
+  config->runtimeEnabled = ReadBoolValue(runtimeJson, "enabled", config->runtimeEnabled);
   config->runtimeWorldNodeSelection = ParseRuntimeWorldNodeSelection(
       ReadStringValue(runtimeJson, "worldNodeSelection", DescribeRuntimeWorldNodeSelection(config->runtimeWorldNodeSelection)));
   config->runtimeMaxNodeConnections = ReadSizeValue(limitsJson, "maxNodeConnections", config->runtimeMaxNodeConnections);
@@ -185,13 +175,13 @@ bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config,
   config->runtimeMaxChunkInterests = ReadSizeValue(limitsJson, "maxChunkInterests", config->runtimeMaxChunkInterests);
   config->runtimeMaxWorldEventRecipients = ReadSizeValue(limitsJson, "maxWorldEventRecipients", config->runtimeMaxWorldEventRecipients);
 
-  config->simulatorFrames = ReadIntValue(simulationJson, "frames", ReadIntValue(legacySimulatorJson, "frames", config->simulatorFrames));
-  config->simulatorFrameTime = ReadFloatValue(simulationJson, "frameTime", ReadFloatValue(legacySimulatorJson, "frameTime", config->simulatorFrameTime));
-  config->simulatorSleepMs = ReadIntValue(simulationJson, "sleepMs", ReadIntValue(legacySimulatorJson, "sleepMs", config->simulatorSleepMs));
-  config->simulatorEmitPlaceEvent = ReadBoolValue(simulationJson, "emitPlaceEvent", ReadBoolValue(legacySimulatorJson, "emitPlaceEvent", config->simulatorEmitPlaceEvent));
-  config->simulatorPlaceVoxelValue = (uint8_t)ReadIntValue(simulationJson, "placeVoxelValue", ReadIntValue(legacySimulatorJson, "placeVoxelValue", (int)config->simulatorPlaceVoxelValue));
+  config->simulatorFrames = ReadIntValue(simulationJson, "frames", config->simulatorFrames);
+  config->simulatorFrameTime = ReadFloatValue(simulationJson, "frameTime", config->simulatorFrameTime);
+  config->simulatorSleepMs = ReadIntValue(simulationJson, "sleepMs", config->simulatorSleepMs);
+  config->simulatorEmitPlaceEvent = ReadBoolValue(simulationJson, "emitPlaceEvent", config->simulatorEmitPlaceEvent);
+  config->simulatorPlaceVoxelValue = (uint8_t)ReadIntValue(simulationJson, "placeVoxelValue", (int)config->simulatorPlaceVoxelValue);
 
-  config->relayTicks = ReadIntValue(serviceJson, "ticks", ReadIntValue(legacyRelayJson, "ticks", config->relayTicks));
+  config->relayTicks = ReadIntValue(serviceJson, "ticks", config->relayTicks);
 
   config->runtimeJumpNodeIndex = ClampIntValue(config->runtimeJumpNodeIndex, 0, 1024);
   config->runtimeInterestRadius = ClampU32Value(config->runtimeInterestRadius, 0, MAX_RUNTIME_INTEREST_RADIUS);

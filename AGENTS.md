@@ -65,7 +65,7 @@ Do not describe this repo as if it already contains distributed networking or co
 
   - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: RPC URL, contract addresses, and request timeouts.
   - `BlockchainAbi.*` contains the current lightweight Ethereum ABI call encoding/decoding helpers used by the native wrappers.
-  - `Wallet.*` currently abstracts the selected wallet account plus optional runtime signer metadata for the native layer; transaction signing/submission is not implemented yet.
+  - `Wallet.*` currently abstracts the selected wallet account for the native layer; transaction signing/submission is not implemented yet.
   - `BlockchainRpcClient.*` wraps JSON-RPC calls to the orchestration-layer backend.
   - `GlobalParamsContract.*`, `PlayerRegistryContract.*`, `ChunkClaimsContract.*`, and `MarketplaceContract.*` are the native contract wrapper classes for the current runtime-facing orchestration reads; each wrapper keeps its own related POD read models in its header instead of using a shared blockchain-types header.
 - `node/client/Game.*`
@@ -151,7 +151,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - `realms/test/` stores the local/test runtime environment with the same file shape.
 - `config.json`
   - Root runtime node configuration file.
-  - Stores the selected default realm plus node-local settings such as wallet addresses and simulator/relay bind/node defaults.
+  - Stores the selected default realm plus target-agnostic runtime settings, service/simulation controls, client menu settings, and wallet account identity.
   - Now also stores a `client` object for client-node menu settings (`realm`, `jumpNodeIndex`, `masterVolume`, `mouseSensitivity`, `invertMouseY`, `showFps`).
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
@@ -163,7 +163,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Blockchain contract/interface/file names intentionally omit the redundant `OpenRealm` prefix; prefer concise names like `PlayerRegistry`, `ChunkClaims`, `Marketplace`, `IPlayerRegistry`, and `IChunkClaims`.
   - `GlobalParams` is the shared on-chain source for orchestration-layer tuning values such as chunk coordinate bounds, `MIN_CHUNK_PRICE`, max fee bps, and minimum auction duration; deployment records include both the contract address and the configured values for later runtime fetching.
   - `PlayerRegistry` now also owns expiring runtime-session authorizations so the upcoming runtime layer can resolve gameplay/session signers back to registered wallet accounts.
-  - `ChunkClaims` now exposes `GetChunkRuntimeState(...)`, `CanEditWithRuntimeSigner(...)`, and `EditorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
+  - `ChunkClaims` now exposes `GetChunkRuntimeState(...)` and `EditorEpochOfChunk(...)` as the main runtime-facing permission/query surface.
   - Free chunks are claimed by paying exactly `GlobalParams.MIN_CHUNK_PRICE`; abandoning a chunk refunds that locked minimum purchase price to the owner and returns the chunk to the free pool.
   - `Marketplace` now exposes unified sale-state reads (`GetSaleStateForChunk`, `GetSaleStateForToken`) for runtime/UI integration.
   - Marketplace listings and auction reserve prices must be at least `GlobalParams.MIN_CHUNK_PRICE`; fee bps validation is capped by `GlobalParams.MAX_FEE_BPS`.

@@ -205,6 +205,20 @@ static nlohmann::json& EnsureRuntimeInterestObject(nlohmann::json& root)
   return EnsureObject(EnsureRuntimeObject(root), "interest");
 }
 
+static void NormalizeConfigSchema(nlohmann::json* root)
+{
+  if (root == nullptr || !root->is_object()) return;
+
+  EnsureObject(*root, "wallet");
+  nlohmann::json& runtimeJson = EnsureRuntimeObject(*root);
+
+  EnsureAddress(runtimeJson);
+  EnsureRuntimeInterestObject(*root);
+  EnsureSimulationObject(*root);
+  EnsureServiceObject(*root);
+
+}
+
 static const wchar_t* RoleTitle(NodeCliRole role)
 {
   return role == NodeCliRole::Relay ? L"Relay Node" : L"Simulator Node";
@@ -320,7 +334,6 @@ enum class NodeCliFieldId
 {
   Realm,
   WalletAccountAddress,
-  WalletRuntimeSignerAddress,
   BindHost,
   BindPort,
   NodeId,
@@ -353,7 +366,6 @@ static const std::vector<NodeCliFieldSpec>& GetRelayFields()
   static const std::vector<NodeCliFieldSpec> fields = {
       {NodeCliFieldId::Realm, NodeCliFieldKind::Realm, L"Realm", L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
       {NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String, L"Wallet", L"Account address", L"Wallet account used for ownership/economic actions."},
-      {NodeCliFieldId::WalletRuntimeSignerAddress, NodeCliFieldKind::String, L"Wallet", L"Runtime signer", L"Signer identity advertised by native runtime services."},
       {NodeCliFieldId::BindHost, NodeCliFieldKind::String, L"Relay", L"Bind host", L"Interface the relay listener binds to."},
       {NodeCliFieldId::BindPort, NodeCliFieldKind::Int, L"Relay", L"Bind port", L"UDP port exposed by the relay node."},
       {NodeCliFieldId::NodeId, NodeCliFieldKind::Int, L"Relay", L"Node id", L"Unique node identity advertised to peers."},
@@ -368,7 +380,6 @@ static const std::vector<NodeCliFieldSpec>& GetSimulatorFields()
   static const std::vector<NodeCliFieldSpec> fields = {
       {NodeCliFieldId::Realm, NodeCliFieldKind::Realm, L"Realm", L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
       {NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String, L"Wallet", L"Account address", L"Wallet account used for ownership/economic actions."},
-      {NodeCliFieldId::WalletRuntimeSignerAddress, NodeCliFieldKind::String, L"Wallet", L"Runtime signer", L"Signer identity advertised by native runtime sessions."},
       {NodeCliFieldId::BindHost, NodeCliFieldKind::String, L"Runtime", L"Bind host", L"Interface the simulator runtime listener binds to."},
       {NodeCliFieldId::BindPort, NodeCliFieldKind::Int, L"Runtime", L"Bind port", L"UDP port exposed by the simulator node."},
       {NodeCliFieldId::NodeId, NodeCliFieldKind::Int, L"Runtime", L"Node id", L"Unique node identity advertised to peers."},
@@ -401,14 +412,10 @@ static std::string GetFieldValue(const nlohmann::json& root, NodeCliFieldId fiel
   const nlohmann::json bindAddress = runtimeJson.value("bindAddress", nlohmann::json::object());
   const nlohmann::json interestJson = runtimeJson.value("interest", nlohmann::json::object());
 
-  std::string signerAddress = JsonString(wallet, "signerAddress", {});
-  if (signerAddress.empty()) signerAddress = JsonString(wallet, "runtimeSignerAddress", {});
-
   switch (fieldId)
   {
     case NodeCliFieldId::Realm: return JsonString(root, "realm", "realms/test");
     case NodeCliFieldId::WalletAccountAddress: return JsonString(wallet, "accountAddress", {});
-    case NodeCliFieldId::WalletRuntimeSignerAddress: return signerAddress;
     case NodeCliFieldId::BindHost: return JsonString(bindAddress, "host", "127.0.0.1");
     case NodeCliFieldId::BindPort: return std::to_string(JsonInt(bindAddress, "port", 46010));
     case NodeCliFieldId::NodeId: return std::to_string(JsonInt(runtimeJson, "nodeId", 7001));
@@ -479,11 +486,6 @@ static bool SetFieldValue(
 
     case NodeCliFieldId::WalletAccountAddress:
       wallet["accountAddress"] = value;
-      return true;
-
-    case NodeCliFieldId::WalletRuntimeSignerAddress:
-      wallet["signerAddress"] = value;
-      if (wallet.contains("runtimeSignerAddress")) wallet.erase("runtimeSignerAddress");
       return true;
 
     case NodeCliFieldId::BindHost:
@@ -1015,8 +1017,11 @@ static NodeCliAction SaveIfNeeded(const NodeCliOptions& options, const nlohmann:
     return launchAfterSave ? NodeCliAction::Launch : NodeCliAction::None;
   }
 
+  nlohmann::json normalizedRoot = root;
+  NormalizeConfigSchema(&normalizedRoot);
+
   std::string error = {};
-  if (!SaveJsonFile(options.configPath, root, &error))
+  if (!SaveJsonFile(options.configPath, normalizedRoot, &error))
   {
     SetStatus(state, StatusTone::Error, "Failed to save config: " + error);
     return NodeCliAction::None;
@@ -1246,6 +1251,7 @@ static NodeCliAction HandleMainKey(
         return NodeCliAction::None;
       }
 
+      NormalizeConfigSchema(&reloaded);
       *root = std::move(reloaded);
       state->dirty = false;
       state->reloadArmed = false;
@@ -1279,6 +1285,8 @@ bool RunNodeCli(const NodeCliOptions& options)
     std::printf("OpenRealm config CLI failed: %s\n", error.c_str());
     return false;
   }
+
+  NormalizeConfigSchema(&root);
 
   if (!tinit())
   {

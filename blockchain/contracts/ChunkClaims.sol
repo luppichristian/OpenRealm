@@ -272,25 +272,6 @@ contract ChunkClaims is Ownable, ERC721Lite
     return chunkOwner == account || delegatedEditors[tokenId][editorEpoch][account];
   }
 
-  function CanEditWithRuntimeSigner(
-    int32 x,
-    int32 y,
-    address actor
-  )
-    external
-    view
-    returns (bool allowed, address resolvedActor, bool actorUsesRuntimeSession)
-  {
-    // Resolve the incoming signer first, because runtime code may use a delegated session key.
-    (resolvedActor, , actorUsesRuntimeSession) = registry.ResolveRuntimeAccount(actor);
-    if (resolvedActor == address(0))
-    {
-      return (false, address(0), actorUsesRuntimeSession);
-    }
-
-    return (CanEdit(x, y, resolvedActor), resolvedActor, actorUsesRuntimeSession);
-  }
-
   function EditorEpochOfChunk(int32 x, int32 y) external view returns (uint64)
   {
     uint256 tokenId = chunkTokenIds[_chunkKey(x, y)];

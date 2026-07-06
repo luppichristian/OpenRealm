@@ -37,11 +37,6 @@ std::string SmartContract::GetWalletTransactionSender() const
   return wallet != nullptr ? wallet->GetTransactionSenderAddress() : std::string{};
 }
 
-std::string SmartContract::GetWalletActiveSigner() const
-{
-  return wallet != nullptr ? wallet->GetActiveSignerAddress() : std::string{};
-}
-
 bool SmartContract::Call(
     const std::string& callData,
     std::string* resultHex,

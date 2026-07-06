@@ -14,14 +14,6 @@ struct ChunkClaimState
   uint64_t claimedAt = 0;
 };
 
-struct ChunkEditState
-{
-  bool available = false;
-  bool allowed = false;
-  std::string resolvedActor = {};
-  bool actorUsesRuntimeSession = false;
-};
-
 struct ChunkRuntimeState
 {
   bool available = false;
@@ -72,7 +64,6 @@ class ChunkClaimsContract : public SmartContract
   ChunkClaimState GetClaim(int32_t x, int32_t y) const;
   ChunkClaimState GetClaimByTokenId(const std::string& tokenId) const;
   bool CanEdit(int32_t x, int32_t y, const std::string& account) const;
-  ChunkEditState CanEditWithRuntimeSigner(int32_t x, int32_t y, const std::string& actor) const;
   uint64_t EditorEpochOfChunk(int32_t x, int32_t y) const;
   ChunkRuntimeState GetChunkRuntimeState(int32_t x, int32_t y, const std::string& actor) const;
   bool IsRegisteredPlayer(const std::string& account) const;

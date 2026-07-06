@@ -8,35 +8,32 @@
     "showFps": true
   },
   "realm": "realms/test",
-  "relay": {
-    "bindAddress": {
-      "host": "127.0.0.1",
-      "port": 46001
-    },
-    "nodeId": 9001,
-    "receiveTimeoutMs": 100,
-    "ticks": 0
-  },
-  "simulator": {
+  "runtime": {
     "bindAddress": {
       "host": "127.0.0.1",
       "port": 46010
     },
+    "enabled": false,
+    "interest": {
+      "chunkX": 0,
+      "chunkY": 0,
+      "radius": 1
+    },
+    "jumpNodeIndex": 0,
+    "nodeId": 7001,
+    "receiveTimeoutMs": 1000
+  },
+  "service": {
+    "ticks": 0
+  },
+  "simulation": {
     "emitPlaceEvent": false,
     "frameTime": 0.016666667,
     "frames": 0,
-    "interestChunkX": 0,
-    "interestChunkY": 0,
-    "interestRadius": 1,
-    "jumpNodeIndex": 0,
-    "nodeId": 7001,
     "placeVoxelValue": 255,
-    "receiveTimeoutMs": 1000,
-    "runtimeEnabled": false,
     "sleepMs": 16
   },
   "wallet": {
-    "accountAddress": "0x0000000000000000000000000000000000000001",
-    "runtimeSignerAddress": "0x0000000000000000000000000000000000000001"
+    "accountAddress": "0x0000000000000000000000000000000000000001"
   }
 }

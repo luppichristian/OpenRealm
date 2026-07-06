@@ -438,7 +438,7 @@ int main(int argc, char** argv)
   std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
   std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
   std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
-  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
+  std::cout << "- runtime wallet sender: " << config.wallet.GetTransactionSenderAddress() << "\n";
   std::cout << "- runtime mode: " << (config.runtimeEnabled ? "enabled" : "disabled") << "\n";
   std::cout << "- runtime bind address: " << DescribeRuntimePeerAddress(config.bindAddress) << "\n";
   std::cout << "- runtime relay address: " << DescribeRuntimePeerAddress(config.relayAddress) << "\n";

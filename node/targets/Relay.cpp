@@ -314,14 +314,15 @@ static int RunRelaySmoke(const RelayConfig& config)
   const std::string chainId = realmState.chainId;
   const GlobalParamsState globalParamsState = realmState.globalParams;
   ResolvedRuntimeAccount runtimeAccount = blockchain.GetPlayerRegistry().ResolveRuntimeAccount(
-      blockchain.GetWallet().GetActiveSignerAddress());
+      blockchain.GetWallet().GetTransactionSenderAddress());
   ChunkRuntimeState chunkRuntimeState = blockchain.GetChunkClaims().GetChunkRuntimeState(
       0,
       0,
-      blockchain.GetWallet().GetActiveSignerAddress());
+      blockchain.GetWallet().GetTransactionSenderAddress());
   SaleState saleState = blockchain.GetMarketplace().GetSaleStateForChunk(0, 0);
 
   ActiveNodeBucket activeNodes(config.maxNodeConnections);
+
   ChunkInterestBucket chunkInterests(config.maxChunkInterests);
   RelayRuntimeStats stats = {};
   RelayRuntimeSession session = {config, relayListener, activeNodes, chunkInterests, stats, realmHash};
@@ -442,7 +443,7 @@ static int RunRelaySmoke(const RelayConfig& config)
   std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
   std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
   std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
-  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
+  std::cout << "- runtime wallet sender: " << config.wallet.GetTransactionSenderAddress() << "\n";
   std::cout << "- runtime networking: " << relayListener.DescribeStack() << "\n";
   std::cout << "- relay listener startup: " << (relayStarted ? "ok" : "failed") << "\n";
   std::cout << "- accepted peer startup: " << (acceptedPeerStarted ? "ok" : "failed") << "\n";
@@ -491,8 +492,9 @@ static int RunRelaySmoke(const RelayConfig& config)
   std::cout << "- blockchain rpc url: " << blockchain.GetRpcClient().GetRpcUrl() << "\n";
   std::cout << "- wallet state: " << blockchain.GetWallet().DescribeWallet() << "\n";
   std::cout << "- wallet account: " << blockchain.GetWallet().GetAccountAddress() << "\n";
-  std::cout << "- wallet active signer: " << blockchain.GetWallet().GetActiveSignerAddress() << "\n";
+  std::cout << "- wallet sender: " << blockchain.GetWallet().GetTransactionSenderAddress() << "\n";
   std::cout << "- eth_chainId probe: " << (chainId.empty() ? "unavailable" : chainId) << "\n";
+
   std::cout << "- global params wrapper: " << blockchain.GetGlobalParams().DescribeContract() << " @ " << blockchain.GetGlobalParams().GetContractAddress() << "\n";
   std::cout << "- player registry wrapper: " << blockchain.GetPlayerRegistry().DescribeContract() << " @ " << blockchain.GetPlayerRegistry().GetContractAddress() << "\n";
   std::cout << "- chunk claims wrapper: " << blockchain.GetChunkClaims().DescribeContract() << " @ " << blockchain.GetChunkClaims().GetContractAddress() << "\n";
@@ -578,7 +580,7 @@ static int RunRelayService(const RelayConfig& config, bool interactiveLaunch)
   std::cout << "- runtime jump nodes loaded: " << config.jumpNodeCount << "\n";
   std::cout << "- runtime blockchain rpc url: " << config.blockchainConfig.rpcUrl << "\n";
   std::cout << "- runtime wallet account: " << config.wallet.GetAccountAddress() << "\n";
-  std::cout << "- runtime wallet active signer: " << config.wallet.GetActiveSignerAddress() << "\n";
+  std::cout << "- runtime wallet sender: " << config.wallet.GetTransactionSenderAddress() << "\n";
   std::cout << "- runtime networking: " << relay.DescribeStack() << "\n";
   std::cout << "- relay listener startup: ok\n";
   std::cout << "- relay bind address: " << DescribeRuntimePeerAddress(relay.GetBindAddress()) << "\n";
