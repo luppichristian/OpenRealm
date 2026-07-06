@@ -90,7 +90,7 @@ struct WorldEventPacketData
 Packet MakeHandshakePacket(const HandshakePacketData& handshake);
 bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake);
 Packet MakePeerDiscoveryPacket(const PeerDiscoveryPacketData& peerDiscovery);
-bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery);
+bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery, size_t maxNodes = 64);
 Packet MakeChunkInterestPacket(const ChunkInterestPacketData& chunkInterest);
 bool TryDecodeChunkInterestPacket(const Packet& packet, ChunkInterestPacketData* chunkInterest);
 Packet MakeWorldEventPacket(const WorldEventPacketData& worldEvent);

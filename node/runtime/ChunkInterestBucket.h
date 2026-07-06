@@ -19,7 +19,12 @@ struct ChunkInterestState
 class ChunkInterestBucket
 {
  public:
-  void RegisterInterest(const ChunkInterestPacketData& chunkInterest);
+  explicit ChunkInterestBucket(size_t maxInterests = 64)
+      : maxInterests(maxInterests)
+  {
+  }
+
+  bool RegisterInterest(const ChunkInterestPacketData& chunkInterest);
 
   size_t GetCount() const;
   const ChunkInterestState* FindByNodeId(uint32_t nodeId) const;
@@ -27,11 +32,13 @@ class ChunkInterestBucket
       const ActiveNodeBucket& activeNodes,
       uint32_t senderNodeId,
       int chunkX,
-      int chunkY
+      int chunkY,
+      size_t maxRecipients = SIZE_MAX
   ) const;
   bool TryResolveWorldEventChunk(const WorldEventPacketData& worldEvent, int* chunkX, int* chunkY) const;
 
  private:
+  size_t maxInterests = 64;
   std::vector<ChunkInterestState> interests = {};
 };
 

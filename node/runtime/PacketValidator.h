@@ -23,6 +23,7 @@ enum class PacketValidationCode : uint8_t
   DuplicateNodeId = 5,
   DuplicatePeerAddress = 6,
   MissingActiveNodeBucket = 7,
+  ActiveNodeLimitReached = 8,
 };
 
 struct PacketValidationResult

@@ -13,6 +13,11 @@ void Wallet::Connect(std::string accountAddressValue, std::string runtimeSignerA
 {
   accountAddress = std::move(accountAddressValue);
   runtimeSignerAddress = std::move(runtimeSignerAddressValue);
+  if (IsZeroBlockchainAddress(runtimeSignerAddress) ||
+      NormalizeBlockchainAddress(runtimeSignerAddress) == NormalizeBlockchainAddress(accountAddress))
+  {
+    runtimeSignerAddress.clear();
+  }
   connected = !IsZeroBlockchainAddress(accountAddress);
 }
 

@@ -12,6 +12,7 @@ std::string DescribePacketValidationCode(PacketValidationCode code)
     case PacketValidationCode::DuplicateNodeId: return "duplicate_node_id";
     case PacketValidationCode::DuplicatePeerAddress: return "duplicate_peer_address";
     case PacketValidationCode::MissingActiveNodeBucket: return "missing_active_node_bucket";
+    case PacketValidationCode::ActiveNodeLimitReached: return "active_node_limit_reached";
     default: return "unknown";
   }
 }
@@ -63,7 +64,9 @@ PacketValidationResult ValidateIncomingPacket(
   {
     result.code = result.activeNode.code == ActiveNodeBucketCode::DuplicateNodeId
         ? PacketValidationCode::DuplicateNodeId
-        : PacketValidationCode::DuplicatePeerAddress;
+        : (result.activeNode.code == ActiveNodeBucketCode::DuplicatePeerAddress
+               ? PacketValidationCode::DuplicatePeerAddress
+               : PacketValidationCode::ActiveNodeLimitReached);
     return result;
   }
 

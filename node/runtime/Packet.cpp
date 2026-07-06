@@ -10,7 +10,7 @@ static constexpr size_t PACKET_HEADER_SIZE = 16;
 static constexpr size_t HANDSHAKE_PAYLOAD_SIZE = 16;
 static constexpr size_t CHUNK_INTEREST_PAYLOAD_SIZE = 16;
 static constexpr size_t WORLD_EVENT_PAYLOAD_SIZE = 58;
-static constexpr size_t MAX_PEER_DISCOVERY_NODES = 64;
+static constexpr size_t MAX_PEER_DISCOVERY_NODES = 256;
 static constexpr size_t MAX_PEER_DISCOVERY_HOST_BYTES = 255;
 
 static void AppendU32(std::vector<uint8_t>* bytes, uint32_t value)
@@ -160,7 +160,7 @@ Packet MakePeerDiscoveryPacket(const PeerDiscoveryPacketData& peerDiscovery)
   return packet;
 }
 
-bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery)
+bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData* peerDiscovery, size_t maxNodes)
 {
   if (peerDiscovery == nullptr) return false;
   if (packet.type != PacketType::PeerDiscovery) return false;
@@ -173,6 +173,7 @@ bool TryDecodePeerDiscoveryPacket(const Packet& packet, PeerDiscoveryPacketData*
   const uint32_t nodeCount = ReadU32(packet.payload, offset);
   offset += 4;
   if (nodeCount > MAX_PEER_DISCOVERY_NODES) return false;
+  if ((size_t)nodeCount > maxNodes) return false;
 
   peerDiscovery->nodes.clear();
   peerDiscovery->nodes.reserve(nodeCount);

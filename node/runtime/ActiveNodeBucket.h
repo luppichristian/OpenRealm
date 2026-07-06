@@ -23,6 +23,7 @@ enum class ActiveNodeBucketCode : uint8_t
   Refreshed = 1,
   DuplicateNodeId = 2,
   DuplicatePeerAddress = 3,
+  CapacityReached = 4,
 };
 
 struct ActiveNodeBucketResult
@@ -35,6 +36,11 @@ struct ActiveNodeBucketResult
 class ActiveNodeBucket
 {
  public:
+  explicit ActiveNodeBucket(size_t maxNodes = 32)
+      : maxNodes(maxNodes)
+  {
+  }
+
   ActiveNodeBucketResult RegisterHandshake(
       const RuntimePeerAddress& peerAddress,
       const HandshakePacketData& handshake,
@@ -44,10 +50,11 @@ class ActiveNodeBucket
   size_t GetCount() const;
   const ActiveNodeState* FindByNodeId(uint32_t nodeId) const;
   const ActiveNodeState* FindByPeerAddress(const RuntimePeerAddress& peerAddress) const;
-  std::vector<RuntimePeerAddress> BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash) const;
-  std::vector<PeerDiscoveryNodeState> BuildPeerDiscoveryNodes(uint32_t requestingNodeId, uint64_t realmHash) const;
+  std::vector<RuntimePeerAddress> BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
+  std::vector<PeerDiscoveryNodeState> BuildPeerDiscoveryNodes(uint32_t requestingNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
 
  private:
+  size_t maxNodes = 32;
   std::vector<ActiveNodeState> nodes = {};
 };
 

@@ -185,9 +185,24 @@ static nlohmann::json& EnsureAddress(nlohmann::json& object)
   return object["bindAddress"];
 }
 
-static const char* RoleKey(NodeCliRole role)
+static nlohmann::json& EnsureRuntimeObject(nlohmann::json& root)
 {
-  return role == NodeCliRole::Relay ? "relay" : "simulator";
+  return EnsureObject(root, "runtime");
+}
+
+static nlohmann::json& EnsureSimulationObject(nlohmann::json& root)
+{
+  return EnsureObject(root, "simulation");
+}
+
+static nlohmann::json& EnsureServiceObject(nlohmann::json& root)
+{
+  return EnsureObject(root, "service");
+}
+
+static nlohmann::json& EnsureRuntimeInterestObject(nlohmann::json& root)
+{
+  return EnsureObject(EnsureRuntimeObject(root), "interest");
 }
 
 static const wchar_t* RoleTitle(NodeCliRole role)
@@ -200,10 +215,7 @@ static const wchar_t* RoleSubtitle(NodeCliRole role)
   return role == NodeCliRole::Relay ? L"Discovery and packet-forwarding role" : L"Headless world simulation role";
 }
 
-static nlohmann::json& EnsureRoleObject(nlohmann::json& root, NodeCliRole role)
-{
-  return EnsureObject(root, RoleKey(role));
-}
+
 
 static std::string FormatFloat(float value)
 {
@@ -380,33 +392,39 @@ static const std::vector<NodeCliFieldSpec>& GetFieldSpecs(NodeCliRole role)
   return role == NodeCliRole::Relay ? GetRelayFields() : GetSimulatorFields();
 }
 
-static std::string GetFieldValue(const nlohmann::json& root, NodeCliRole role, NodeCliFieldId fieldId)
+static std::string GetFieldValue(const nlohmann::json& root, NodeCliFieldId fieldId)
 {
   const nlohmann::json wallet = root.value("wallet", nlohmann::json::object());
-  const nlohmann::json roleJson = root.value(RoleKey(role), nlohmann::json::object());
-  const nlohmann::json bindAddress = roleJson.value("bindAddress", nlohmann::json::object());
+  const nlohmann::json runtimeJson = root.value("runtime", nlohmann::json::object());
+  const nlohmann::json simulationJson = root.value("simulation", nlohmann::json::object());
+  const nlohmann::json serviceJson = root.value("service", nlohmann::json::object());
+  const nlohmann::json bindAddress = runtimeJson.value("bindAddress", nlohmann::json::object());
+  const nlohmann::json interestJson = runtimeJson.value("interest", nlohmann::json::object());
+
+  std::string signerAddress = JsonString(wallet, "signerAddress", {});
+  if (signerAddress.empty()) signerAddress = JsonString(wallet, "runtimeSignerAddress", {});
 
   switch (fieldId)
   {
     case NodeCliFieldId::Realm: return JsonString(root, "realm", "realms/test");
     case NodeCliFieldId::WalletAccountAddress: return JsonString(wallet, "accountAddress", {});
-    case NodeCliFieldId::WalletRuntimeSignerAddress: return JsonString(wallet, "runtimeSignerAddress", {});
+    case NodeCliFieldId::WalletRuntimeSignerAddress: return signerAddress;
     case NodeCliFieldId::BindHost: return JsonString(bindAddress, "host", "127.0.0.1");
-    case NodeCliFieldId::BindPort: return std::to_string(JsonInt(bindAddress, "port", role == NodeCliRole::Relay ? 46001 : 46010));
-    case NodeCliFieldId::NodeId: return std::to_string(JsonInt(roleJson, "nodeId", role == NodeCliRole::Relay ? 9001 : 7001));
-    case NodeCliFieldId::RelayReceiveTimeoutMs: return std::to_string(JsonInt(roleJson, "receiveTimeoutMs", 100));
-    case NodeCliFieldId::RelayTicks: return std::to_string(JsonInt(roleJson, "ticks", 0));
-    case NodeCliFieldId::SimulatorJumpNodeIndex: return std::to_string(JsonInt(roleJson, "jumpNodeIndex", 0));
-    case NodeCliFieldId::SimulatorInterestChunkX: return std::to_string(JsonInt(roleJson, "interestChunkX", 0));
-    case NodeCliFieldId::SimulatorInterestChunkY: return std::to_string(JsonInt(roleJson, "interestChunkY", 0));
-    case NodeCliFieldId::SimulatorInterestRadius: return std::to_string(JsonInt(roleJson, "interestRadius", 1));
-    case NodeCliFieldId::SimulatorFrames: return std::to_string(JsonInt(roleJson, "frames", 0));
-    case NodeCliFieldId::SimulatorFrameTime: return FormatFloat(JsonFloat(roleJson, "frameTime", 1.0f / 60.0f));
-    case NodeCliFieldId::SimulatorSleepMs: return std::to_string(JsonInt(roleJson, "sleepMs", 16));
-    case NodeCliFieldId::SimulatorRuntimeEnabled: return JsonBool(roleJson, "runtimeEnabled", false) ? "true" : "false";
-    case NodeCliFieldId::SimulatorEmitPlaceEvent: return JsonBool(roleJson, "emitPlaceEvent", false) ? "true" : "false";
-    case NodeCliFieldId::SimulatorPlaceVoxelValue: return std::to_string(JsonInt(roleJson, "placeVoxelValue", 255));
-    case NodeCliFieldId::SimulatorReceiveTimeoutMs: return std::to_string(JsonInt(roleJson, "receiveTimeoutMs", 1000));
+    case NodeCliFieldId::BindPort: return std::to_string(JsonInt(bindAddress, "port", 46010));
+    case NodeCliFieldId::NodeId: return std::to_string(JsonInt(runtimeJson, "nodeId", 7001));
+    case NodeCliFieldId::RelayReceiveTimeoutMs: return std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000));
+    case NodeCliFieldId::RelayTicks: return std::to_string(JsonInt(serviceJson, "ticks", 0));
+    case NodeCliFieldId::SimulatorJumpNodeIndex: return std::to_string(JsonInt(runtimeJson, "jumpNodeIndex", 0));
+    case NodeCliFieldId::SimulatorInterestChunkX: return std::to_string(JsonInt(interestJson, "chunkX", 0));
+    case NodeCliFieldId::SimulatorInterestChunkY: return std::to_string(JsonInt(interestJson, "chunkY", 0));
+    case NodeCliFieldId::SimulatorInterestRadius: return std::to_string(JsonInt(interestJson, "radius", 1));
+    case NodeCliFieldId::SimulatorFrames: return std::to_string(JsonInt(simulationJson, "frames", 0));
+    case NodeCliFieldId::SimulatorFrameTime: return FormatFloat(JsonFloat(simulationJson, "frameTime", 1.0f / 60.0f));
+    case NodeCliFieldId::SimulatorSleepMs: return std::to_string(JsonInt(simulationJson, "sleepMs", 16));
+    case NodeCliFieldId::SimulatorRuntimeEnabled: return JsonBool(runtimeJson, "enabled", false) ? "true" : "false";
+    case NodeCliFieldId::SimulatorEmitPlaceEvent: return JsonBool(simulationJson, "emitPlaceEvent", false) ? "true" : "false";
+    case NodeCliFieldId::SimulatorPlaceVoxelValue: return std::to_string(JsonInt(simulationJson, "placeVoxelValue", 255));
+    case NodeCliFieldId::SimulatorReceiveTimeoutMs: return std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000));
   }
 
   return {};
@@ -434,15 +452,17 @@ static bool ParseFloatValue(const std::string& value, float* parsed)
 
 static bool SetFieldValue(
     nlohmann::json& root,
-    NodeCliRole role,
     NodeCliFieldId fieldId,
     const std::string& rawValue,
     std::string* errorMessage)
 {
   const std::string value = Trim(rawValue);
   nlohmann::json& wallet = EnsureObject(root, "wallet");
-  nlohmann::json& roleJson = EnsureRoleObject(root, role);
-  nlohmann::json& bindAddress = EnsureAddress(roleJson);
+  nlohmann::json& runtimeJson = EnsureRuntimeObject(root);
+  nlohmann::json& bindAddress = EnsureAddress(runtimeJson);
+  nlohmann::json& interestJson = EnsureRuntimeInterestObject(root);
+  nlohmann::json& simulationJson = EnsureSimulationObject(root);
+  nlohmann::json& serviceJson = EnsureServiceObject(root);
 
   auto fail = [&](const std::string& error)
   {
@@ -462,7 +482,8 @@ static bool SetFieldValue(
       return true;
 
     case NodeCliFieldId::WalletRuntimeSignerAddress:
-      wallet["runtimeSignerAddress"] = value;
+      wallet["signerAddress"] = value;
+      if (wallet.contains("runtimeSignerAddress")) wallet.erase("runtimeSignerAddress");
       return true;
 
     case NodeCliFieldId::BindHost:
@@ -484,7 +505,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("node id must be an integer");
       if (parsed < 1 || parsed > 2147483647LL) return fail("node id must be positive");
-      roleJson["nodeId"] = (int)parsed;
+      runtimeJson["nodeId"] = (int)parsed;
       return true;
     }
 
@@ -494,7 +515,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("timeout must be an integer");
       if (parsed < 0 || parsed > 600000) return fail("timeout must be between 0 and 600000");
-      roleJson[fieldId == NodeCliFieldId::RelayReceiveTimeoutMs ? "receiveTimeoutMs" : "receiveTimeoutMs"] = (int)parsed;
+      runtimeJson["receiveTimeoutMs"] = (int)parsed;
       return true;
     }
 
@@ -503,7 +524,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("ticks budget must be an integer");
       if (parsed < 0 || parsed > 1000000000LL) return fail("ticks budget must be 0 or positive");
-      roleJson["ticks"] = (int)parsed;
+      serviceJson["ticks"] = (int)parsed;
       return true;
     }
 
@@ -512,7 +533,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("jump node index must be an integer");
       if (parsed < 0 || parsed > 1024) return fail("jump node index must be 0 or positive");
-      roleJson["jumpNodeIndex"] = (int)parsed;
+      runtimeJson["jumpNodeIndex"] = (int)parsed;
       return true;
     }
 
@@ -522,7 +543,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("interest chunk must be an integer");
       if (parsed < -30000 || parsed > 30000) return fail("interest chunk must stay inside [-30000, 30000]");
-      roleJson[fieldId == NodeCliFieldId::SimulatorInterestChunkX ? "interestChunkX" : "interestChunkY"] = (int)parsed;
+      interestJson[fieldId == NodeCliFieldId::SimulatorInterestChunkX ? "chunkX" : "chunkY"] = (int)parsed;
       return true;
     }
 
@@ -531,7 +552,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("interest radius must be an integer");
       if (parsed < 0 || parsed > 1024) return fail("interest radius must be between 0 and 1024");
-      roleJson["interestRadius"] = (int)parsed;
+      interestJson["radius"] = (int)parsed;
       return true;
     }
 
@@ -540,7 +561,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("frames must be an integer");
       if (parsed < 0 || parsed > 1000000000LL) return fail("frames must be 0 or positive");
-      roleJson["frames"] = (int)parsed;
+      simulationJson["frames"] = (int)parsed;
       return true;
     }
 
@@ -549,7 +570,7 @@ static bool SetFieldValue(
       float parsed = 0.0f;
       if (!ParseFloatValue(value, &parsed)) return fail("frame time must be a number");
       if (parsed <= 0.0f || parsed > 10.0f) return fail("frame time must be between 0 and 10 seconds");
-      roleJson["frameTime"] = parsed;
+      simulationJson["frameTime"] = parsed;
       return true;
     }
 
@@ -558,7 +579,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("sleep ms must be an integer");
       if (parsed < 0 || parsed > 600000) return fail("sleep ms must be between 0 and 600000");
-      roleJson["sleepMs"] = (int)parsed;
+      simulationJson["sleepMs"] = (int)parsed;
       return true;
     }
 
@@ -568,12 +589,14 @@ static bool SetFieldValue(
       const std::string lowered = ToLower(value);
       if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "y")
       {
-        roleJson[fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? "runtimeEnabled" : "emitPlaceEvent"] = true;
+        (fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? runtimeJson : simulationJson)
+            [fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? "enabled" : "emitPlaceEvent"] = true;
         return true;
       }
       if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "n")
       {
-        roleJson[fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? "runtimeEnabled" : "emitPlaceEvent"] = false;
+        (fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? runtimeJson : simulationJson)
+            [fieldId == NodeCliFieldId::SimulatorRuntimeEnabled ? "enabled" : "emitPlaceEvent"] = false;
         return true;
       }
       return fail("boolean fields accept true/false, yes/no, or 1/0");
@@ -584,7 +607,7 @@ static bool SetFieldValue(
       int64_t parsed = 0;
       if (!ParseInt64(value, &parsed)) return fail("place voxel value must be an integer");
       if (parsed < 0 || parsed > 255) return fail("place voxel value must be between 0 and 255");
-      roleJson["placeVoxelValue"] = (int)parsed;
+      simulationJson["placeVoxelValue"] = (int)parsed;
       return true;
     }
   }
@@ -592,16 +615,17 @@ static bool SetFieldValue(
   return fail("unknown field");
 }
 
-static bool ToggleBoolField(nlohmann::json& root, NodeCliRole role, NodeCliFieldId fieldId)
+static bool ToggleBoolField(nlohmann::json& root, NodeCliFieldId fieldId)
 {
-  nlohmann::json& roleJson = EnsureRoleObject(root, role);
+  nlohmann::json& runtimeJson = EnsureRuntimeObject(root);
+  nlohmann::json& simulationJson = EnsureSimulationObject(root);
   switch (fieldId)
   {
     case NodeCliFieldId::SimulatorRuntimeEnabled:
-      roleJson["runtimeEnabled"] = !JsonBool(roleJson, "runtimeEnabled", false);
+      runtimeJson["enabled"] = !JsonBool(runtimeJson, "enabled", false);
       return true;
     case NodeCliFieldId::SimulatorEmitPlaceEvent:
-      roleJson["emitPlaceEvent"] = !JsonBool(roleJson, "emitPlaceEvent", false);
+      simulationJson["emitPlaceEvent"] = !JsonBool(simulationJson, "emitPlaceEvent", false);
       return true;
     default: return false;
   }
@@ -755,32 +779,37 @@ static std::vector<std::string> BuildSummaryLines(const nlohmann::json& root, No
   lines.push_back(std::string("Config realm: ") + JsonString(root, "realm", "realms/test"));
   lines.push_back(std::string("Wallet account: ") + JsonString(root.value("wallet", nlohmann::json::object()), "accountAddress", {}));
 
-  const nlohmann::json roleJson = root.value(RoleKey(role), nlohmann::json::object());
-  const nlohmann::json bindAddress = roleJson.value("bindAddress", nlohmann::json::object());
+  const nlohmann::json runtimeJson = root.value("runtime", nlohmann::json::object());
+  const nlohmann::json simulationJson = root.value("simulation", nlohmann::json::object());
+  const nlohmann::json serviceJson = root.value("service", nlohmann::json::object());
+  const nlohmann::json bindAddress = runtimeJson.value("bindAddress", nlohmann::json::object());
+  const nlohmann::json interestJson = runtimeJson.value("interest", nlohmann::json::object());
   lines.push_back(
       std::string("Bind: ") + JsonString(bindAddress, "host", "127.0.0.1") + ":" +
-      std::to_string(JsonInt(bindAddress, "port", role == NodeCliRole::Relay ? 46001 : 46010)));
-  lines.push_back(std::string("Node id: ") + std::to_string(JsonInt(roleJson, "nodeId", role == NodeCliRole::Relay ? 9001 : 7001)));
+      std::to_string(JsonInt(bindAddress, "port", 46010)));
+  lines.push_back(std::string("Node id: ") + std::to_string(JsonInt(runtimeJson, "nodeId", 7001)));
 
   if (role == NodeCliRole::Relay)
   {
-    lines.push_back(std::string("Receive timeout ms: ") + std::to_string(JsonInt(roleJson, "receiveTimeoutMs", 100)));
-    lines.push_back(std::string("Ticks budget: ") + std::to_string(JsonInt(roleJson, "ticks", 0)));
+    lines.push_back(std::string("Receive timeout ms: ") + std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000)));
+    lines.push_back(std::string("Ticks budget: ") + std::to_string(JsonInt(serviceJson, "ticks", 0)));
   }
   else
   {
-    lines.push_back(std::string("Jump node index: ") + std::to_string(JsonInt(roleJson, "jumpNodeIndex", 0)));
-    lines.push_back(std::string("Runtime enabled: ") + (JsonBool(roleJson, "runtimeEnabled", false) ? "true" : "false"));
-    lines.push_back(std::string("Emit place event: ") + (JsonBool(roleJson, "emitPlaceEvent", false) ? "true" : "false"));
-    lines.push_back(std::string("Frames: ") + std::to_string(JsonInt(roleJson, "frames", 0)));
-    lines.push_back(std::string("Frame time: ") + FormatFloat(JsonFloat(roleJson, "frameTime", 1.0f / 60.0f)));
-    lines.push_back(std::string("Sleep ms: ") + std::to_string(JsonInt(roleJson, "sleepMs", 16)));
+    lines.push_back(std::string("Jump node index: ") + std::to_string(JsonInt(runtimeJson, "jumpNodeIndex", 0)));
+    lines.push_back(std::string("Runtime enabled: ") + (JsonBool(runtimeJson, "enabled", false) ? "true" : "false"));
+    lines.push_back(std::string("Emit place event: ") + (JsonBool(simulationJson, "emitPlaceEvent", false) ? "true" : "false"));
+    lines.push_back(std::string("Frames: ") + std::to_string(JsonInt(simulationJson, "frames", 0)));
+    lines.push_back(std::string("Frame time: ") + FormatFloat(JsonFloat(simulationJson, "frameTime", 1.0f / 60.0f)));
+    lines.push_back(std::string("Sleep ms: ") + std::to_string(JsonInt(simulationJson, "sleepMs", 16)));
 
-    const int jumpNodeIndex = JsonInt(roleJson, "jumpNodeIndex", 0);
+    const int jumpNodeIndex = JsonInt(runtimeJson, "jumpNodeIndex", 0);
     if (state.realmPreview.loaded && jumpNodeIndex >= 0 && (size_t)jumpNodeIndex < state.realmPreview.jumpNodes.size())
     {
       lines.push_back(std::string("Selected jump node: ") + state.realmPreview.jumpNodes[(size_t)jumpNodeIndex]);
     }
+    lines.push_back(std::string("Interest chunk: ") + std::to_string(JsonInt(interestJson, "chunkX", 0)) + "," + std::to_string(JsonInt(interestJson, "chunkY", 0)));
+    lines.push_back(std::string("Interest radius: ") + std::to_string(JsonInt(interestJson, "radius", 1)));
   }
 
   return lines;
@@ -835,7 +864,7 @@ static void RenderMainUi(const NodeCliOptions& options, const nlohmann::json& ro
     if (visualRow >= scrollRow && visualRow < scrollRow + contentHeight)
     {
       const bool selected = i == state.selectedFieldIndex;
-      const std::string valueText = GetFieldValue(root, options.role, field.id);
+      const std::string valueText = GetFieldValue(root, field.id);
       const tcolor_t bg = selected ? COLOR_SELECTED_BG : COLOR_PANEL;
       const tcolor_t border = selected ? COLOR_SELECTED_BORDER : bg;
       const tcolor_t valueColor = field.kind == NodeCliFieldKind::Bool
@@ -950,12 +979,12 @@ enum class NodeCliAction
   Launch,
 };
 
-static void OpenEditor(const nlohmann::json& root, const NodeCliFieldSpec& field, NodeCliRole role, NodeCliUiState* state)
+static void OpenEditor(const nlohmann::json& root, const NodeCliFieldSpec& field, NodeCliUiState* state)
 {
   if (state == nullptr) return;
   state->editor.active = true;
   state->editor.field = field;
-  state->editor.input = GetFieldValue(root, role, field.id);
+  state->editor.input = GetFieldValue(root, field.id);
   state->editor.error.clear();
 }
 
@@ -1026,7 +1055,7 @@ static NodeCliAction HandleEditorKey(
   if (key == TKEY_ENTER)
   {
     std::string error = {};
-    if (!SetFieldValue(*root, options.role, state->editor.field.id, state->editor.input, &error))
+    if (!SetFieldValue(*root, state->editor.field.id, state->editor.input, &error))
     {
       state->editor.error = error;
       return NodeCliAction::None;
@@ -1155,7 +1184,7 @@ static NodeCliAction HandleMainKey(
       const NodeCliFieldSpec& field = fields[state->selectedFieldIndex];
       if (field.kind == NodeCliFieldKind::Bool)
       {
-        if (ToggleBoolField(*root, options.role, field.id))
+        if (ToggleBoolField(*root, field.id))
         {
           state->dirty = true;
           state->previewRealm.clear();
@@ -1173,14 +1202,14 @@ static NodeCliAction HandleMainKey(
         }
         return NodeCliAction::None;
       }
-      OpenEditor(*root, field, options.role, state);
+      OpenEditor(*root, field, state);
       return NodeCliAction::None;
     }
 
     case ' ':
       if (fields[state->selectedFieldIndex].kind == NodeCliFieldKind::Bool)
       {
-        if (ToggleBoolField(*root, options.role, fields[state->selectedFieldIndex].id))
+        if (ToggleBoolField(*root, fields[state->selectedFieldIndex].id))
         {
           state->dirty = true;
           SetStatus(state, StatusTone::Success, "Boolean field toggled.");

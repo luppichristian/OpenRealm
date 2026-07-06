@@ -18,6 +18,7 @@ std::string DescribeActiveNodeBucketCode(ActiveNodeBucketCode code)
     case ActiveNodeBucketCode::Refreshed: return "refreshed";
     case ActiveNodeBucketCode::DuplicateNodeId: return "duplicate_node_id";
     case ActiveNodeBucketCode::DuplicatePeerAddress: return "duplicate_peer_address";
+    case ActiveNodeBucketCode::CapacityReached: return "capacity_reached";
     default: return "unknown";
   }
 }
@@ -67,6 +68,13 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
     }
   }
 
+  if (nodes.size() >= maxNodes)
+  {
+    result.code = ActiveNodeBucketCode::CapacityReached;
+    result.accepted = false;
+    return result;
+  }
+
   nodes.push_back(result.node);
   result.code = ActiveNodeBucketCode::Added;
   result.accepted = true;
@@ -96,7 +104,7 @@ const ActiveNodeState* ActiveNodeBucket::FindByPeerAddress(const RuntimePeerAddr
   return nullptr;
 }
 
-std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash) const
+std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount) const
 {
   std::vector<RuntimePeerAddress> peerAddresses = {};
 
@@ -105,6 +113,7 @@ std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t ex
     if (node.nodeId == excludedNodeId) continue;
     if (node.realmHash != realmHash) continue;
     peerAddresses.push_back(node.peerAddress);
+    if (peerAddresses.size() >= maxCount) break;
   }
 
   return peerAddresses;
@@ -112,7 +121,8 @@ std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t ex
 
 std::vector<PeerDiscoveryNodeState> ActiveNodeBucket::BuildPeerDiscoveryNodes(
     uint32_t requestingNodeId,
-    uint64_t realmHash
+    uint64_t realmHash,
+    size_t maxCount
 ) const
 {
   std::vector<PeerDiscoveryNodeState> discoveredNodes = {};
@@ -128,6 +138,7 @@ std::vector<PeerDiscoveryNodeState> ActiveNodeBucket::BuildPeerDiscoveryNodes(
     discoveredNode.realmHash = node.realmHash;
     discoveredNode.peerAddress = node.peerAddress;
     discoveredNodes.push_back(discoveredNode);
+    if (discoveredNodes.size() >= maxCount) break;
   }
 
   return discoveredNodes;

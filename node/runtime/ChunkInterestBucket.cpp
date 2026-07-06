@@ -11,7 +11,7 @@ bool IsChunkInsideInterest(const ChunkInterestState& interest, int chunkX, int c
   return std::abs(deltaX) <= (int)interest.radius && std::abs(deltaY) <= (int)interest.radius;
 }
 
-void ChunkInterestBucket::RegisterInterest(const ChunkInterestPacketData& chunkInterest)
+bool ChunkInterestBucket::RegisterInterest(const ChunkInterestPacketData& chunkInterest)
 {
   for (ChunkInterestState& interest : interests)
   {
@@ -21,8 +21,10 @@ void ChunkInterestBucket::RegisterInterest(const ChunkInterestPacketData& chunkI
     interest.chunkY = chunkInterest.chunkY;
     interest.radius = chunkInterest.radius;
     interest.acceptedPackets += 1;
-    return;
+    return true;
   }
+
+  if (interests.size() >= maxInterests) return false;
 
   ChunkInterestState interest = {};
   interest.nodeId = chunkInterest.nodeId;
@@ -31,6 +33,7 @@ void ChunkInterestBucket::RegisterInterest(const ChunkInterestPacketData& chunkI
   interest.radius = chunkInterest.radius;
   interest.acceptedPackets = 1;
   interests.push_back(interest);
+  return true;
 }
 
 size_t ChunkInterestBucket::GetCount() const
@@ -51,7 +54,8 @@ std::vector<RuntimePeerAddress> ChunkInterestBucket::BuildInterestedPeerAddresse
     const ActiveNodeBucket& activeNodes,
     uint32_t senderNodeId,
     int chunkX,
-    int chunkY
+    int chunkY,
+    size_t maxRecipients
 ) const
 {
   std::vector<RuntimePeerAddress> peerAddresses = {};
@@ -64,6 +68,7 @@ std::vector<RuntimePeerAddress> ChunkInterestBucket::BuildInterestedPeerAddresse
     const ActiveNodeState* activeNode = activeNodes.FindByNodeId(interest.nodeId);
     if (activeNode == nullptr) continue;
     peerAddresses.push_back(activeNode->peerAddress);
+    if (peerAddresses.size() >= maxRecipients) break;
   }
 
   return peerAddresses;

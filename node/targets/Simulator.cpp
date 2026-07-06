@@ -32,12 +32,13 @@ struct SimulatorConfig
   bool emitPlaceEvent = false;
   RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
   RuntimePeerAddress relayAddress = {"127.0.0.1", 46001};
-  uint32_t localNodeId = 7001;
+  uint32_t localNodeId = DEFAULT_RUNTIME_NODE_ID;
   int interestChunkX = 0;
   int interestChunkY = 0;
-  uint32_t interestRadius = 1;
+  uint32_t interestRadius = DEFAULT_RUNTIME_INTEREST_RADIUS;
   uint8_t placeVoxelValue = 255;
-  uint32_t receiveTimeoutMs = 1000;
+  uint32_t receiveTimeoutMs = DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS;
+  size_t maxPeerDiscoveryNodes = DEFAULT_RUNTIME_MAX_PEER_DISCOVERY_NODES;
   std::string configPath = "config.json";
   std::string realmDirectory = "realms/test";
   std::string realmName = {};
@@ -79,15 +80,16 @@ static SimulatorConfig BuildSimulatorConfigFromFiles(const NodeFilesConfig& node
   config.frames = nodeFiles.simulatorFrames;
   config.frameTime = nodeFiles.simulatorFrameTime;
   config.sleepMs = nodeFiles.simulatorSleepMs;
-  config.runtimeEnabled = nodeFiles.simulatorRuntimeEnabled;
+  config.runtimeEnabled = nodeFiles.runtimeEnabled;
   config.emitPlaceEvent = nodeFiles.simulatorEmitPlaceEvent;
-  config.bindAddress = nodeFiles.simulatorBindAddress;
-  config.localNodeId = nodeFiles.simulatorNodeId;
-  config.interestChunkX = nodeFiles.simulatorInterestChunkX;
-  config.interestChunkY = nodeFiles.simulatorInterestChunkY;
-  config.interestRadius = nodeFiles.simulatorInterestRadius;
+  config.bindAddress = nodeFiles.runtimeBindAddress;
+  config.localNodeId = nodeFiles.runtimeNodeId;
+  config.interestChunkX = nodeFiles.runtimeInterestChunkX;
+  config.interestChunkY = nodeFiles.runtimeInterestChunkY;
+  config.interestRadius = nodeFiles.runtimeInterestRadius;
   config.placeVoxelValue = nodeFiles.simulatorPlaceVoxelValue;
-  config.receiveTimeoutMs = nodeFiles.simulatorReceiveTimeoutMs;
+  config.receiveTimeoutMs = nodeFiles.runtimeReceiveTimeoutMs;
+  config.maxPeerDiscoveryNodes = nodeFiles.runtimeMaxPeerDiscoveryNodes;
   config.configPath = nodeFiles.configPath;
   config.realmDirectory = realmFiles.directory;
   config.realmName = realmFiles.realmName;
@@ -97,7 +99,7 @@ static SimulatorConfig BuildSimulatorConfigFromFiles(const NodeFilesConfig& node
 
   if (!realmFiles.jumpNodes.empty())
   {
-    int jumpNodeIndex = nodeFiles.simulatorJumpNodeIndex;
+    int jumpNodeIndex = nodeFiles.runtimeJumpNodeIndex;
     if (jumpNodeIndex < 0) jumpNodeIndex = 0;
     if ((size_t)jumpNodeIndex >= realmFiles.jumpNodes.size()) jumpNodeIndex = 0;
     config.relayAddress = realmFiles.jumpNodes[(size_t)jumpNodeIndex].peerAddress;
@@ -134,7 +136,6 @@ static ReceivedPeerDiscoveryState ReceivePeerDiscovery(RuntimeClient& client, ui
 
   state.received = true;
   state.parsed = TryParsePacket(bytes, &state.packet);
-  state.decoded = state.parsed && TryDecodePeerDiscoveryPacket(state.packet, &state.peerDiscovery);
   return state;
 }
 
@@ -208,7 +209,10 @@ static bool StartRuntimeSession(
   ReceivedPeerDiscoveryState peerDiscovery = ReceivePeerDiscovery(*runtimeClient, config.receiveTimeoutMs);
   runtimeState->discoveryReceived = peerDiscovery.received;
   runtimeState->discoveryParsed = peerDiscovery.parsed;
-  runtimeState->discoveryDecoded = peerDiscovery.decoded;
+  runtimeState->discoveryDecoded = peerDiscovery.parsed && TryDecodePeerDiscoveryPacket(
+      peerDiscovery.packet,
+      &peerDiscovery.peerDiscovery,
+      config.maxPeerDiscoveryNodes);
   runtimeState->discoveredNodes = peerDiscovery.peerDiscovery.nodes.size();
 
   ChunkInterestPacketData chunkInterest = {};
@@ -263,7 +267,7 @@ static void PumpRuntimePackets(
       PeerDiscoveryPacketData peerDiscovery = {};
       runtimeState->discoveryReceived = true;
       runtimeState->discoveryParsed = true;
-      runtimeState->discoveryDecoded = TryDecodePeerDiscoveryPacket(packet, &peerDiscovery);
+      runtimeState->discoveryDecoded = TryDecodePeerDiscoveryPacket(packet, &peerDiscovery, config.maxPeerDiscoveryNodes);
       runtimeState->discoveredNodes = runtimeState->discoveryDecoded ? peerDiscovery.nodes.size() : runtimeState->discoveredNodes;
       continue;
     }
