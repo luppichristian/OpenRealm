@@ -248,6 +248,35 @@ static void ProcessRelayPacket(
   if (forwardedAny) stats->forwardedWorldEvents += 1;
 }
 
+static std::vector<NodeRuntimeViewLine> BuildRelayRuntimeViewLines(
+    const RelayConfig& config,
+    const RuntimeClient& relay,
+    const RelayRuntimeStats& stats,
+    const ActiveNodeBucket& activeNodes,
+    const ChunkInterestBucket& chunkInterests,
+    uint64_t realmHash,
+    int idleTicks)
+{
+  return {
+      {"Config path", config.configPath},
+      {"Realm", config.realmDirectory},
+      {"Bind", DescribeRuntimePeerAddress(relay.GetBindAddress())},
+      {"Stack", relay.DescribeStack()},
+      {"Node id", std::to_string(config.localNodeId)},
+      {"Realm hash", FormatHash64(realmHash)},
+      {"Ticks budget", std::to_string(config.ticks)},
+      {"Idle ticks", std::to_string(idleTicks)},
+      {"Processed packets", std::to_string(stats.processedPackets)},
+      {"Accepted packets", std::to_string(stats.acceptedPackets)},
+      {"Discovery packets", std::to_string(stats.sentDiscoveryPackets)},
+      {"Interest packets", std::to_string(stats.acceptedInterestPackets)},
+      {"World events", std::to_string(stats.forwardedWorldEvents)},
+      {"World event recipients", std::to_string(stats.forwardedWorldEventRecipients)},
+      {"Active nodes", std::to_string(activeNodes.GetCount())},
+      {"Chunk interests", std::to_string(chunkInterests.GetCount())},
+  };
+}
+
 static int RunRelaySmoke(const RelayConfig& config)
 {
   RuntimePeerAddress relayBindAddress = config.bindAddress;
@@ -454,7 +483,7 @@ static int RunRelaySmoke(const RelayConfig& config)
   return runtimeValidationOk ? 0 : 1;
 }
 
-static int RunRelayService(const RelayConfig& config)
+static int RunRelayService(const RelayConfig& config, bool interactiveLaunch)
 {
   RuntimeClient relay = {};
   if (!relay.Start(config.bindAddress))
@@ -480,18 +509,39 @@ static int RunRelayService(const RelayConfig& config)
   validationContext.expectedRealmHash = realmHash;
   validationContext.activeNodes = &activeNodes;
 
+  bool runtimeViewActive = false;
+  if (interactiveLaunch)
+  {
+    NodeRuntimeViewOptions runtimeViewOptions = {};
+    runtimeViewOptions.role = NodeCliRole::Relay;
+    runtimeViewOptions.title = "OpenRealm Relay";
+    runtimeViewOptions.subtitle = "Live runtime controls";
+    runtimeViewActive = BeginNodeRuntimeView(runtimeViewOptions);
+  }
+
   int idleTicks = 0;
-  while (config.ticks <= 0 || idleTicks < config.ticks)
+  bool stopRequested = false;
+  while ((config.ticks <= 0 || idleTicks < config.ticks) && !stopRequested)
   {
     ReceivedPacketState state = ReceiveAndValidate(relay, validationContext, config.receiveTimeoutMs);
     if (!state.received)
     {
       idleTicks += 1;
-      continue;
+    }
+    else
+    {
+      ProcessRelayPacket(relay, state, realmHash, &activeNodes, &chunkInterests, &stats);
     }
 
-    ProcessRelayPacket(relay, state, realmHash, &activeNodes, &chunkInterests, &stats);
+    if (runtimeViewActive)
+    {
+      stopRequested = PumpNodeRuntimeView(
+          "Relay running. Press Q or Esc to stop cleanly.",
+          BuildRelayRuntimeViewLines(config, relay, stats, activeNodes, chunkInterests, realmHash, idleTicks));
+    }
   }
+
+  if (runtimeViewActive) EndNodeRuntimeView();
 
   std::cout << "OpenRealm relay stack\n";
   std::cout << "- relay mode: service\n";
@@ -518,14 +568,16 @@ static int RunRelayService(const RelayConfig& config)
   std::cout << "- relay forwarded world event recipients: " << stats.forwardedWorldEventRecipients << "\n";
   std::cout << "- relay active nodes: " << activeNodes.GetCount() << "\n";
   std::cout << "- relay chunk interests: " << chunkInterests.GetCount() << "\n";
+  std::cout << "- relay quit requested: " << (stopRequested ? "yes" : "no") << "\n";
   return 0;
 }
-
 int main(int argc, char** argv)
 {
   const NodeBootConfig bootConfig = ParseNodeBootConfig(argc, argv);
+  bool interactiveLaunch = false;
   if (ShouldRunNodeCli(argc, argv))
   {
+    interactiveLaunch = true;
     NodeCliOptions cliOptions = {};
     cliOptions.role = NodeCliRole::Relay;
     cliOptions.configPath = bootConfig.configPath;
@@ -559,5 +611,5 @@ int main(int argc, char** argv)
   ApplyRelayArguments(argc, argv, &config);
 
   if (config.smoke) return RunRelaySmoke(config);
-  return RunRelayService(config);
+  return RunRelayService(config, interactiveLaunch);
 }

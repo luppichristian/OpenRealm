@@ -18,6 +18,7 @@ void Game::Initialize(TaskManager& taskManager)
 
   clientMenu.Initialize("config.json");
   clientMenu.OpenMainMenu();
+  cursorCaptured = true;
   UpdateCursorState();
   initialized = true;
 }
@@ -32,6 +33,7 @@ void Game::Shutdown(TaskManager& taskManager)
     taskManager.Stop();
     taskManagerStarted = false;
   }
+  SetCursorCaptured(false);
   CloseAudioDevice();
   CloseWindow();
   initialized = false;
@@ -76,16 +78,27 @@ void Game::OpenPauseMenu()
   UpdateCursorState();
 }
 
-void Game::UpdateCursorState()
+void Game::SetCursorCaptured(bool captured)
 {
-  if (clientMenu.IsOpen() || !gameplayActive || colorMenu.IsOpen())
+  if (captured == cursorCaptured) return;
+
+  cursorCaptured = captured;
+  if (cursorCaptured)
   {
-    EnableCursor();
+    HideCursor();
+    DisableCursor();
   }
   else
   {
-    DisableCursor();
+    EnableCursor();
+    ShowCursor();
   }
+}
+
+void Game::UpdateCursorState()
+{
+  const bool shouldCaptureCursor = gameplayActive && !clientMenu.IsOpen() && !colorMenu.IsOpen() && IsWindowFocused();
+  SetCursorCaptured(shouldCaptureCursor);
 }
 
 void Game::ToggleColorMenu()

@@ -1,35 +1,13 @@
 {
-  "realm": "realms/test",
-  "wallet": {
-    "accountAddress": "0x0000000000000000000000000000000000000001",
-    "runtimeSignerAddress": "0x0000000000000000000000000000000000000001"
-  },
-  "simulator": {
-    "bindAddress": {
-      "host": "127.0.0.1",
-      "port": 46010
-    },
-    "jumpNodeIndex": 0,
-    "nodeId": 7001,
-    "interestChunkX": 0,
-    "interestChunkY": 0,
-    "interestRadius": 1,
-    "placeVoxelValue": 255,
-    "receiveTimeoutMs": 1000,
-    "frames": 0,
-    "frameTime": 0.016666667,
-    "sleepMs": 16,
-    "runtimeEnabled": false,
-    "emitPlaceEvent": false
-  },
   "client": {
-    "realm": "realms/test",
-    "jumpNodeIndex": 0,
-    "masterVolume": 1.0,
-    "mouseSensitivity": 1.0,
     "invertMouseY": false,
+    "jumpNodeIndex": 0,
+    "masterVolume": 0.49999991059303284,
+    "mouseSensitivity": 1.0,
+    "realm": "realms/test",
     "showFps": true
   },
+  "realm": "realms/test",
   "relay": {
     "bindAddress": {
       "host": "127.0.0.1",
@@ -38,5 +16,27 @@
     "nodeId": 9001,
     "receiveTimeoutMs": 100,
     "ticks": 0
+  },
+  "simulator": {
+    "bindAddress": {
+      "host": "127.0.0.1",
+      "port": 46010
+    },
+    "emitPlaceEvent": false,
+    "frameTime": 0.016666667,
+    "frames": 0,
+    "interestChunkX": 0,
+    "interestChunkY": 0,
+    "interestRadius": 1,
+    "jumpNodeIndex": 0,
+    "nodeId": 7001,
+    "placeVoxelValue": 255,
+    "receiveTimeoutMs": 1000,
+    "runtimeEnabled": false,
+    "sleepMs": 16
+  },
+  "wallet": {
+    "accountAddress": "0x0000000000000000000000000000000000000001",
+    "runtimeSignerAddress": "0x0000000000000000000000000000000000000001"
   }
 }

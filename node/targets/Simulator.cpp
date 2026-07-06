@@ -278,11 +278,43 @@ static void PumpRuntimePackets(
   }
 }
 
+static std::vector<NodeRuntimeViewLine> BuildSimulatorRuntimeViewLines(
+    const SimulatorConfig& config,
+    const SimulatorRuntimeState& runtimeState,
+    int simulatedFrames,
+    const RuntimeClient& runtimeClient,
+    const TaskManager& taskManager)
+{
+  return {
+      {"Config path", config.configPath},
+      {"Realm", config.realmDirectory},
+      {"Bind", DescribeRuntimePeerAddress(config.bindAddress)},
+      {"Relay", DescribeRuntimePeerAddress(config.relayAddress)},
+      {"Frames", std::to_string(simulatedFrames)},
+      {"Frame time", std::to_string(config.frameTime)},
+      {"Sleep ms", std::to_string(config.sleepMs)},
+      {"Task manager", taskManager.IsRunning() ? "running" : "stopped"},
+      {"Runtime mode", config.runtimeEnabled ? "enabled" : "disabled"},
+      {"Runtime listener", runtimeClient.IsRunning() ? "running" : "stopped"},
+      {"Handshake", runtimeState.handshakeSent ? "sent" : "pending"},
+      {"Discovery", runtimeState.discoveryDecoded ? "decoded" : (runtimeState.discoveryReceived ? "received" : "waiting")},
+      {"Discovered nodes", std::to_string(runtimeState.discoveredNodes)},
+      {"Interest send", runtimeState.interestSent ? "sent" : "pending"},
+      {"Place event", config.emitPlaceEvent ? (runtimeState.worldEventSent ? "sent" : "pending") : "disabled"},
+      {"Packets received", std::to_string(runtimeState.runtimePacketsReceived)},
+      {"World events recv", std::to_string(runtimeState.runtimeWorldEventsReceived)},
+      {"World events applied", std::to_string(runtimeState.runtimeWorldEventsApplied)},
+      {"Place events applied", std::to_string(runtimeState.runtimePlaceEventsApplied)},
+  };
+}
+
 int main(int argc, char** argv)
 {
   const NodeBootConfig bootConfig = ParseNodeBootConfig(argc, argv);
+  bool interactiveLaunch = false;
   if (ShouldRunNodeCli(argc, argv))
   {
+    interactiveLaunch = true;
     NodeCliOptions cliOptions = {};
     cliOptions.role = NodeCliRole::Simulator;
     cliOptions.configPath = bootConfig.configPath;
@@ -332,12 +364,31 @@ int main(int argc, char** argv)
     runtimeOk = StartRuntimeSession(config, &runtimeClient, &runtimeState);
   }
 
+  bool runtimeViewActive = false;
+  if (interactiveLaunch)
+  {
+    NodeRuntimeViewOptions runtimeViewOptions = {};
+    runtimeViewOptions.role = NodeCliRole::Simulator;
+    runtimeViewOptions.title = "OpenRealm Simulator";
+    runtimeViewOptions.subtitle = "Live runtime controls";
+    runtimeViewActive = BeginNodeRuntimeView(runtimeViewOptions);
+  }
+
   int simulatedFrames = 0;
-  while (config.frames <= 0 || simulatedFrames < config.frames)
+  bool stopRequested = false;
+  while ((config.frames <= 0 || simulatedFrames < config.frames) && !stopRequested)
   {
     if (config.runtimeEnabled && runtimeState.runtimeStarted)
     {
       PumpRuntimePackets(runtimeClient, config, world, &runtimeState);
+    }
+
+    if (runtimeViewActive)
+    {
+      stopRequested = PumpNodeRuntimeView(
+          "Simulator running. Press Q or Esc to stop cleanly.",
+          BuildSimulatorRuntimeViewLines(config, runtimeState, simulatedFrames, runtimeClient, taskManager));
+      if (stopRequested) break;
     }
 
     world.Update(config.frameTime);
@@ -368,6 +419,7 @@ int main(int argc, char** argv)
   runtimeClient.Stop();
   world.Shutdown();
   taskManager.Stop();
+  if (runtimeViewActive) EndNodeRuntimeView();
 
   std::cout << "OpenRealm simulator node\n";
   std::cout << "- simulated frames: " << simulatedFrames << "\n";
@@ -401,5 +453,6 @@ int main(int argc, char** argv)
   std::cout << "- runtime world events applied: " << runtimeState.runtimeWorldEventsApplied << "\n";
   std::cout << "- runtime place events applied: " << runtimeState.runtimePlaceEventsApplied << "\n";
   std::cout << "- runtime interest voxel value: " << (int)remoteInterestVoxel << "\n";
+  std::cout << "- runtime quit requested: " << (stopRequested ? "yes" : "no") << "\n";
   return runtimeOk ? 0 : 1;
 }

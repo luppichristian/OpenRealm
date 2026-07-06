@@ -32,6 +32,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Profiling dependency: `tracy`
 - Runtime node-to-node networking scaffold: ENet binary UDP transport
 - Blockchain JSON-RPC integration scaffold: `cpp-httplib` + `nlohmann/json`
+- Terminal configuration UI: vendored `term.h` (`node/cli/third_party/term.h`) with a small native C implementation unit linked into the node targets
 
 ## Repository Layout
 
@@ -52,13 +53,14 @@ Do not describe this repo as if it already contains distributed networking or co
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
 - `node/cli/`
   - Shared console configuration UI for non-client nodes.
-  - `NodeCli.*` lets relay/simulator users view node and realm values, pick the selected realm, edit role-specific config values, edit wallet values, save to `config.json`, then launch.
+  - `NodeCli.*` is now a term.h-based full-screen TUI for relay/simulator nodes: arrow-key navigation, inline editors/toggles, realm picker, dirty-state tracking, reload/save/launch actions, and a live realm/launch summary panel.
+  - `NodeCliTerm.c` is the tiny C implementation unit that defines `TIMPLEMENTATION`; `node/cli/third_party/term.h` is vendored from the upstream `term.h` repository.
   - Client nodes should not use this CLI because they are expected to get in-game GUI configuration later.
 - `node/blockchain/`
   - Native-side orchestration-layer / JSON-RPC integration code.
   - `RealmConfigFiles.*` loads selected realm data from `<realm>/realm.json` and `<realm>/jump_nodes.json`, including blockchain config, realm name, and jump-node defaults.
-  - `SmartContract.h` is the common base for native contract wrappers; it centralizes shared RPC/address behavior.
-  - `Blockchain.*` is the unified native blockchain facade that owns the RPC client, wallet abstraction, and contract wrappers.
+  - `SmartContract.*` is the common base for native contract wrappers; the shared RPC/address helpers now live in `SmartContract.cpp` instead of being fully inlined in the header.
+
   - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: RPC URL, contract addresses, and request timeouts.
   - `BlockchainAbi.*` contains the current lightweight Ethereum ABI call encoding/decoding helpers used by the native wrappers.
   - `Wallet.*` currently abstracts the selected wallet account plus optional runtime signer metadata for the native layer; transaction signing/submission is not implemented yet.
@@ -74,6 +76,8 @@ Do not describe this repo as if it already contains distributed networking or co
   - In-game GUI menu flow for client nodes.
   - Owns the main menu, play/network selection menu, options menu, credits screen, and pause menu.
   - Persists client-only settings and selected realm/jump node through `config.json`.
+  - Menu hitboxes/interaction rows should share the same layout constants as the drawn widgets so clickable regions stay aligned with the visible controls.
+  - Long client-menu text should be wrapped or width-fitted to the menu panel instead of being drawn as a single unbounded line.
 - `node/client/ClientConfigFiles.*`
   - Client-only config/realm file helpers.
   - Loads/saves the `client` block in root `config.json` and discovers playable realms from `realms/*`.
@@ -172,13 +176,18 @@ Do not describe this repo as if it already contains distributed networking or co
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
   - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
   - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, and `node/targets/Relay.cpp`.
+  - The term.h TUI is linked through a dedicated `termh_impl` C static library (`node/cli/NodeCliTerm.c`) instead of forcing the C implementation directly through the C++ targets.
+  - The simulator/relay targets no longer hardcode `ws2_32` / `winmm`; ENet's package target supplies the required platform linkage transitively, which keeps `project.bbs` itself platform-agnostic.
+
 - The codebase is mostly split into two layers:
   - client/app shell in `node/client/`
   - world/simulation systems in `node/world/`
+
 - The long-term product architecture is expected to become three concerns that should stay conceptually separate:
   - orchestration layer: blockchain/smart-contract systems for chunk claims, user registration/unregistration, wallet-linked identity, and chunk marketplace/business logic
   - runtime layer: decentralized node network in C/C++ that simulates world state and exchanges world events peer-to-peer
   - local client layer: rendering, input, audio, and UX on top of the runtime/world simulation
+
 - The `blockchain/` directory is the repository root for orchestration-layer implementation and documentation; it should stay focused on low-frequency ownership/economic concerns and not absorb real-time simulation responsibilities.
 - Smart-contract usage is intended for low-frequency, ownership/economic operations rather than moment-to-moment gameplay synchronization.
 - Chunk ownership/claiming is expected to be blockchain-backed; chunks are intended to be purchasable/tradable, with marketplace transactions taking a project-controlled fee.
@@ -190,7 +199,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - Runtime nodes are expected to join the wider network through one or more known "jump nodes" that act as discoverable entry points; project-hosted jump nodes are acceptable, but player-hosted jump nodes should also remain possible.
 - The current native runtime targets source realm-scoped blockchain/jump-node data from JSON files: `realms/<name>/realm.json` for blockchain config and `realms/<name>/jump_nodes.json` for known entry nodes, with root `config.json` selecting the default realm path (for example `realms/test`) and providing node-local wallet/bind settings.
 - A jump node is a public entry/discovery role layered on top of a known node address; it should provide first contact, peer-list sharing, handshake/compatibility checks, and optional relay fallback, but should not imply gameplay authority.
-- The decentralized node graph should preserve reachability across the same world/network even when peers do not all connect directly.
+
 - Peer neighborhood design should prefer locality-aware connectivity: nodes responsible for nearby world regions should connect more directly, while distant regions do not need dense direct links.
 - The network topology should be locality-biased rather than a full mesh: nearby nodes cluster more densely, distant communication normally traverses graph hops, and sparse long-range links/relay assistance preserve resilience.
 - Region-of-interest should be a first-class runtime concept and may be centered around the local player, claimed/hosted chunks, settlements, or manually configured sim areas.

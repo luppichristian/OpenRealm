@@ -20,12 +20,14 @@ class Game
   void StopGameplay();
   void ResumeGameplay();
   void OpenPauseMenu();
+  void SetCursorCaptured(bool captured);
   void UpdateCursorState();
   void ToggleColorMenu();
 
   bool initialized = false;
   bool taskManagerStarted = false;
   bool gameplayActive = false;
+  bool cursorCaptured = false;
   World world;
   ClientWorld clientWorld;
   ClientMenu clientMenu;

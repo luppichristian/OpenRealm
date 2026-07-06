@@ -3,6 +3,114 @@
 #include <algorithm>
 #include <cstdio>
 
+static constexpr float kPanelPadding = 28.0f;
+static constexpr float kPlayRowTop = 184.0f;
+static constexpr float kOptionsRowTop = 140.0f;
+static constexpr float kRowStep = 68.0f;
+
+struct StepperRowLayout
+{
+  Rectangle labelBounds = {};
+  Rectangle leftButton = {};
+  Rectangle valueBounds = {};
+  Rectangle rightButton = {};
+};
+
+static StepperRowLayout BuildStepperRowLayout(const Rectangle& panel, float top)
+{
+  const float controlsWidth = fminf(276.0f, panel.width * 0.58f);
+  const float leftButtonWidth = 42.0f;
+  const float rightButtonWidth = 42.0f;
+  const float gap = 6.0f;
+  const float valueWidth = controlsWidth - leftButtonWidth - rightButtonWidth - gap * 2.0f;
+  const float controlsLeft = panel.x + panel.width - kPanelPadding - controlsWidth;
+  return {
+      .labelBounds = {panel.x + kPanelPadding, top, controlsLeft - panel.x - kPanelPadding - 16.0f, 42.0f},
+      .leftButton = {controlsLeft, top, leftButtonWidth, 42.0f},
+      .valueBounds = {controlsLeft + leftButtonWidth + gap, top, valueWidth, 42.0f},
+      .rightButton = {controlsLeft + leftButtonWidth + gap + valueWidth + gap, top, rightButtonWidth, 42.0f},
+  };
+}
+
+static std::string FitTextToWidth(const std::string& text, int fontSize, float maxWidth)
+{
+  if (text.empty()) return text;
+  if (MeasureText(text.c_str(), fontSize) <= maxWidth) return text;
+
+  std::string clipped = text;
+  while (!clipped.empty())
+  {
+    clipped.pop_back();
+    const std::string candidate = clipped + "...";
+    if (MeasureText(candidate.c_str(), fontSize) <= maxWidth) return candidate;
+  }
+
+  return "...";
+}
+
+static float DrawWrappedText(const std::string& text, float x, float y, float maxWidth, int fontSize, float lineSpacing, Color color)
+{
+  std::string line = {};
+  std::string word = {};
+  float currentY = y;
+
+  auto flushLine = [&](const std::string& value) {
+    if (value.empty()) return;
+    DrawText(value.c_str(), (int)x, (int)currentY, fontSize, color);
+    currentY += (float)fontSize + lineSpacing;
+  };
+
+  for (size_t i = 0; i <= text.size(); ++i)
+  {
+    const bool end = i == text.size();
+    const char ch = end ? '\0' : text[i];
+    if (ch == '\n')
+    {
+      if (!word.empty())
+      {
+        const std::string candidate = line.empty() ? word : line + " " + word;
+        if (!line.empty() && MeasureText(candidate.c_str(), fontSize) > maxWidth)
+        {
+          flushLine(line);
+          line = word;
+        }
+        else
+        {
+          line = candidate;
+        }
+        word.clear();
+      }
+      flushLine(line);
+      line.clear();
+      continue;
+    }
+
+    if (end || ch == ' ')
+    {
+      if (!word.empty())
+      {
+        const std::string candidate = line.empty() ? word : line + " " + word;
+        if (!line.empty() && MeasureText(candidate.c_str(), fontSize) > maxWidth)
+        {
+          flushLine(line);
+          line = word;
+        }
+        else
+        {
+          line = candidate;
+        }
+        word.clear();
+      }
+      continue;
+    }
+
+    word.push_back(ch);
+  }
+
+  flushLine(line);
+  return currentY;
+}
+
 static Color GetMenuTextColor(bool hovered)
 {
   return hovered ? WHITE : Fade(RAYWHITE, 0.92f);
@@ -24,8 +132,8 @@ int ClientMenu::ClampInt(int value, int minimum, int maximum)
 
 Rectangle ClientMenu::BuildPanelBounds() const
 {
-  const float width = fminf(kMenuPanelWidth, (float)GetScreenWidth() - 80.0f);
-  const float height = fminf(600.0f, (float)GetScreenHeight() - 80.0f);
+  const float width = fminf(720.0f, (float)GetScreenWidth() - 80.0f);
+  const float height = fminf(640.0f, (float)GetScreenHeight() - 80.0f);
   return {
       ((float)GetScreenWidth() - width) * 0.5f,
       ((float)GetScreenHeight() - height) * 0.5f,
@@ -52,7 +160,7 @@ ClientMenu::Button ClientMenu::BuildCenteredButton(float top, const std::string&
 ClientMenu::Button ClientMenu::BuildBackButton() const
 {
   Rectangle panel = BuildPanelBounds();
-  return BuildFooterButton(panel.x + 28.0f, panel.y + panel.height - 72.0f, 140.0f, "Back");
+  return BuildFooterButton(panel.x + kPanelPadding, panel.y + panel.height - 72.0f, 140.0f, "Back");
 }
 
 ClientMenu::Button ClientMenu::BuildFooterButton(float x, float y, float width, const std::string& label) const
@@ -221,16 +329,15 @@ bool ClientMenu::HandleStepperRow(
   }
 
   Rectangle panel = BuildPanelBounds();
-  Rectangle leftButton = {panel.x + panel.width - 168.0f, top, 42.0f, 42.0f};
-  Rectangle rightButton = {panel.x + panel.width - 48.0f, top, 42.0f, 42.0f};
+  const StepperRowLayout layout = BuildStepperRowLayout(panel, top);
 
   bool changed = false;
-  if (CheckCollisionPointRec(GetMousePosition(), leftButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+  if (CheckCollisionPointRec(GetMousePosition(), layout.leftButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
   {
     *value = ClampFloat(*value - step, minimum, maximum);
     changed = true;
   }
-  else if (CheckCollisionPointRec(GetMousePosition(), rightButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+  else if (CheckCollisionPointRec(GetMousePosition(), layout.rightButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
   {
     *value = ClampFloat(*value + step, minimum, maximum);
     changed = true;
@@ -257,16 +364,15 @@ bool ClientMenu::HandleStepperRow(
   }
 
   Rectangle panel = BuildPanelBounds();
-  Rectangle leftButton = {panel.x + panel.width - 168.0f, top, 42.0f, 42.0f};
-  Rectangle rightButton = {panel.x + panel.width - 48.0f, top, 42.0f, 42.0f};
+  const StepperRowLayout layout = BuildStepperRowLayout(panel, top);
 
   bool changed = false;
-  if (CheckCollisionPointRec(GetMousePosition(), leftButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+  if (CheckCollisionPointRec(GetMousePosition(), layout.leftButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
   {
     *value = ClampInt(*value - step, minimum, maximum);
     changed = true;
   }
-  else if (CheckCollisionPointRec(GetMousePosition(), rightButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+  else if (CheckCollisionPointRec(GetMousePosition(), layout.rightButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
   {
     *value = ClampInt(*value + step, minimum, maximum);
     changed = true;
@@ -336,7 +442,7 @@ ClientMenuAction ClientMenu::Update()
       }
 
       const int realmMaximum = (int)availableRealms.size() - 1;
-      if (HandleStepperRow(panel.y + 140.0f, "Network", config.selectedRealm, &realmIndex, 1, 0, realmMaximum))
+      if (HandleStepperRow(panel.y + kPlayRowTop, "Realm", selectedRealm.realmName, &realmIndex, 1, 0, realmMaximum))
       {
         config.selectedRealm = availableRealms[(size_t)realmIndex];
         RefreshSelectedRealm();
@@ -345,11 +451,9 @@ ClientMenuAction ClientMenu::Update()
 
       const std::string jumpNodeLabel = selectedRealm.jumpNodes.empty()
                                             ? std::string("none")
-                                            : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].label + " (" +
-                                                  selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].host + ":" +
-                                                  std::to_string(selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].port) + ")";
+                                            : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].label;
       const int jumpNodeMaximum = selectedRealm.jumpNodes.empty() ? 0 : (int)selectedRealm.jumpNodes.size() - 1;
-      HandleStepperRow(panel.y + 208.0f, "Jump node", jumpNodeLabel, &config.jumpNodeIndex, 1, 0, jumpNodeMaximum);
+      HandleStepperRow(panel.y + kPlayRowTop + kRowStep, "Jump node", jumpNodeLabel, &config.jumpNodeIndex, 1, 0, jumpNodeMaximum);
 
       if (HandleButton(BuildFooterButton(panel.x + panel.width - 284.0f, panel.y + panel.height - 72.0f, 124.0f, "Play")))
       {
@@ -368,16 +472,16 @@ ClientMenuAction ClientMenu::Update()
     {
       char volumeText[32] = {};
       std::snprintf(volumeText, sizeof(volumeText), "%d%%", (int)(config.masterVolume * 100.0f + 0.5f));
-      if (HandleStepperRow(panel.y + 140.0f, "Master volume", volumeText, &config.masterVolume, 0.1f, 0.0f, 1.0f))
+      if (HandleStepperRow(panel.y + kOptionsRowTop, "Master volume", volumeText, &config.masterVolume, 0.1f, 0.0f, 1.0f))
       {
         ApplyAudioSettings();
       }
 
       char sensitivityText[32] = {};
       std::snprintf(sensitivityText, sizeof(sensitivityText), "%.2fx", config.mouseSensitivity);
-      HandleStepperRow(panel.y + 208.0f, "Mouse sensitivity", sensitivityText, &config.mouseSensitivity, 0.1f, 0.25f, 2.5f);
-      HandleToggleRow(panel.y + 276.0f, "Invert mouse Y", config.invertMouseY, &config.invertMouseY);
-      HandleToggleRow(panel.y + 344.0f, "Show FPS", config.showFps, &config.showFps);
+      HandleStepperRow(panel.y + kOptionsRowTop + kRowStep, "Mouse sensitivity", sensitivityText, &config.mouseSensitivity, 0.1f, 0.25f, 2.5f);
+      HandleToggleRow(panel.y + kOptionsRowTop + kRowStep * 2.0f, "Invert mouse Y", config.invertMouseY, &config.invertMouseY);
+      HandleToggleRow(panel.y + kOptionsRowTop + kRowStep * 3.0f, "Show FPS", config.showFps, &config.showFps);
 
       if (HandleButton(BuildBackButton()))
       {
@@ -442,15 +546,15 @@ void ClientMenu::Draw(bool gameplayActive) const
 
   if (!statusMessage.empty())
   {
-    DrawText(statusMessage.c_str(), (int)panel.x + 28, (int)(panel.y + panel.height - 112.0f), 18, Fade(RAYWHITE, 0.78f));
+    DrawWrappedText(statusMessage, panel.x + kPanelPadding, panel.y + panel.height - 120.0f, panel.width - kPanelPadding * 2.0f, 18, 4.0f, Fade(RAYWHITE, 0.78f));
   }
 }
 
 void ClientMenu::DrawScreenTitle(const char* title, const char* subtitle) const
 {
   Rectangle panel = BuildPanelBounds();
-  DrawText(title, (int)panel.x + 28, (int)panel.y + 24, 38, WHITE);
-  DrawText(subtitle, (int)panel.x + 30, (int)panel.y + 72, 20, Fade(RAYWHITE, 0.78f));
+  DrawText(title, (int)panel.x + kPanelPadding, (int)panel.y + 24, 38, WHITE);
+  DrawWrappedText(subtitle, panel.x + kPanelPadding, panel.y + 72.0f, panel.width - kPanelPadding * 2.0f, 20, 2.0f, Fade(RAYWHITE, 0.78f));
 }
 
 void ClientMenu::DrawButton(const Button& button, bool primary) const
@@ -487,27 +591,27 @@ void ClientMenu::DrawRealmSummary(float top) const
   const int left = (int)panel.x + 28;
   DrawText("Current realm", left, (int)top, 18, Fade(RAYWHITE, 0.75f));
   DrawText(selectedRealm.realmName.c_str(), left, (int)top + 24, 28, WHITE);
-  DrawText(config.selectedRealm.c_str(), left, (int)top + 58, 18, Fade(RAYWHITE, 0.82f));
+  DrawText(FitTextToWidth(config.selectedRealm, 18, panel.width - 56.0f).c_str(), left, (int)top + 58, 18, Fade(RAYWHITE, 0.82f));
 }
 
 void ClientMenu::DrawStepperRow(float top, const std::string& label, const std::string& valueText) const
 {
   Rectangle panel = BuildPanelBounds();
-  const Rectangle rowBounds = {panel.x + 28.0f, top, panel.width - 56.0f, 42.0f};
-  const Rectangle leftButton = {panel.x + panel.width - 168.0f, top, 42.0f, 42.0f};
-  const Rectangle valueBounds = {panel.x + panel.width - 120.0f, top, 66.0f, 42.0f};
-  const Rectangle rightButton = {panel.x + panel.width - 48.0f, top, 42.0f, 42.0f};
-  const bool leftHovered = CheckCollisionPointRec(GetMousePosition(), leftButton);
-  const bool rightHovered = CheckCollisionPointRec(GetMousePosition(), rightButton);
+  const StepperRowLayout layout = BuildStepperRowLayout(panel, top);
+  const bool leftHovered = CheckCollisionPointRec(GetMousePosition(), layout.leftButton);
+  const bool rightHovered = CheckCollisionPointRec(GetMousePosition(), layout.rightButton);
+  const std::string fittedLabel = FitTextToWidth(label, 22, layout.labelBounds.width);
+  const std::string fittedValue = FitTextToWidth(valueText, 20, layout.valueBounds.width - 12.0f);
 
-  DrawText(label.c_str(), (int)rowBounds.x, (int)rowBounds.y + 10, 24, WHITE);
-  DrawRectangleRounded(leftButton, 0.18f, 6, Fade(DARKGRAY, leftHovered ? 0.95f : 0.8f));
-  DrawRectangleRounded(rightButton, 0.18f, 6, Fade(DARKGRAY, rightHovered ? 0.95f : 0.8f));
-  DrawText("<", (int)leftButton.x + 13, (int)leftButton.y + 8, 24, WHITE);
-  DrawText(">", (int)rightButton.x + 13, (int)rightButton.y + 8, 24, WHITE);
-  DrawRectangleRounded(valueBounds, 0.18f, 6, Fade(BLACK, 0.45f));
-  DrawRectangleLinesEx(valueBounds, 1.0f, Fade(RAYWHITE, 0.35f));
-  DrawText(valueText.c_str(), (int)valueBounds.x - 220, (int)valueBounds.y + 10, 20, Fade(RAYWHITE, 0.78f));
+  DrawText(fittedLabel.c_str(), (int)layout.labelBounds.x, (int)layout.labelBounds.y + 10, 22, WHITE);
+  DrawRectangleRounded(layout.leftButton, 0.18f, 6, Fade(DARKGRAY, leftHovered ? 0.95f : 0.8f));
+  DrawRectangleRounded(layout.rightButton, 0.18f, 6, Fade(DARKGRAY, rightHovered ? 0.95f : 0.8f));
+  DrawText("<", (int)layout.leftButton.x + 13, (int)layout.leftButton.y + 8, 24, WHITE);
+  DrawText(">", (int)layout.rightButton.x + 13, (int)layout.rightButton.y + 8, 24, WHITE);
+  DrawRectangleRounded(layout.valueBounds, 0.18f, 6, Fade(BLACK, 0.45f));
+  DrawRectangleLinesEx(layout.valueBounds, 1.0f, Fade(RAYWHITE, 0.35f));
+  const int valueWidth = MeasureText(fittedValue.c_str(), 20);
+  DrawText(fittedValue.c_str(), (int)(layout.valueBounds.x + (layout.valueBounds.width - (float)valueWidth) * 0.5f), (int)layout.valueBounds.y + 10, 20, Fade(RAYWHITE, 0.78f));
 }
 
 void ClientMenu::DrawToggleRow(float top, const std::string& label, bool value) const
@@ -515,7 +619,7 @@ void ClientMenu::DrawToggleRow(float top, const std::string& label, bool value) 
   Rectangle panel = BuildPanelBounds();
   const Rectangle buttonBounds = {panel.x + panel.width - 168.0f, top, 120.0f, 42.0f};
   const bool hovered = CheckCollisionPointRec(GetMousePosition(), buttonBounds);
-  DrawText(label.c_str(), (int)panel.x + 28, (int)top + 10, 24, WHITE);
+  DrawText(FitTextToWidth(label, 22, panel.width - 228.0f).c_str(), (int)panel.x + 28, (int)top + 10, 22, WHITE);
   const unsigned char alpha = (unsigned char)(hovered ? 255 : 225);
   DrawRectangleRounded(buttonBounds, 0.18f, 6, value ? Color{53, 118, 255, alpha} : Fade(DARKGRAY, hovered ? 0.95f : 0.8f));
   DrawRectangleLinesEx(buttonBounds, 1.5f, Fade(RAYWHITE, 0.45f));
@@ -530,20 +634,25 @@ void ClientMenu::DrawPlayMenu() const
   DrawScreenTitle("Play", "Choose the target realm and jump node before entering the world.");
   DrawRealmSummary(panel.y + 112.0f);
 
-  DrawStepperRow(panel.y + 184.0f, "Network", config.selectedRealm);
+  DrawStepperRow(panel.y + kPlayRowTop, "Realm", selectedRealm.realmName);
 
   const std::string jumpNodeLabel = selectedRealm.jumpNodes.empty()
                                         ? std::string("No jump nodes available")
-                                        : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].label + "  " +
-                                              selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].host + ":" +
-                                              std::to_string(selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].port);
-  DrawStepperRow(panel.y + 252.0f, "Jump node", jumpNodeLabel);
+                                        : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].label;
+  DrawStepperRow(panel.y + kPlayRowTop + kRowStep, "Jump node", jumpNodeLabel);
 
-  DrawText(
-      "The current client still runs local gameplay, but the chosen realm/jump node are persisted for the client node flow.",
-      (int)panel.x + 28,
-      (int)panel.y + 328,
+  const std::string jumpNodeDetails = selectedRealm.jumpNodes.empty()
+                                          ? std::string("No host/port available for the selected realm.")
+                                          : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].host + ":" +
+                                                std::to_string(selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].port);
+  DrawWrappedText(jumpNodeDetails, panel.x + kPanelPadding, panel.y + 328.0f, panel.width - kPanelPadding * 2.0f, 18, 4.0f, Fade(RAYWHITE, 0.78f));
+  DrawWrappedText(
+      "Client gameplay is still local for now. This menu saves the chosen realm and jump node for the client node flow.",
+      panel.x + kPanelPadding,
+      panel.y + 356.0f,
+      panel.width - kPanelPadding * 2.0f,
       18,
+      4.0f,
       Fade(RAYWHITE, 0.78f));
 
   DrawButton(BuildFooterButton(panel.x + panel.width - 284.0f, panel.y + panel.height - 72.0f, 124.0f, "Play"), true);
@@ -557,13 +666,13 @@ void ClientMenu::DrawOptionsMenu() const
 
   char volumeText[32] = {};
   std::snprintf(volumeText, sizeof(volumeText), "%d%%", (int)(config.masterVolume * 100.0f + 0.5f));
-  DrawStepperRow(panel.y + 140.0f, "Master volume", volumeText);
+  DrawStepperRow(panel.y + kOptionsRowTop, "Master volume", volumeText);
 
   char sensitivityText[32] = {};
   std::snprintf(sensitivityText, sizeof(sensitivityText), "%.2fx", config.mouseSensitivity);
-  DrawStepperRow(panel.y + 208.0f, "Mouse sensitivity", sensitivityText);
-  DrawToggleRow(panel.y + 276.0f, "Invert mouse Y", config.invertMouseY);
-  DrawToggleRow(panel.y + 344.0f, "Show FPS", config.showFps);
+  DrawStepperRow(panel.y + kOptionsRowTop + kRowStep, "Mouse sensitivity", sensitivityText);
+  DrawToggleRow(panel.y + kOptionsRowTop + kRowStep * 2.0f, "Invert mouse Y", config.invertMouseY);
+  DrawToggleRow(panel.y + kOptionsRowTop + kRowStep * 3.0f, "Show FPS", config.showFps);
   DrawButton(BuildBackButton(), false);
 }
 
@@ -574,11 +683,13 @@ void ClientMenu::DrawCreditsMenu() const
   DrawText("Project: Christian Luppi", (int)panel.x + 28, (int)panel.y + 150, 26, WHITE);
   DrawText("Rendering / audio / input: raylib", (int)panel.x + 28, (int)panel.y + 198, 22, Fade(RAYWHITE, 0.85f));
   DrawText("Profiling: Tracy", (int)panel.x + 28, (int)panel.y + 232, 22, Fade(RAYWHITE, 0.85f));
-  DrawText(
+  DrawWrappedText(
       "OpenRealm currently focuses on the local engine/client foundation while the wider decentralized runtime grows around it.",
-      (int)panel.x + 28,
-      (int)panel.y + 296,
+      panel.x + kPanelPadding,
+      panel.y + 296.0f,
+      panel.width - kPanelPadding * 2.0f,
       20,
+      4.0f,
       Fade(RAYWHITE, 0.78f));
   DrawButton(BuildBackButton(), false);
 }

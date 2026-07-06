@@ -55,6 +55,19 @@ targets(
     cmake_target(enet)
   )
 
+  header_lib(
+    id(termh)
+    name("term.h")
+    repo(
+      link("https://github.com/luppichristian/term.h.git")
+      commit("8e20a9f1e33a6d54de9dab4cc81db3ef9ada9d62")
+    )
+    cmake_target(termh_header)
+    include_dirs(
+      "$TARGET(package.resolved_dir)"
+    )
+  )
+
   console(
     id(openrealm_client)
     name("OpenRealm Client Node")
@@ -79,14 +92,11 @@ targets(
     include_dirs(
       "$DEP(enet.package.resolved_dir)/include"
     )
-    dependencies(raylib tracy httplib nlohmann_json enet)
-    link_libs(
-      ws2_32
-      winmm
-    )
+    dependencies(raylib tracy httplib nlohmann_json enet termh)
     units(
       node/TaskManager.cpp
       node/runtime/*.cpp
+      node/cli/*.c
       node/cli/*.cpp
       node/blockchain/*.cpp
       node/world/*.cpp
@@ -103,13 +113,10 @@ targets(
     include_dirs(
       "$DEP(enet.package.resolved_dir)/include"
     )
-    dependencies(raylib tracy httplib nlohmann_json enet)
-    link_libs(
-      ws2_32
-      winmm
-    )
+    dependencies(raylib tracy httplib nlohmann_json enet termh)
     units(
       node/runtime/*.cpp
+      node/cli/*.c
       node/cli/*.cpp
       node/blockchain/*.cpp
       node/targets/Relay.cpp
