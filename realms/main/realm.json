@@ -1,6 +1,7 @@
 {
   "name": "main",
   "blockchain": {
+    "protocolVersion": 1,
     "rpcUrl": "https://rpc.example.invalid",
     "globalParamsAddress": "0x0000000000000000000000000000000000000000",
     "playerRegistryAddress": "0x0000000000000000000000000000000000000000",

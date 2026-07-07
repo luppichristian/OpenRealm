@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ActiveNodeBucket.h"
+#include "ProtocolVersion.h"
 
 #include <cstdint>
 #include <string>
@@ -9,6 +10,7 @@
 struct PacketValidationContext
 {
   uint32_t localNodeId = 0;
+  uint32_t expectedProtocolVersion = kRuntimeProtocolVersion;
   uint64_t expectedRealmHash = 0;
   ActiveNodeBucket* activeNodes = nullptr;
 };
@@ -19,11 +21,12 @@ enum class PacketValidationCode : uint8_t
   PacketParseFailed = 1,
   InvalidHandshakePayload = 2,
   SelfNodeId = 3,
-  RealmMismatch = 4,
-  DuplicateNodeId = 5,
-  DuplicatePeerAddress = 6,
-  MissingActiveNodeBucket = 7,
-  ActiveNodeLimitReached = 8,
+  ProtocolVersionMismatch = 4,
+  RealmMismatch = 5,
+  DuplicateNodeId = 6,
+  DuplicatePeerAddress = 7,
+  MissingActiveNodeBucket = 8,
+  ActiveNodeLimitReached = 9,
 };
 
 struct PacketValidationResult

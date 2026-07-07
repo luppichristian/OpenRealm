@@ -7,7 +7,9 @@
 std::string BuildRuntimeRealmFingerprint(const RuntimeRealmState& realmState)
 {
   std::ostringstream stream = {};
+  stream << "runtimeProtocolVersion=" << realmState.runtimeProtocolVersion << '\n';
   stream << "chainId=" << realmState.chainId << '\n';
+  stream << "blockchainProtocolVersion=" << realmState.blockchainConfig.protocolVersion << '\n';
   stream << "rpcUrl=" << realmState.blockchainConfig.rpcUrl << '\n';
   stream << "globalParamsAddress=" << realmState.blockchainConfig.globalParamsAddress << '\n';
   stream << "playerRegistryAddress=" << realmState.blockchainConfig.playerRegistryAddress << '\n';

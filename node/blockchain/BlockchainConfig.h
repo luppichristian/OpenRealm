@@ -1,9 +1,12 @@
 #pragma once
 
+#include "ProtocolVersion.h"
+
 #include <string>
 
 struct BlockchainConfig
 {
+  uint32_t protocolVersion = kBlockchainProtocolVersion;
   std::string rpcUrl = {};
   std::string globalParamsAddress = {};
   std::string playerRegistryAddress = {};

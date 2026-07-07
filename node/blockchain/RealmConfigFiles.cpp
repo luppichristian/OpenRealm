@@ -1,4 +1,5 @@
 #include "RealmConfigFiles.h"
+#include "../runtime/ProtocolVersion.h"
 
 #include <fstream>
 #include <utility>
@@ -80,6 +81,10 @@ bool LoadRealmConfigFiles(const std::string& realmDirectory, RealmConfigFiles* r
   realmFiles->realmName = ReadStringValue(realmJson, "name", realmDirectory);
 
   const nlohmann::json blockchainJson = realmJson.value("blockchain", nlohmann::json::object());
+  realmFiles->blockchainConfig.protocolVersion = ReadU32Value(
+      blockchainJson,
+      "protocolVersion",
+      realmFiles->blockchainConfig.protocolVersion);
   realmFiles->blockchainConfig.rpcUrl = ReadStringValue(blockchainJson, "rpcUrl", realmFiles->blockchainConfig.rpcUrl);
   realmFiles->blockchainConfig.globalParamsAddress = ReadStringValue(
       blockchainJson,
@@ -133,6 +138,7 @@ bool LoadRealmConfigFiles(const std::string& realmDirectory, RealmConfigFiles* r
 RuntimeRealmState BuildRuntimeRealmState(Blockchain& blockchain, const BlockchainConfig& blockchainConfig)
 {
   RuntimeRealmState realmState = {};
+  realmState.runtimeProtocolVersion = kRuntimeProtocolVersion;
   const std::string chainId = blockchain.GetRpcClient().EthChainId();
   realmState.chainId = chainId.empty() ? "unavailable" : chainId;
   realmState.blockchainConfig = blockchainConfig;

@@ -18,6 +18,7 @@
 #include "../runtime/ChunkInterestBucket.h"
 #include "../runtime/Packet.h"
 #include "../runtime/PacketValidator.h"
+#include "../runtime/ProtocolVersion.h"
 #include "../runtime/RuntimeClient.h"
 #include "../runtime/RuntimeHash.h"
 #include "../runtime/RuntimeRealm.h"
@@ -329,23 +330,24 @@ static int RunRelaySmoke(const RelayConfig& config)
   PacketValidationContext validationContext = {};
 
   validationContext.localNodeId = config.localNodeId;
+  validationContext.expectedProtocolVersion = kRuntimeProtocolVersion;
   validationContext.expectedRealmHash = realmHash;
   validationContext.activeNodes = &activeNodes;
 
   HandshakePacketData acceptedHandshake = {};
-  acceptedHandshake.protocolVersion = 1;
+  acceptedHandshake.protocolVersion = kRuntimeProtocolVersion;
   acceptedHandshake.nodeId = 42;
   acceptedHandshake.realmHash = realmHash;
 
   HandshakePacketData discoveredHandshake = {};
-  discoveredHandshake.protocolVersion = 1;
+  discoveredHandshake.protocolVersion = kRuntimeProtocolVersion;
   discoveredHandshake.nodeId = 43;
   discoveredHandshake.realmHash = realmHash;
 
   HandshakePacketData duplicateHandshake = acceptedHandshake;
 
   HandshakePacketData mismatchedRealmHandshake = {};
-  mismatchedRealmHandshake.protocolVersion = 1;
+  mismatchedRealmHandshake.protocolVersion = kRuntimeProtocolVersion;
   mismatchedRealmHandshake.nodeId = 84;
   mismatchedRealmHandshake.realmHash = realmHash + 1;
 

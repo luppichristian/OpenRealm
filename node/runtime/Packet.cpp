@@ -1,11 +1,11 @@
 #include "Packet.h"
+#include "ProtocolVersion.h"
 
 #include <enet/enet.h>
 
 #include <cstring>
 
 static constexpr uint32_t RUNTIME_PACKET_MAGIC = 0x4f524c4d;
-static constexpr uint8_t RUNTIME_PACKET_VERSION = 1;
 static constexpr size_t PACKET_HEADER_SIZE = 16;
 static constexpr size_t HANDSHAKE_PAYLOAD_SIZE = 16;
 static constexpr size_t CHUNK_INTEREST_PAYLOAD_SIZE = 16;
@@ -312,7 +312,7 @@ std::vector<uint8_t> SerializePacket(const Packet& packet)
 {
   PacketHeader header = {};
   header.magic = RUNTIME_PACKET_MAGIC;
-  header.version = RUNTIME_PACKET_VERSION;
+  header.version = kRuntimePacketVersion;
   header.type = (uint8_t)packet.type;
   header.payloadSize = (uint32_t)packet.payload.size();
   header.checksum = ComputePacketChecksum(header, packet.payload);
@@ -344,7 +344,7 @@ bool TryParsePacket(const std::vector<uint8_t>& bytes, Packet* packet)
   header.checksum = ReadU32(bytes, 12);
 
   if (header.magic != RUNTIME_PACKET_MAGIC) return false;
-  if (header.version != RUNTIME_PACKET_VERSION) return false;
+  if (header.version != kRuntimePacketVersion) return false;
   if (bytes.size() != (size_t)(PACKET_HEADER_SIZE + header.payloadSize)) return false;
 
   PacketType packetType = (PacketType)header.type;

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ethers } = require('ethers');
+const { ORCHESTRATION_PROTOCOL_VERSION } = require('./protocolVersion');
 const { compileContracts, getContractArtifact } = require('../test/helpers/compileContracts');
 
 function parseArgs(argv)
@@ -38,6 +39,47 @@ function ensureRequired(value, message)
   }
 
   return value;
+}
+
+function createDeploymentRecord({
+  networkName,
+  chainId,
+  ownerAddress,
+  deployerAddress,
+  minChunkCoord,
+  maxChunkCoord,
+  minChunkPrice,
+  maxFeeBps,
+  minAuctionDuration,
+  feeBps,
+  registryAddress,
+  globalParamsAddress,
+  claimsAddress,
+  marketplaceAddress
+})
+{
+  return {
+    protocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
+    network: networkName,
+    chainId,
+    ownerAddress,
+    deployerAddress,
+    globalParams: {
+      minChunkCoord,
+      maxChunkCoord,
+      minChunkPriceWei: minChunkPrice.toString(),
+      maxFeeBps,
+      minAuctionDurationSeconds: minAuctionDuration
+    },
+    feeBps,
+    deployedAt: new Date().toISOString(),
+    contracts: {
+      PlayerRegistry: registryAddress,
+      GlobalParams: globalParamsAddress,
+      ChunkClaims: claimsAddress,
+      Marketplace: marketplaceAddress
+    }
+  };
 }
 
 async function main()
@@ -112,27 +154,22 @@ async function main()
   console.log(`[deploy] marketplace linked in tx=${setMarketplaceTx.hash}`);
 
   const chainId = Number((await provider.getNetwork()).chainId);
-  const deploymentRecord = {
-    network: networkName,
+  const deploymentRecord = createDeploymentRecord({
+    networkName,
     chainId,
     ownerAddress,
     deployerAddress: wallet.address,
-    globalParams: {
-      minChunkCoord,
-      maxChunkCoord,
-      minChunkPriceWei: minChunkPrice.toString(),
-      maxFeeBps,
-      minAuctionDurationSeconds: minAuctionDuration
-    },
+    minChunkCoord,
+    maxChunkCoord,
+    minChunkPrice,
+    maxFeeBps,
+    minAuctionDuration,
     feeBps,
-    deployedAt: new Date().toISOString(),
-    contracts: {
-      PlayerRegistry: await registry.getAddress(),
-      GlobalParams: await globalParams.getAddress(),
-      ChunkClaims: await claims.getAddress(),
-      Marketplace: await marketplace.getAddress()
-    }
-  };
+    registryAddress: await registry.getAddress(),
+    globalParamsAddress: await globalParams.getAddress(),
+    claimsAddress: await claims.getAddress(),
+    marketplaceAddress: await marketplace.getAddress()
+  });
 
   const deploymentsDir = path.resolve(__dirname, '..', 'deployments');
   fs.mkdirSync(deploymentsDir, { recursive: true });
@@ -141,9 +178,17 @@ async function main()
   console.log(`[deploy] wrote ${path.relative(path.resolve(__dirname, '..'), outputPath).split(path.sep).join('/')}`);
 }
 
-main().catch((error) =>
+if (require.main === module)
 {
-  console.error('[deploy] failed');
-  console.error(error);
-  process.exit(1);
-});
+  main().catch((error) =>
+  {
+    console.error('[deploy] failed');
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  createDeploymentRecord,
+  main
+};

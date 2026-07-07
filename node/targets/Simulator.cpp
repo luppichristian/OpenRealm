@@ -16,6 +16,7 @@
 #include "../blockchain/Wallet.h"
 #include "../runtime/ActiveNodeBucket.h"
 #include "../runtime/Packet.h"
+#include "../runtime/ProtocolVersion.h"
 #include "../runtime/RuntimeClient.h"
 #include "../runtime/RuntimeHash.h"
 #include "../runtime/RuntimeRealm.h"
@@ -200,7 +201,7 @@ static bool StartRuntimeSession(SimulatorRuntimeSession* session)
   runtimeState.realmHash = ComputeRuntimeRealmHash(realmState);
 
   HandshakePacketData handshake = {};
-  handshake.protocolVersion = 1;
+  handshake.protocolVersion = kRuntimeProtocolVersion;
   handshake.nodeId = config.localNodeId;
   handshake.realmHash = runtimeState.realmHash;
   runtimeState.handshakeSent = runtimeClient.SendPacket(

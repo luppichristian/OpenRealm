@@ -1,6 +1,8 @@
 const assert = require('assert');
 const ganache = require('ganache');
 const { ethers } = require('ethers');
+const { createDeploymentRecord } = require('../scripts/deploy');
+const { ORCHESTRATION_PROTOCOL_VERSION } = require('../scripts/protocolVersion');
 const { compileContracts, getContractArtifact } = require('./helpers/compileContracts');
 
 describe('OpenRealm orchestration layer', function ()
@@ -101,6 +103,29 @@ describe('OpenRealm orchestration layer', function ()
   {
     return BigInt(await provider.send('eth_getBalance', [account, 'latest']));
   }
+
+  it('defines an explicit orchestration protocol version for deployment records', async function ()
+  {
+    const deploymentRecord = createDeploymentRecord({
+      networkName: 'local',
+      chainId: 31337,
+      ownerAddress: '0x0000000000000000000000000000000000000001',
+      deployerAddress: '0x0000000000000000000000000000000000000002',
+      minChunkCoord: MIN_CHUNK_COORD,
+      maxChunkCoord: MAX_CHUNK_COORD,
+      minChunkPrice: MIN_CHUNK_PRICE,
+      maxFeeBps: MAX_FEE_BPS,
+      minAuctionDuration: MIN_AUCTION_DURATION,
+      feeBps: 500,
+      registryAddress: '0x0000000000000000000000000000000000000011',
+      globalParamsAddress: '0x0000000000000000000000000000000000000012',
+      claimsAddress: '0x0000000000000000000000000000000000000013',
+      marketplaceAddress: '0x0000000000000000000000000000000000000014'
+    });
+
+    assert.equal(ORCHESTRATION_PROTOCOL_VERSION, 1);
+    assert.equal(deploymentRecord.protocolVersion, ORCHESTRATION_PROTOCOL_VERSION);
+  });
 
   it('registers players, enforces unique handles, and frees handles after unregistering', async function ()
   {

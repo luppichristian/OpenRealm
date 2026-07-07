@@ -1,6 +1,7 @@
 {
   "name": "test",
   "blockchain": {
+    "protocolVersion": 1,
     "rpcUrl": "http://127.0.0.1:8545",
     "globalParamsAddress": "0x0000000000000000000000000000000000000000",
     "playerRegistryAddress": "0x0000000000000000000000000000000000000000",

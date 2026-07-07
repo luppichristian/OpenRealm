@@ -8,6 +8,7 @@ std::string DescribePacketValidationCode(PacketValidationCode code)
     case PacketValidationCode::PacketParseFailed: return "packet_parse_failed";
     case PacketValidationCode::InvalidHandshakePayload: return "invalid_handshake_payload";
     case PacketValidationCode::SelfNodeId: return "self_node_id";
+    case PacketValidationCode::ProtocolVersionMismatch: return "protocol_version_mismatch";
     case PacketValidationCode::RealmMismatch: return "realm_mismatch";
     case PacketValidationCode::DuplicateNodeId: return "duplicate_node_id";
     case PacketValidationCode::DuplicatePeerAddress: return "duplicate_peer_address";
@@ -44,6 +45,12 @@ PacketValidationResult ValidateIncomingPacket(
   if (result.handshake.nodeId == context.localNodeId)
   {
     result.code = PacketValidationCode::SelfNodeId;
+    return result;
+  }
+
+  if (result.handshake.protocolVersion != context.expectedProtocolVersion)
+  {
+    result.code = PacketValidationCode::ProtocolVersionMismatch;
     return result;
   }
 

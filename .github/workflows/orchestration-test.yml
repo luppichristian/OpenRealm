@@ -2,15 +2,11 @@ name: Test Orchestration Layer
 
 on:
   push:
-    branches:
-      - master
     paths:
       - blockchain/**
       - .github/workflows/orchestration-test.yml
       - .github/workflows/orchestration-deploy.yml
   pull_request:
-    branches:
-      - master
     paths:
       - blockchain/**
       - .github/workflows/orchestration-test.yml

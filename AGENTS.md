@@ -47,11 +47,12 @@ Do not describe this repo as if it already contains distributed networking or co
   - Runtime node-to-node transport code and node-local runtime configuration.
   - `NodeConfigFiles.*` loads root `config.json` so simulator/relay nodes can source wallet, bind, node-id, runtime-loop, and local node defaults from JSON instead of verbose CLI flags.
   - Root `config.json` should stay target-agnostic for shared runtime settings: common runtime fields belong under shared sections like `runtime`, `runtime.interest`, and `runtime.limits` instead of being split per target type.
+  - `ProtocolVersion.h` centralizes the explicit runtime protocol version (`kRuntimeProtocolVersion`) and packet-header version (`kRuntimePacketVersion`).
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
   - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
   - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
-  - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces realm-hash matching, and rejects duplicate/self node ids.
-  - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from blockchain config + fetched global params so peers can confirm they are on the same environment.
+  - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces explicit protocol-version + realm-hash matching, and rejects duplicate/self node ids.
+  - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from the explicit runtime protocol version plus blockchain config + fetched global params so peers can confirm they are on the same environment.
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
 - `node/cli/`
   - Shared console configuration UI for non-client nodes.
@@ -62,8 +63,8 @@ Do not describe this repo as if it already contains distributed networking or co
   - Native-side orchestration-layer / JSON-RPC integration code.
   - `RealmConfigFiles.*` loads selected realm data from `<realm>/realm.json` and `<realm>/jump_nodes.json`, including blockchain config, realm name, and jump-node defaults.
   - `SmartContract.*` is the common base for native contract wrappers; the shared RPC/address helpers now live in `SmartContract.cpp` instead of being fully inlined in the header.
-
-  - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: RPC URL, contract addresses, and request timeouts.
+  - `ProtocolVersion.h` centralizes the explicit blockchain/orchestration protocol version (`kBlockchainProtocolVersion`).
+  - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: protocol version, RPC URL, contract addresses, and request timeouts.
   - `BlockchainAbi.*` contains the current lightweight Ethereum ABI call encoding/decoding helpers used by the native wrappers.
   - `Wallet.*` currently abstracts the selected wallet account for the native layer; transaction signing/submission is not implemented yet.
   - `BlockchainRpcClient.*` wraps JSON-RPC calls to the orchestration-layer backend.
@@ -84,7 +85,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Client-only config/realm file helpers.
   - Loads/saves the `client` block in root `config.json` and discovers playable realms from `realms/*`.
 - `node/client/ClientWorld.*`
-  - Client-only composition root.
+
   - Owns asset/audio caches, GPU upload state, and render orchestration for a `World`.
   - Receives the shared `TaskManager` from `Game` instead of owning worker threads directly.
 - `node/client/PlayerController.*`
@@ -148,6 +149,7 @@ Do not describe this repo as if it already contains distributed networking or co
 - `realms/`
   - Root folder for runtime realm-data directories.
   - `realms/main/` stores one runtime environment's `realm.json` and `jump_nodes.json`.
+  - `realms/*/realm.json` now explicitly carries the orchestration/blockchain `protocolVersion` for that realm alongside RPC/contract settings.
   - `realms/test/` stores the local/test runtime environment with the same file shape.
 - `config.json`
   - Root runtime node configuration file.
@@ -155,7 +157,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Now also stores a `client` object for client-node menu settings (`realm`, `jumpNodeIndex`, `masterVolume`, `mouseSensitivity`, `invertMouseY`, `showFps`).
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
-  - Contains a Node-based Solidity workflow (`package.json`) using `solc` + `ganache` + `ethers` + `mocha` for local contract testing.
+
   - The local Solidity helper at `blockchain/test/helpers/compileContracts.js` should pin `evmVersion: 'shanghai'` so bytecode stays compatible with the Ganache version used by this repo's local verification flow.
   - Includes Windows helper batch scripts at the `blockchain/` root for common local flows: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, `start-ganache-local.bat`, `deploy-local.bat`, and `verify-local.bat`.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
@@ -170,7 +172,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
 - `.github/workflows/`
   - `orchestration-test.yml` runs the blockchain workspace build/tests on pushes and pull requests that touch orchestration-layer files.
-  - `orchestration-deploy.yml` provides a manual workflow that first smoke-deploys the contracts to ephemeral Ganache, then can deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
+  - `orchestration-deploy.yml` provides a workflow whose `local-smoke-deploy` job always deploys the contracts to an ephemeral local Ganache instance first; on `workflow_dispatch` it can then deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
 
 ## Architecture Notes
 
