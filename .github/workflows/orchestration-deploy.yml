@@ -84,7 +84,7 @@ jobs:
 
       - name: Deploy to local Ganache
         run: >-
-          npm run deploy:local --
+          node ../realms/test/deploy.js
           --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
           --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 
@@ -95,7 +95,7 @@ jobs:
           name: orchestration-local-smoke-deployment
           path: |
             blockchain/artifacts
-            blockchain/deployments/local.json
+            blockchain/deployments/test.json
             blockchain/ganache.log
           if-no-files-found: error
 

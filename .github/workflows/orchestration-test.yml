@@ -21,8 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build and test Solidity contracts
+  build-test-and-smoke-deploy:
+    name: Build, test, and smoke deploy Solidity contracts
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,38 +47,6 @@ jobs:
 
       - name: Run contract tests
         run: npm test
-
-      - name: Upload contract artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: orchestration-contract-artifacts
-          path: blockchain/artifacts
-          if-no-files-found: error
-
-  local-smoke-deploy:
-    name: Smoke deploy to ephemeral Ganache
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    defaults:
-      run:
-        working-directory: blockchain
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: blockchain/package-lock.json
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build contract artifacts
-        run: npm run build
 
       - name: Start local Ganache
         run: |
@@ -105,16 +73,16 @@ jobs:
 
       - name: Deploy to local Ganache
         run: >-
-          npm run deploy:local --
+          node ../realms/test/deploy.js
           --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
           --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 
-      - name: Upload smoke deployment artifacts
+      - name: Upload contract and smoke deployment artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: orchestration-local-smoke-deployment
+          name: orchestration-contract-and-smoke-artifacts
           path: |
             blockchain/artifacts
-            blockchain/deployments/local.json
+            blockchain/deployments/test.json
             blockchain/ganache.log
           if-no-files-found: error

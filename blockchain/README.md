@@ -203,23 +203,23 @@ Windows shortcut:
 start-ganache-local.bat
 ```
 
-Then deploy from this directory:
+Then deploy from the test realm wrapper:
 
 ```bash
-npm run deploy:local -- --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
+node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
 ```
 
 Windows shortcut:
 
 ```bat
-deploy-local.bat [privateKey] [ownerAddress]
+..\realms\test\deploy-local.bat [privateKey] [ownerAddress]
 ```
 
-If you omit both arguments, `deploy-local.bat` uses the first account from the default local Ganache mnemonic.
+If you omit both arguments, `realms\test\deploy-local.bat` uses the first account from the default local Ganache mnemonic.
 
 Notes:
 - `--owner` is optional; if omitted, the deployer wallet becomes the contract owner
-- the deploy script writes a deployment record to `deployments/local.json`
+- the test-realm wrapper reads `../realms/test/realm.json` for the realm name + RPC URL and writes a deployment record to `deployments/test.json`
 - `GlobalParams` is deployed first and its address + parameter values are included in that deployment record for later runtime fetching
 
 ### 5. Deploy to another EVM-compatible network

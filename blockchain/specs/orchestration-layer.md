@@ -133,7 +133,7 @@ For local deployment:
 
 ```bash
 npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
-npm run deploy:local -- --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
+node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
 ```
 
 For non-local deployment:

@@ -172,7 +172,7 @@ For a local deployment against Ganache:
 
 ```bash
 npx ganache --wallet.mnemonic 'test test test test test test test test test test test junk' --wallet.totalAccounts 10 --chain.chainId 31337 --server.port 8545
-npm run deploy:local -- --private-key <private-key> --owner <owner-address>
+node realms/test/deploy.js --private-key <private-key> --owner <owner-address>
 ```
 
 See [`blockchain/README.md`](blockchain/README.md) for the full contract workflow.

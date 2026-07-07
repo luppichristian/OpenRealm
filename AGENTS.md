@@ -169,10 +169,10 @@ Do not describe this repo as if it already contains distributed networking or co
   - Free chunks are claimed by paying exactly `GlobalParams.MIN_CHUNK_PRICE`; abandoning a chunk refunds that locked minimum purchase price to the owner and returns the chunk to the free pool.
   - `Marketplace` now exposes unified sale-state reads (`GetSaleStateForChunk`, `GetSaleStateForToken`) for runtime/UI integration.
   - Marketplace listings and auction reserve prices must be at least `GlobalParams.MIN_CHUNK_PRICE`; fee bps validation is capped by `GlobalParams.MAX_FEE_BPS`.
-  - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and `npm run deploy ...` writes deployment records under `blockchain/deployments/`.
+  - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and the generic `npm run deploy ...` path writes deployment records under `blockchain/deployments/`.
 - `.github/workflows/`
-  - `orchestration-test.yml` is the main orchestration CI workflow: on pushes and pull requests that touch orchestration-layer files it builds the Solidity artifacts, runs the blockchain tests, then smoke-deploys the contracts to an ephemeral local Ganache instance.
-  - `orchestration-deploy.yml` is the manual deployment workflow: on `workflow_dispatch` it first runs the same local smoke deploy, then can deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
+  - `orchestration-test.yml` is the main orchestration CI workflow: on pushes and pull requests that touch orchestration-layer files it runs one job that builds the Solidity artifacts, runs the blockchain tests, then smoke-deploys the **test realm** to an ephemeral local Ganache instance through `realms/test/deploy.js`.
+  - `orchestration-deploy.yml` is the manual deployment workflow: on `workflow_dispatch` it first runs the same local test-realm smoke deploy, then can deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
 
 ## Architecture Notes
 
@@ -346,7 +346,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - In `project.bbs`, do not add raw MSVC-only flags such as `/FS` through `additional_compile_args(...)`; prefer dedicated `bbs` fields or toolchain-agnostic/clang-style arguments that `bbs` can translate for MSVC.
 - `openrealm_relay` now uses the `bbs` target-specific expansion token `$DEP(enet.package.resolved_dir)` to include ENet headers directly from the resolved package root (`.../include`) instead of using a repo-local header-sync workaround or hardcoded package cache path.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
-- For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` / `npm run deploy:local` deploy the registry + claims + marketplace stack and write `deployments/<network>.json`.
+- For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` handles generic network deployments. Test-realm local deployment belongs under `realms/test/` (`node ../realms/test/deploy.js`, `realms/test/deploy-local.bat`) and writes `deployments/test.json`.
 - Root `.gitignore` should ignore native build outputs (`build/`, `dist/`, `gen/`), machine-local `bbs` files (`config.bbs`, `toolchain.bbs`), and generated blockchain workspace directories such as `blockchain/node_modules/`, `blockchain/artifacts/`, and `blockchain/deployments/`.
 
 ## Behavior To Preserve

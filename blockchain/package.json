@@ -6,8 +6,7 @@
   "scripts": {
     "build": "node scripts/compile.js",
     "test": "mocha --recursive --reporter spec test/**/*.test.js",
-    "deploy": "node scripts/deploy.js",
-    "deploy:local": "node scripts/deploy.js --rpc http://127.0.0.1:8545 --network local"
+    "deploy": "node scripts/deploy.js"
   },
   "devDependencies": {
     "ethers": "^6.15.0",
