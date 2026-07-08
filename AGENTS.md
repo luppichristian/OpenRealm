@@ -45,7 +45,9 @@ Do not describe this repo as if it already contains distributed networking or co
   - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
 - `node_launcher/`
   - Root-level utility subproject for multi-node local runtime sessions.
-  - `main.cpp` clones the selected base `config.json`, creates a session-local realm copy under `build/node_launcher/<timestamp>/realm`, rewrites jump-node discovery to the launched local relay ports, and spawns multiple `openrealm-relay` / `openrealm-simulator` child processes with `--no-cli`.
+  - `Main.cpp` stays as the top-level orchestration entrypoint only; launcher argument parsing, config/session-realm generation, process management, shared types, path/time helpers, and platform-specific process spawning are split across `LauncherArguments.*`, `LauncherConfig.*`, `LauncherProcess.*`, `LauncherTypes.h`, `LauncherUtilities.*`, and `Platform.*`.
+  - `openrealm_node_launcher` intentionally keeps `node_launcher/*.cpp` in `project.bbs`; new launcher implementation files should remain under `node_launcher/` so the target picks them up without per-file unit churn.
+  - The launcher clones the selected base `config.json`, creates a session-local realm copy under `build/node_launcher/<timestamp>/realm`, rewrites jump-node discovery to the launched local relay ports, and spawns multiple `openrealm-relay` / `openrealm-simulator` child processes with `--no-cli`.
   - Generated per-node configs and logs live under `build/node_launcher/<timestamp>/` so launcher sessions stay out of committed source paths.
 - `node/runtime/`
   - Runtime node-to-node transport code and node-local runtime configuration.
