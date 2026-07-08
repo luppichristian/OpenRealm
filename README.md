@@ -144,6 +144,13 @@ bbs update --init-toolchain
 bbs build -t openrealm_client
 bbs build -t openrealm_simulator
 bbs build -t openrealm_relay
+bbs build -t openrealm_node_launcher
+```
+
+Example multi-node local runtime session:
+
+```bash
+bbs run -t openrealm_node_launcher -a --realm test --relays 1 --simulators 2 --run-seconds 5
 ```
 
 ### Native dependencies

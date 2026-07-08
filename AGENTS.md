@@ -43,6 +43,10 @@ Do not describe this repo as if it already contains distributed networking or co
   - `Relay.cpp` owns the lightweight relay node entrypoint and relay service/smoke verification modes.
   - `RuntimeNodeConfigBase.h` holds the shared relay/simulator runtime config fields so the native node targets do not duplicate wallet/bind/node-id/realm defaults.
   - The target entrypoints should keep heavyweight node roots (`Game`, `World`, shared `TaskManager`) in static storage instead of stack locals because the world/client state is large enough to risk Windows stack overflow in tiny headless launchers.
+- `node_launcher/`
+  - Root-level utility subproject for multi-node local runtime sessions.
+  - `main.cpp` clones the selected base `config.json`, creates a session-local realm copy under `build/node_launcher/<timestamp>/realm`, rewrites jump-node discovery to the launched local relay ports, and spawns multiple `openrealm-relay` / `openrealm-simulator` child processes with `--no-cli`.
+  - Generated per-node configs and logs live under `build/node_launcher/<timestamp>/` so launcher sessions stay out of committed source paths.
 - `node/runtime/`
   - Runtime node-to-node transport code and node-local runtime configuration.
   - `NodeConfigFiles.*` loads root `config.json` so simulator/relay nodes can source wallet, bind, node-id, runtime-loop, and local node defaults from JSON instead of verbose CLI flags.
@@ -183,6 +187,7 @@ Do not describe this repo as if it already contains distributed networking or co
   - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
   - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
   - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, and `node/targets/Relay.cpp`.
+  - `openrealm_node_launcher` builds `openrealm-node-launcher` from `node_launcher/*.cpp` and is responsible for assembling disposable per-session configs/logs and spawning multiple headless relay/simulator node processes for a chosen realm.
   - The term.h TUI is linked through a dedicated `termh_impl` C static library (`node/cli/NodeCliTerm.c`) instead of forcing the C implementation directly through the C++ targets.
   - The simulator/relay targets no longer hardcode `ws2_32` / `winmm`; ENet's package target supplies the required platform linkage transitively, which keeps `project.bbs` itself platform-agnostic.
 
@@ -343,6 +348,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
   - `openrealm_client`: `node/TaskManager.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, `node/targets/Client.cpp`
   - `openrealm_simulator`: `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/targets/Simulator.cpp`
   - `openrealm_relay`: `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/targets/Relay.cpp`
+  - `openrealm_node_launcher`: `node_launcher/*.cpp`
 - Add new executable node entrypoints as explicit `units(...)` under their corresponding `project.bbs` console target in `node/targets/` rather than globbing every target entrypoint together.
 - New subdirectories under `node/` are not automatically part of the build unless `project.bbs` is updated.
 - In `project.bbs`, do not hardcode machine-local package cache paths (for example `C:/Users/.../packages/...`); package include/link data must flow from declared `dependencies(...)` or from repo-relative/generated paths derived at build time.

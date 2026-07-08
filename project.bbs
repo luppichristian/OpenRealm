@@ -122,4 +122,16 @@ targets(
       node/targets/Relay.cpp
     )
   )
+
+  console(
+    id(openrealm_node_launcher)
+    name("OpenRealm Node Launcher")
+    output(openrealm-node-launcher)
+    lang(cpp)
+    stdver(c++20)
+    dependencies(nlohmann_json)
+    units(
+      node_launcher/*.cpp
+    )
+  )
 )
