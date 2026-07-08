@@ -171,14 +171,18 @@ npm test
 For a local deployment against Ganache:
 
 ```bash
-npx ganache --wallet.mnemonic 'test test test test test test test test test test test junk' --wallet.totalAccounts 10 --chain.chainId 31337 --server.port 8545
-node realms/test/deploy.js --private-key <private-key> --owner <owner-address>
+python realms/test/start_ganache_local.py
+python realms/test/deploy_local.py [private-key] [owner-address]
 ```
+
+These helpers expect Python 3 plus the usual Node/npm toolchain on `PATH`.
+
+If you prefer the raw JavaScript entrypoint, you can still run `node realms/test/deploy.js --private-key <private-key> --owner <owner-address>` directly.
 
 For a main/real deployment using the realm-specific wrapper:
 
 ```bash
-node realms/main/deploy.js --rpc <production-rpc-url> --private-key <private-key> --owner <owner-address>
+python realms/main/deploy.py --rpc <production-rpc-url> --private-key <private-key> --owner <owner-address>
 ```
 
 See [`blockchain/README.md`](blockchain/README.md) for the full contract workflow.

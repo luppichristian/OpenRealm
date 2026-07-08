@@ -138,6 +138,7 @@ along with the relevant seller, current pricing, bid, and freshness fields.
 
 The local toolchain is intentionally lightweight:
 
+- Python 3 for the cross-platform helper wrappers
 - `solc` for compilation
 - `ganache` for ephemeral local EVM execution in tests
 - `ethers` for deployment and interaction
@@ -153,10 +154,10 @@ All commands below are run from `blockchain/`.
 npm install
 ```
 
-Windows shortcut:
+Cross-platform helper:
 
-```bat
-install-deps.bat
+```bash
+python install_deps.py
 ```
 
 ### 2. Build artifacts
@@ -165,10 +166,10 @@ install-deps.bat
 npm run build
 ```
 
-Windows shortcut:
+Cross-platform helper:
 
-```bat
-build-contracts.bat
+```bash
+python build_contracts.py
 ```
 
 This compiles every Solidity source and writes JSON artifacts under `artifacts/`.
@@ -179,10 +180,10 @@ This compiles every Solidity source and writes JSON artifacts under `artifacts/`
 npm test
 ```
 
-Windows shortcut:
+Cross-platform helper:
 
-```bat
-test-blockchain.bat
+```bash
+python test_blockchain.py
 ```
 
 Expected result today:
@@ -197,25 +198,21 @@ Start a local JSON-RPC chain in another shell, for example:
 npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
 ```
 
-Windows shortcut:
+Cross-platform helper:
 
-```bat
-..\realms\test\start-ganache-local.bat
+```bash
+python ../realms/test/start_ganache_local.py
 ```
 
 Then deploy from the test realm wrapper:
 
 ```bash
-node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
+python ../realms/test/deploy_local.py [privateKey] [ownerAddress]
 ```
 
-Windows shortcut:
+If you prefer the raw JavaScript entrypoint, `node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS` still works.
 
-```bat
-..\realms\test\deploy-local.bat [privateKey] [ownerAddress]
-```
-
-If you omit both arguments, `realms\test\deploy-local.bat` uses the first account from the default local Ganache mnemonic.
+If you omit both arguments, `realms/test/deploy_local.py` uses the first account from the default local Ganache mnemonic.
 
 Notes:
 - `--owner` is optional; if omitted, the deployer wallet becomes the contract owner
@@ -228,14 +225,10 @@ Notes:
 Use the realm-specific production wrapper when you want the deployment to follow `../realms/main/realm.json` defaults:
 
 ```bash
-node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+python ../realms/main/deploy.py --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
 ```
 
-Windows shortcut:
-
-```bat
-..\realms\main\deploy.bat --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
-```
+If you prefer the raw JavaScript entrypoint, `node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner` still works.
 
 ### 6. Use the generic blockchain deployment entrypoints
 
@@ -285,8 +278,8 @@ Deployment output:
 
 If you just want the normal beginner loop for local work:
 
-```bat
-verify-local.bat
+```bash
+python verify_local.py
 ```
 
 That runs:
