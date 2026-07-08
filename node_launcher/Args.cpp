@@ -1,11 +1,11 @@
-#include "LauncherArguments.h"
+#include "Args.h"
 
 #include <cstdlib>
 #include <iostream>
 
 namespace
 {
-bool ParseIntArgument(const std::string& text, int* value)
+bool ParseInt(const std::string& text, int* value)
 {
   if (value == nullptr) return false;
   char* end = nullptr;
@@ -15,15 +15,15 @@ bool ParseIntArgument(const std::string& text, int* value)
   return true;
 }
 
-bool ParseU32Argument(const std::string& text, uint32_t* value)
+bool ParseU32(const std::string& text, uint32_t* value)
 {
   int parsed = 0;
-  if (!ParseIntArgument(text, &parsed) || parsed < 0) return false;
+  if (!ParseInt(text, &parsed) || parsed < 0) return false;
   if (value != nullptr) *value = (uint32_t)parsed;
   return true;
 }
 
-bool ParseFloatArgument(const std::string& text, float* value)
+bool ParseFloat(const std::string& text, float* value)
 {
   if (value == nullptr) return false;
   char* end = nullptr;
@@ -102,7 +102,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--relays")
     {
-      if (!requireValue("--relays", &value) || !ParseIntArgument(value, &options->relayCount))
+      if (!requireValue("--relays", &value) || !ParseInt(value, &options->relayCount))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--relays must be an integer";
         return false;
@@ -112,7 +112,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--simulators")
     {
-      if (!requireValue("--simulators", &value) || !ParseIntArgument(value, &options->simulatorCount))
+      if (!requireValue("--simulators", &value) || !ParseInt(value, &options->simulatorCount))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--simulators must be an integer";
         return false;
@@ -122,7 +122,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--relay-base-port")
     {
-      if (!requireValue("--relay-base-port", &value) || !ParseIntArgument(value, &options->relayBasePort))
+      if (!requireValue("--relay-base-port", &value) || !ParseInt(value, &options->relayBasePort))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--relay-base-port must be an integer";
         return false;
@@ -132,7 +132,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--sim-base-port")
     {
-      if (!requireValue("--sim-base-port", &value) || !ParseIntArgument(value, &options->simulatorBasePort))
+      if (!requireValue("--sim-base-port", &value) || !ParseInt(value, &options->simulatorBasePort))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-base-port must be an integer";
         return false;
@@ -142,7 +142,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--relay-base-node-id")
     {
-      if (!requireValue("--relay-base-node-id", &value) || !ParseU32Argument(value, &options->relayBaseNodeId))
+      if (!requireValue("--relay-base-node-id", &value) || !ParseU32(value, &options->relayBaseNodeId))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--relay-base-node-id must be a non-negative integer";
         return false;
@@ -152,7 +152,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--sim-base-node-id")
     {
-      if (!requireValue("--sim-base-node-id", &value) || !ParseU32Argument(value, &options->simulatorBaseNodeId))
+      if (!requireValue("--sim-base-node-id", &value) || !ParseU32(value, &options->simulatorBaseNodeId))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-base-node-id must be a non-negative integer";
         return false;
@@ -162,7 +162,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--relay-ticks")
     {
-      if (!requireValue("--relay-ticks", &value) || !ParseIntArgument(value, &options->relayTicks))
+      if (!requireValue("--relay-ticks", &value) || !ParseInt(value, &options->relayTicks))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--relay-ticks must be an integer";
         return false;
@@ -172,7 +172,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--sim-frames")
     {
-      if (!requireValue("--sim-frames", &value) || !ParseIntArgument(value, &options->simulatorFrames))
+      if (!requireValue("--sim-frames", &value) || !ParseInt(value, &options->simulatorFrames))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-frames must be an integer";
         return false;
@@ -182,7 +182,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--sim-sleep-ms")
     {
-      if (!requireValue("--sim-sleep-ms", &value) || !ParseIntArgument(value, &options->simulatorSleepMs))
+      if (!requireValue("--sim-sleep-ms", &value) || !ParseInt(value, &options->simulatorSleepMs))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-sleep-ms must be an integer";
         return false;
@@ -192,7 +192,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--sim-frame-time")
     {
-      if (!requireValue("--sim-frame-time", &value) || !ParseFloatArgument(value, &options->simulatorFrameTime))
+      if (!requireValue("--sim-frame-time", &value) || !ParseFloat(value, &options->simulatorFrameTime))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-frame-time must be a number";
         return false;
@@ -202,7 +202,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--launch-delay-ms")
     {
-      if (!requireValue("--launch-delay-ms", &value) || !ParseIntArgument(value, &options->launchDelayMs))
+      if (!requireValue("--launch-delay-ms", &value) || !ParseInt(value, &options->launchDelayMs))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--launch-delay-ms must be an integer";
         return false;
@@ -212,7 +212,7 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
 
     if (argument == "--run-seconds")
     {
-      if (!requireValue("--run-seconds", &value) || !ParseIntArgument(value, &options->runSeconds))
+      if (!requireValue("--run-seconds", &value) || !ParseInt(value, &options->runSeconds))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--run-seconds must be an integer";
         return false;

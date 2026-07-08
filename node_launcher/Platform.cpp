@@ -114,16 +114,10 @@ void StopPlatformChildProcess(ChildProcess* child)
 
 bool LaunchPlatformChildProcess(
     const std::filesystem::path& repoRoot,
-    const std::filesystem::path& executablePath,
-    const std::filesystem::path& configPath,
-    const std::filesystem::path& realmDir,
     const std::vector<std::string>& arguments,
     ChildProcess* child,
     std::string* errorMessage)
 {
-  (void)executablePath;
-  (void)configPath;
-  (void)realmDir;
   if (child == nullptr)
   {
     if (errorMessage != nullptr) *errorMessage = "child output was null";
@@ -181,7 +175,7 @@ bool LaunchPlatformChildProcess(
 
   if (!started)
   {
-    if (errorMessage != nullptr) *errorMessage = "failed to launch " + child->role + " from " + FormatPath(executablePath);
+    if (errorMessage != nullptr) *errorMessage = "failed to launch " + child->role + " from " + FormatPath(child->executablePath);
     return false;
   }
 

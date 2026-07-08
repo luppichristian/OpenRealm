@@ -1,15 +1,49 @@
-#include "LauncherProcess.h"
+#include "Process.h"
 
+#include <atomic>
 #include <iostream>
 
 #include "LauncherUtilities.h"
 #include "Platform.h"
 
+namespace
+{
 std::atomic_bool gStopRequested = false;
+}
 
 void HandleStopSignal(int)
 {
   gStopRequested.store(true);
+}
+
+bool IsStopRequested()
+{
+  return gStopRequested.load();
+}
+
+bool LaunchChildProcess(
+    const std::filesystem::path& repoRoot,
+    const std::filesystem::path& executablePath,
+    const std::filesystem::path& configPath,
+    const std::filesystem::path& realmDir,
+    ChildProcess* child,
+    std::string* errorMessage)
+{
+  if (child == nullptr)
+  {
+    if (errorMessage != nullptr) *errorMessage = "child output was null";
+    return false;
+  }
+
+  const std::vector<std::string> arguments = {
+      FormatPath(executablePath),
+      "--config",
+      FormatPath(configPath),
+      "--realm-dir",
+      FormatPath(realmDir),
+      "--no-cli",
+  };
+  return LaunchPlatformChildProcess(repoRoot, arguments, child, errorMessage);
 }
 
 bool PollChildProcess(ChildProcess* child)
@@ -27,24 +61,14 @@ void StopChildProcess(ChildProcess* child)
   StopPlatformChildProcess(child);
 }
 
-bool LaunchChildProcess(
-    const std::filesystem::path& repoRoot,
-    const std::filesystem::path& executablePath,
-    const std::filesystem::path& configPath,
-    const std::filesystem::path& realmDir,
-    ChildProcess* child,
-    std::string* errorMessage)
+void StopAndCloseChildren(std::vector<ChildProcess>* children)
 {
-  const std::vector<std::string> arguments = {
-      FormatPath(executablePath),
-      "--config",
-      FormatPath(configPath),
-      "--realm-dir",
-      FormatPath(realmDir),
-      "--no-cli",
-  };
-
-  return LaunchPlatformChildProcess(repoRoot, executablePath, configPath, realmDir, arguments, child, errorMessage);
+  if (children == nullptr) return;
+  for (ChildProcess& child : *children)
+  {
+    StopChildProcess(&child);
+    CloseChildProcess(&child);
+  }
 }
 
 void PrintLaunchLine(const ChildProcess& child)

@@ -132,6 +132,7 @@ targets(
     dependencies(nlohmann_json)
     units(
       node_launcher/*.cpp
+      node_launcher/App.cpp
     )
   )
 )

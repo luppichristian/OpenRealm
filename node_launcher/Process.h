@@ -1,18 +1,14 @@
 #pragma once
 
-#include <atomic>
 #include <filesystem>
 #include <string>
 #include <vector>
 
 #include "LauncherTypes.h"
 
-extern std::atomic_bool gStopRequested;
-
 void HandleStopSignal(int signal);
-bool PollChildProcess(ChildProcess* child);
-void CloseChildProcess(ChildProcess* child);
-void StopChildProcess(ChildProcess* child);
+bool IsStopRequested();
+
 bool LaunchChildProcess(
     const std::filesystem::path& repoRoot,
     const std::filesystem::path& executablePath,
@@ -20,5 +16,9 @@ bool LaunchChildProcess(
     const std::filesystem::path& realmDir,
     ChildProcess* child,
     std::string* errorMessage);
+bool PollChildProcess(ChildProcess* child);
+void CloseChildProcess(ChildProcess* child);
+void StopChildProcess(ChildProcess* child);
+void StopAndCloseChildren(std::vector<ChildProcess>* children);
 void PrintLaunchLine(const ChildProcess& child);
 void PrintStatusLines(const std::vector<ChildProcess>& children);

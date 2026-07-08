@@ -1,4 +1,4 @@
-#include "LauncherConfig.h"
+#include "Config.h"
 
 #include <fstream>
 
