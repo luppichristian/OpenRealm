@@ -6,8 +6,12 @@
   "scripts": {
     "build": "node scripts/compile.js",
     "test": "mocha --recursive --reporter spec test/**/*.test.js",
+    "verify": "npm run build && npm test",
     "deploy": "node scripts/deploy.js",
-    "deploy:realm": "node scripts/deployRealm.js"
+    "deploy:realm": "node scripts/deployRealm.js",
+    "ganache:test": "node ../realms/test/start-ganache-local.js",
+    "deploy:test:local": "node ../realms/test/deploy-local.js",
+    "deploy:main": "node ../realms/main/deploy.js"
   },
   "devDependencies": {
     "ethers": "^6.15.0",

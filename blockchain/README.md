@@ -138,7 +138,6 @@ along with the relevant seller, current pricing, bid, and freshness fields.
 
 The local toolchain is intentionally lightweight:
 
-- Python 3 for the cross-platform helper wrappers
 - `solc` for compilation
 - `ganache` for ephemeral local EVM execution in tests
 - `ethers` for deployment and interaction
@@ -154,22 +153,10 @@ All commands below are run from `blockchain/`.
 npm install
 ```
 
-Cross-platform helper:
-
-```bash
-python install_deps.py
-```
-
 ### 2. Build artifacts
 
 ```bash
 npm run build
-```
-
-Cross-platform helper:
-
-```bash
-python build_contracts.py
 ```
 
 This compiles every Solidity source and writes JSON artifacts under `artifacts/`.
@@ -178,12 +165,6 @@ This compiles every Solidity source and writes JSON artifacts under `artifacts/`
 
 ```bash
 npm test
-```
-
-Cross-platform helper:
-
-```bash
-python test_blockchain.py
 ```
 
 Expected result today:
@@ -198,21 +179,23 @@ Start a local JSON-RPC chain in another shell, for example:
 npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
 ```
 
-Cross-platform helper:
+Realm-local helper:
 
 ```bash
-python ../realms/test/start_ganache_local.py
+node ../realms/test/start-ganache-local.js
 ```
 
 Then deploy from the test realm wrapper:
 
 ```bash
-python ../realms/test/deploy_local.py [privateKey] [ownerAddress]
+node ../realms/test/deploy-local.js [privateKey] [ownerAddress]
 ```
+
+If you prefer to stay inside `blockchain/`, the equivalent helpers are `npm run ganache:test` and `npm run deploy:test:local`.
 
 If you prefer the raw JavaScript entrypoint, `node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS` still works.
 
-If you omit both arguments, `realms/test/deploy_local.py` uses the first account from the default local Ganache mnemonic.
+If you omit both arguments, `realms/test/deploy-local.js` uses the first account from the default local Ganache mnemonic.
 
 Notes:
 - `--owner` is optional; if omitted, the deployer wallet becomes the contract owner
@@ -225,10 +208,8 @@ Notes:
 Use the realm-specific production wrapper when you want the deployment to follow `../realms/main/realm.json` defaults:
 
 ```bash
-python ../realms/main/deploy.py --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
 ```
-
-If you prefer the raw JavaScript entrypoint, `node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner` still works.
 
 ### 6. Use the generic blockchain deployment entrypoints
 
@@ -279,7 +260,7 @@ Deployment output:
 If you just want the normal beginner loop for local work:
 
 ```bash
-python verify_local.py
+npm run verify
 ```
 
 That runs:
