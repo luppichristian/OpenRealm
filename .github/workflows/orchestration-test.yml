@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - blockchain/**
+      - realms/test/**
       - .github/workflows/orchestration-test.yml
       - .github/workflows/orchestration-deploy.yml
   pull_request:
     paths:
       - blockchain/**
+      - realms/test/**
       - .github/workflows/orchestration-test.yml
       - .github/workflows/orchestration-deploy.yml
   workflow_dispatch:

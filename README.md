@@ -175,6 +175,12 @@ npx ganache --wallet.mnemonic 'test test test test test test test test test test
 node realms/test/deploy.js --private-key <private-key> --owner <owner-address>
 ```
 
+For a main/real deployment using the realm-specific wrapper:
+
+```bash
+node realms/main/deploy.js --rpc <production-rpc-url> --private-key <private-key> --owner <owner-address>
+```
+
 See [`blockchain/README.md`](blockchain/README.md) for the full contract workflow.
 
 ## Formatting

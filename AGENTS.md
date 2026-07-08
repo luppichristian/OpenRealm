@@ -148,9 +148,9 @@ Do not describe this repo as if it already contains distributed networking or co
   - Output/distribution artifacts.
 - `realms/`
   - Root folder for runtime realm-data directories.
-  - `realms/main/` stores one runtime environment's `realm.json` and `jump_nodes.json`.
+  - `realms/main/` stores the production/main realm config (`realm.json`, `jump_nodes.json`) plus the realm-specific deployment entrypoints (`deploy.js`, `deploy.bat`) used for real deployments.
   - `realms/*/realm.json` now explicitly carries the orchestration/blockchain `protocolVersion` for that realm alongside RPC/contract settings.
-  - `realms/test/` stores the local/test runtime environment with the same file shape.
+  - `realms/test/` stores the local/test runtime environment plus its Ganache/test-realm deployment wrappers (`start-ganache-local.bat`, `deploy-local.bat`, `deploy.js`).
 - `config.json`
   - Root runtime node configuration file.
   - Stores the selected default realm plus target-agnostic runtime settings, service/simulation controls, client menu settings, and wallet account identity.
@@ -159,7 +159,8 @@ Do not describe this repo as if it already contains distributed networking or co
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
 
   - The local Solidity helper at `blockchain/test/helpers/compileContracts.js` should pin `evmVersion: 'shanghai'` so bytecode stays compatible with the Ganache version used by this repo's local verification flow.
-  - Includes Windows helper batch scripts at the `blockchain/` root for common local flows: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, `start-ganache-local.bat`, `deploy-local.bat`, and `verify-local.bat`.
+  - Windows helper batch scripts at the `blockchain/` root are generic workspace helpers only: `install-deps.bat`, `build-contracts.bat`, `test-blockchain.bat`, and `verify-local.bat`.
+  - Generic realm-aware deployment entrypoints live under `blockchain/scripts/`, especially `deploy.js`, `deployRealm.js`, and `realmConfig.js`; test-only Ganache launch/deploy wrappers live under `realms/test/`, while real-deployment wrappers live under `realms/main/`.
   - Intended for Solidity contracts and related specs/scripts/tests for registration, chunk claims, ownership, and marketplace logic.
   - Current key files include `contracts/GlobalParams.sol`, `contracts/PlayerRegistry.sol`, `contracts/ChunkClaims.sol`, `contracts/Marketplace.sol`, `specs/orchestration-layer.md`, and `test/orchestration.test.js`.
   - Blockchain contract/interface/file names intentionally omit the redundant `OpenRealm` prefix; prefer concise names like `PlayerRegistry`, `ChunkClaims`, `Marketplace`, `IPlayerRegistry`, and `IChunkClaims`.
@@ -171,8 +172,8 @@ Do not describe this repo as if it already contains distributed networking or co
   - Marketplace listings and auction reserve prices must be at least `GlobalParams.MIN_CHUNK_PRICE`; fee bps validation is capped by `GlobalParams.MAX_FEE_BPS`.
   - Build/deploy helpers live under `blockchain/scripts/`; `npm run build` writes JSON artifacts under `blockchain/artifacts/`, and the generic `npm run deploy ...` path writes deployment records under `blockchain/deployments/`.
 - `.github/workflows/`
-  - `orchestration-test.yml` is the main orchestration CI workflow: on pushes and pull requests that touch orchestration-layer files it runs one job that builds the Solidity artifacts, runs the blockchain tests, then smoke-deploys the **test realm** to an ephemeral local Ganache instance through `realms/test/deploy.js`.
-  - `orchestration-deploy.yml` is the manual deployment workflow: on `workflow_dispatch` it first runs the same local test-realm smoke deploy, then can deploy to a configured external JSON-RPC network when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
+  - `orchestration-test.yml` is the main orchestration CI workflow: on pushes and pull requests that touch orchestration-layer files or `realms/test/**` it runs one job that builds the Solidity artifacts, runs the blockchain tests, then smoke-deploys the **test realm** to an ephemeral local Ganache instance through `realms/test/deploy.js`.
+  - `orchestration-deploy.yml` is the manual deployment workflow: on `workflow_dispatch` it first runs the same local test-realm smoke deploy, then deploys the **main realm** through `realms/main/deploy.js` when `ORCHESTRATION_RPC_URL` and `ORCHESTRATION_DEPLOY_PRIVATE_KEY` are available.
 
 ## Architecture Notes
 
@@ -346,7 +347,7 @@ These are not generic C++ preferences. They reflect the code that is already in 
 - In `project.bbs`, do not add raw MSVC-only flags such as `/FS` through `additional_compile_args(...)`; prefer dedicated `bbs` fields or toolchain-agnostic/clang-style arguments that `bbs` can translate for MSVC.
 - `openrealm_relay` now uses the `bbs` target-specific expansion token `$DEP(enet.package.resolved_dir)` to include ENet headers directly from the resolved package root (`.../include`) instead of using a repo-local header-sync workaround or hardcoded package cache path.
 - If you add assets, put them under `assets/` with stable folder naming that matches the current `BuildAssetPath()` convention.
-- For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, and `npm run deploy` handles generic network deployments. Test-realm local deployment belongs under `realms/test/` (`node ../realms/test/deploy.js`, `realms/test/deploy-local.bat`) and writes `deployments/test.json`.
+- For the blockchain workspace, `npm run build` compiles Solidity into `artifacts/`, `npm test` runs the Ganache-backed contract tests, `npm run deploy` stays the low-level generic network deploy path, and `npm run deploy:realm -- --realm <name-or-path>` applies realm defaults from `realms/<name>/realm.json`. Test-realm local deployment belongs under `realms/test/` (`node ../realms/test/deploy.js`, `realms/test/deploy-local.bat`), while real deployments should enter through `realms/main/` (`node ../realms/main/deploy.js`, `realms/main/deploy.bat`).
 - Root `.gitignore` should ignore native build outputs (`build/`, `dist/`, `gen/`), machine-local `bbs` files (`config.bbs`, `toolchain.bbs`), and generated blockchain workspace directories such as `blockchain/node_modules/`, `blockchain/artifacts/`, and `blockchain/deployments/`.
 
 ## Behavior To Preserve

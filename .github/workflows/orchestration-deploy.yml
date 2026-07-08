@@ -144,25 +144,25 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy contracts
+      - name: Deploy main realm contracts
         run: |
           RPC_URL="${INPUT_RPC_URL:-$SECRET_RPC_URL}"
-          OWNER_ARGS=""
+          OWNER_ARGS=()
           if [ -n "$OWNER_ADDRESS" ]; then
-            OWNER_ARGS="--owner $OWNER_ADDRESS"
+            OWNER_ARGS=(--owner "$OWNER_ADDRESS")
           fi
 
-          npm run deploy -- \
+          node ../realms/main/deploy.js \
             --rpc "$RPC_URL" \
             --network "$NETWORK_NAME" \
             --private-key "$DEPLOY_PRIVATE_KEY" \
-            $OWNER_ARGS
+            "${OWNER_ARGS[@]}"
 
       - name: Upload deployment artifacts
         if: ${{ github.event.inputs.upload_artifacts == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: orchestration-${{ github.event.inputs.network }}-deployment
+          name: orchestration-main-realm-deployment
           path: |
             blockchain/artifacts
             blockchain/deployments/${{ github.event.inputs.network }}.json

@@ -200,7 +200,7 @@ npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
 Windows shortcut:
 
 ```bat
-start-ganache-local.bat
+..\realms\test\start-ganache-local.bat
 ```
 
 Then deploy from the test realm wrapper:
@@ -221,10 +221,39 @@ Notes:
 - `--owner` is optional; if omitted, the deployer wallet becomes the contract owner
 - the test-realm wrapper reads `../realms/test/realm.json` for the realm name + RPC URL and writes a deployment record to `deployments/test.json`
 - `GlobalParams` is deployed first and its address + parameter values are included in that deployment record for later runtime fetching
+- test-only Ganache helpers stay under `../realms/test/`; the root `blockchain/` directory only keeps generic build/test/deploy helpers
 
-### 5. Deploy to another EVM-compatible network
+### 5. Deploy the main/real realm
 
-Set environment variables or pass CLI flags:
+Use the realm-specific production wrapper when you want the deployment to follow `../realms/main/realm.json` defaults:
+
+```bash
+node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+```
+
+Windows shortcut:
+
+```bat
+..\realms\main\deploy.bat --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+```
+
+### 6. Use the generic blockchain deployment entrypoints
+
+From `blockchain/`, the generic realm-aware wrapper can deploy either realm while keeping the realm-specific wrappers thin:
+
+```bash
+npm run deploy:realm -- --realm test --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
+npm run deploy:realm -- --realm main --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+```
+
+Notes:
+- `--realm` accepts a realm name like `test` / `main` or an explicit realm path
+- `deployRealm.js` reads `../realms/<name>/realm.json` for the default realm name + RPC URL and forwards into `scripts/deploy.js`
+- CLI flags still override the realm defaults when needed
+
+### 7. Deploy to another EVM-compatible network manually
+
+Set environment variables or pass CLI flags to the low-level generic deploy script when you want full manual control:
 
 ```bash
 RPC_URL=https://your-rpc.example \

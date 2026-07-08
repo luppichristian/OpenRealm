@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node scripts/compile.js",
     "test": "mocha --recursive --reporter spec test/**/*.test.js",
-    "deploy": "node scripts/deploy.js"
+    "deploy": "node scripts/deploy.js",
+    "deploy:realm": "node scripts/deployRealm.js"
   },
   "devDependencies": {
     "ethers": "^6.15.0",

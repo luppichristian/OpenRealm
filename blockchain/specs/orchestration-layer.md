@@ -136,14 +136,17 @@ npx ganache --wallet.totalAccounts 10 --chain.chainId 31337
 node ../realms/test/deploy.js --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
 ```
 
-For non-local deployment:
+For main/real deployment:
 
 ```bash
-RPC_URL=https://your-rpc.example \
-PRIVATE_KEY=0xyourprivatekey \
-OWNER_ADDRESS=0xyourowner \
-FEE_BPS=500 \
-npm run deploy -- --network sepolia
+node ../realms/main/deploy.js --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
+```
+
+You can also use the generic realm-aware wrapper from `blockchain/`:
+
+```bash
+npm run deploy:realm -- --realm test --private-key YOUR_LOCAL_PRIVATE_KEY --owner YOUR_OWNER_ADDRESS
+npm run deploy:realm -- --realm main --rpc https://your-rpc.example --private-key 0xyourprivatekey --owner 0xyourowner
 ```
 
 Deployment writes a record to `deployments/<network>.json`.
