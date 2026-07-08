@@ -21,14 +21,12 @@ std::string DescribePacketValidationCode(PacketValidationCode code)
 PacketValidationResult ValidateIncomingPacket(
     const std::vector<uint8_t>& bytes,
     const RuntimePeerAddress& peerAddress,
-    const PacketValidationContext& context
-)
+    const PacketValidationContext& context)
 {
   PacketValidationResult result = {};
   if (!TryParsePacket(bytes, &result.packet)) return result;
 
   result.packetChecksum = result.packet.checksum;
-
   if (result.packet.type != PacketType::Handshake)
   {
     result.accepted = true;
@@ -66,7 +64,11 @@ PacketValidationResult ValidateIncomingPacket(
     return result;
   }
 
-  result.activeNode = context.activeNodes->RegisterHandshake(peerAddress, result.handshake, result.packet.checksum);
+  result.activeNode = context.activeNodes->RegisterHandshake(
+      peerAddress,
+      result.handshake,
+      result.packet.checksum,
+      context.tick);
   if (!result.activeNode.accepted)
   {
     result.code = result.activeNode.code == ActiveNodeBucketCode::DuplicateNodeId

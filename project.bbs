@@ -74,9 +74,14 @@ targets(
     output(openrealm-client)
     lang(cpp)
     stdver(c++20)
-    dependencies(raylib tracy nlohmann_json)
+    include_dirs(
+      "$DEP(enet.package.resolved_dir)/include"
+    )
+    dependencies(raylib tracy httplib nlohmann_json enet)
     units(
       node/TaskManager.cpp
+      node/runtime/*.cpp
+      node/blockchain/*.cpp
       node/world/*.cpp
       node/client/*.cpp
       node/targets/Client.cpp
@@ -92,12 +97,10 @@ targets(
     include_dirs(
       "$DEP(enet.package.resolved_dir)/include"
     )
-    dependencies(raylib tracy httplib nlohmann_json enet termh)
+    dependencies(raylib tracy httplib nlohmann_json enet)
     units(
       node/TaskManager.cpp
       node/runtime/*.cpp
-      node/cli/*.c
-      node/cli/*.cpp
       node/blockchain/*.cpp
       node/world/*.cpp
       node/targets/Simulator.cpp
@@ -113,12 +116,11 @@ targets(
     include_dirs(
       "$DEP(enet.package.resolved_dir)/include"
     )
-    dependencies(raylib tracy httplib nlohmann_json enet termh)
+    dependencies(raylib tracy httplib nlohmann_json enet)
     units(
       node/runtime/*.cpp
-      node/cli/*.c
-      node/cli/*.cpp
       node/blockchain/*.cpp
+      node/world/*.cpp
       node/targets/Relay.cpp
     )
   )

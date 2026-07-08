@@ -1,39 +1,66 @@
 {
+  "realm": "realms/test",
+  "wallet": {
+    "accountAddress": "0x0000000000000000000000000000000000000001"
+  },
   "client": {
-    "invertMouseY": false,
-    "jumpNodeIndex": 0,
-    "masterVolume": 0.49999991059303284,
-    "mouseSensitivity": 1.0,
     "realm": "realms/test",
+    "jumpNodeIndex": 0,
+    "joinTargetPosition": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "masterVolume": 0.5,
+    "mouseSensitivity": 1.0,
+    "invertMouseY": false,
     "showFps": true
   },
-  "realm": "realms/test",
   "runtime": {
+    "enabled": false,
+    "acceptsJoins": true,
     "bindAddress": {
       "host": "127.0.0.1",
       "port": 46010
     },
-    "enabled": false,
-    "interest": {
-      "chunkX": 0,
-      "chunkY": 0,
-      "radius": 1
-    },
     "jumpNodeIndex": 0,
     "nodeId": 7001,
-    "receiveTimeoutMs": 1000
+    "position": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "areaOfInterest": {
+      "radiusX": 96.0,
+      "radiusY": 96.0,
+      "radiusZ": 64.0
+    },
+    "join": {
+      "targetPosition": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "maxCandidates": 6,
+      "maxHops": 8
+    },
+    "limits": {
+      "maxNodeConnections": 8,
+      "maxKnownNodes": 64
+    },
+    "periodsMs": {
+      "neighborRefresh": 250,
+      "topologyBroadcast": 500,
+      "playerBroadcast": 50
+    },
+    "receiveTimeoutMs": 50
   },
   "service": {
     "ticks": 0
   },
   "simulation": {
-    "emitPlaceEvent": false,
-    "frameTime": 0.016666667,
     "frames": 0,
-    "placeVoxelValue": 255,
+    "frameTime": 0.016666667,
     "sleepMs": 16
-  },
-  "wallet": {
-    "accountAddress": "0x0000000000000000000000000000000000000001"
   }
 }

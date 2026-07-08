@@ -10,10 +10,8 @@
 struct ChunkInterestState
 {
   uint32_t nodeId = 0;
-  int chunkX = 0;
-  int chunkY = 0;
-  uint32_t radius = 0;
-  uint32_t acceptedPackets = 0;
+  RuntimeWorldPosition position = {};
+  RuntimeInterestArea interestArea = {};
 };
 
 class ChunkInterestBucket
@@ -24,22 +22,16 @@ class ChunkInterestBucket
   {
   }
 
-  bool RegisterInterest(const ChunkInterestPacketData& chunkInterest);
-
+  bool RegisterInterest(uint32_t nodeId, const RuntimeWorldPosition& position, const RuntimeInterestArea& interestArea);
   size_t GetCount() const;
   const ChunkInterestState* FindByNodeId(uint32_t nodeId) const;
   std::vector<RuntimePeerAddress> BuildInterestedPeerAddresses(
       const ActiveNodeBucket& activeNodes,
       uint32_t senderNodeId,
-      int chunkX,
-      int chunkY,
-      size_t maxRecipients = SIZE_MAX
-  ) const;
-  bool TryResolveWorldEventChunk(const WorldEventPacketData& worldEvent, int* chunkX, int* chunkY) const;
+      const RuntimeWorldPosition& senderPosition,
+      const RuntimeInterestArea& senderInterestArea) const;
 
  private:
   size_t maxInterests = 64;
   std::vector<ChunkInterestState> interests = {};
 };
-
-bool IsChunkInsideInterest(const ChunkInterestState& interest, int chunkX, int chunkY);

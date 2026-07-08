@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ColorMenu.h"
+#include "../runtime/RuntimeWorldPosition.h"
 #include "../world/World.h"
 
 inline constexpr int LOCAL_PLAYER_ID = 0;
@@ -11,6 +12,6 @@ struct PlayerInputOptions
   bool invertMouseY = false;
 };
 
-void SendSpawnEvent(World& world);
+void SendSpawnEvent(World& world, const RuntimeWorldPosition& spawnPosition);
 void HandleFrameInput(World& world, ColorMenu& colorMenu, const PlayerInputOptions& inputOptions);
 void DrawHud(const ColorMenu& colorMenu);

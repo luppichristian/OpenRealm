@@ -2,14 +2,14 @@
 
 #include "../Utils.h"
 
-void SendSpawnEvent(World& world)
+void SendSpawnEvent(World& world, const RuntimeWorldPosition& spawnPosition)
 {
   WorldEvent spawnLocalPlayerEvent = {
       .type = WorldEventType::Spawn,
       .playerId = LOCAL_PLAYER_ID,
-      .playerX = 0.0f,
-      .playerY = 0.0f,
-      .playerZ = 0.0f,
+      .playerX = spawnPosition.x,
+      .playerY = spawnPosition.y,
+      .playerZ = spawnPosition.z,
       .playerYaw = 0.0f,
       .playerPitch = -0.8f,
   };

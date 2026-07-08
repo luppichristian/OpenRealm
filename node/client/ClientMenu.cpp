@@ -455,6 +455,18 @@ ClientMenuAction ClientMenu::Update()
       const int jumpNodeMaximum = selectedRealm.jumpNodes.empty() ? 0 : (int)selectedRealm.jumpNodes.size() - 1;
       HandleStepperRow(panel.y + kPlayRowTop + kRowStep, "Jump node", jumpNodeLabel, &config.jumpNodeIndex, 1, 0, jumpNodeMaximum);
 
+      char targetXText[32] = {};
+      std::snprintf(targetXText, sizeof(targetXText), "%.0f", config.joinTargetPosition.x);
+      HandleStepperRow(panel.y + kPlayRowTop + kRowStep * 2.0f, "Join target X", targetXText, &config.joinTargetPosition.x, 16.0f, -4096.0f, 4096.0f);
+
+      char targetYText[32] = {};
+      std::snprintf(targetYText, sizeof(targetYText), "%.0f", config.joinTargetPosition.y);
+      HandleStepperRow(panel.y + kPlayRowTop + kRowStep * 3.0f, "Join target Y", targetYText, &config.joinTargetPosition.y, 16.0f, -4096.0f, 4096.0f);
+
+      char targetZText[32] = {};
+      std::snprintf(targetZText, sizeof(targetZText), "%.0f", config.joinTargetPosition.z);
+      HandleStepperRow(panel.y + kPlayRowTop + kRowStep * 4.0f, "Join target Z", targetZText, &config.joinTargetPosition.z, 8.0f, -512.0f, 2048.0f);
+
       if (HandleButton(BuildFooterButton(panel.x + panel.width - 284.0f, panel.y + panel.height - 72.0f, 124.0f, "Play")))
       {
         SaveConfig();
@@ -631,7 +643,7 @@ void ClientMenu::DrawToggleRow(float top, const std::string& label, bool value) 
 void ClientMenu::DrawPlayMenu() const
 {
   Rectangle panel = BuildPanelBounds();
-  DrawScreenTitle("Play", "Choose the target realm and jump node before entering the world.");
+  DrawScreenTitle("Play", "Choose the realm, jump node, and explicit world join target.");
   DrawRealmSummary(panel.y + 112.0f);
 
   DrawStepperRow(panel.y + kPlayRowTop, "Realm", selectedRealm.realmName);
@@ -641,15 +653,27 @@ void ClientMenu::DrawPlayMenu() const
                                         : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].label;
   DrawStepperRow(panel.y + kPlayRowTop + kRowStep, "Jump node", jumpNodeLabel);
 
+  char targetXText[32] = {};
+  std::snprintf(targetXText, sizeof(targetXText), "%.0f", config.joinTargetPosition.x);
+  DrawStepperRow(panel.y + kPlayRowTop + kRowStep * 2.0f, "Join target X", targetXText);
+
+  char targetYText[32] = {};
+  std::snprintf(targetYText, sizeof(targetYText), "%.0f", config.joinTargetPosition.y);
+  DrawStepperRow(panel.y + kPlayRowTop + kRowStep * 3.0f, "Join target Y", targetYText);
+
+  char targetZText[32] = {};
+  std::snprintf(targetZText, sizeof(targetZText), "%.0f", config.joinTargetPosition.z);
+  DrawStepperRow(panel.y + kPlayRowTop + kRowStep * 4.0f, "Join target Z", targetZText);
+
   const std::string jumpNodeDetails = selectedRealm.jumpNodes.empty()
                                           ? std::string("No host/port available for the selected realm.")
                                           : selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].host + ":" +
                                                 std::to_string(selectedRealm.jumpNodes[(size_t)config.jumpNodeIndex].port);
-  DrawWrappedText(jumpNodeDetails, panel.x + kPanelPadding, panel.y + 328.0f, panel.width - kPanelPadding * 2.0f, 18, 4.0f, Fade(RAYWHITE, 0.78f));
+  DrawWrappedText(jumpNodeDetails, panel.x + kPanelPadding, panel.y + 468.0f, panel.width - kPanelPadding * 2.0f, 18, 4.0f, Fade(RAYWHITE, 0.78f));
   DrawWrappedText(
-      "Client gameplay is still local for now. This menu saves the chosen realm and jump node for the client node flow.",
+      "The client now joins the realm around the explicit target position. Jump nodes only bootstrap topology discovery and no longer define the in-world spawn point.",
       panel.x + kPanelPadding,
-      panel.y + 356.0f,
+      panel.y + 496.0f,
       panel.width - kPanelPadding * 2.0f,
       18,
       4.0f,

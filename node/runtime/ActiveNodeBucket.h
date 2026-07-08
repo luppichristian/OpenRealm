@@ -13,8 +13,14 @@ struct ActiveNodeState
   RuntimePeerAddress peerAddress = {};
   uint32_t protocolVersion = 0;
   uint64_t realmHash = 0;
+  RuntimeWorldPosition position = {};
+  RuntimeInterestArea interestArea = {};
+  uint8_t nodeRole = 0;
+  bool acceptsJoins = false;
+  bool connected = false;
   uint32_t lastPacketChecksum = 0;
   uint32_t acceptedPackets = 0;
+  uint64_t lastSeenTick = 0;
 };
 
 enum class ActiveNodeBucketCode : uint8_t
@@ -44,16 +50,41 @@ class ActiveNodeBucket
   ActiveNodeBucketResult RegisterHandshake(
       const RuntimePeerAddress& peerAddress,
       const HandshakePacketData& handshake,
-      uint32_t packetChecksum
+      uint32_t packetChecksum,
+      uint64_t tick
   );
 
+  ActiveNodeBucketResult RegisterTopologyNode(
+      const TopologyNodeState& topologyNode,
+      uint32_t packetChecksum,
+      uint64_t tick
+  );
+
+  void MarkConnected(uint32_t nodeId, bool connected);
+  void ForgetStaleNodes(uint64_t minimumTick);
+
   size_t GetCount() const;
+  const std::vector<ActiveNodeState>& GetNodes() const;
   const ActiveNodeState* FindByNodeId(uint32_t nodeId) const;
+  ActiveNodeState* FindMutableByNodeId(uint32_t nodeId);
   const ActiveNodeState* FindByPeerAddress(const RuntimePeerAddress& peerAddress) const;
-  std::vector<RuntimePeerAddress> BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
-  std::vector<PeerDiscoveryNodeState> BuildPeerDiscoveryNodes(uint32_t requestingNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
+  std::vector<TopologyNodeState> BuildTopologySnapshot(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
+  std::vector<const ActiveNodeState*> BuildClosestNodes(
+      uint32_t excludedNodeId,
+      uint64_t realmHash,
+      const RuntimeWorldPosition& targetPosition,
+      size_t maxCount,
+      bool requireJoinable) const;
+  std::vector<const ActiveNodeState*> BuildNeighborCandidates(
+      uint32_t excludedNodeId,
+      uint64_t realmHash,
+      const RuntimeWorldPosition& localPosition,
+      const RuntimeInterestArea& localInterestArea,
+      size_t maxCount) const;
 
  private:
+  ActiveNodeBucketResult UpsertNode(const ActiveNodeState& candidate, uint64_t tick);
+
   size_t maxNodes = 32;
   std::vector<ActiveNodeState> nodes = {};
 };
@@ -61,3 +92,4 @@ class ActiveNodeBucket
 bool RuntimePeerAddressEquals(const RuntimePeerAddress& a, const RuntimePeerAddress& b);
 std::string DescribeRuntimePeerAddress(const RuntimePeerAddress& peerAddress);
 std::string DescribeActiveNodeBucketCode(ActiveNodeBucketCode code);
+TopologyNodeState ToTopologyNodeState(const ActiveNodeState& node);

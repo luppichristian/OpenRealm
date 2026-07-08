@@ -13,6 +13,7 @@ struct PacketValidationContext
   uint32_t expectedProtocolVersion = kRuntimeProtocolVersion;
   uint64_t expectedRealmHash = 0;
   ActiveNodeBucket* activeNodes = nullptr;
+  uint64_t tick = 0;
 };
 
 enum class PacketValidationCode : uint8_t
@@ -42,7 +43,6 @@ struct PacketValidationResult
 PacketValidationResult ValidateIncomingPacket(
     const std::vector<uint8_t>& bytes,
     const RuntimePeerAddress& peerAddress,
-    const PacketValidationContext& context
-);
+    const PacketValidationContext& context);
 
 std::string DescribePacketValidationCode(PacketValidationCode code);

@@ -1,5 +1,7 @@
 #include "ActiveNodeBucket.h"
 
+#include <algorithm>
+
 bool RuntimePeerAddressEquals(const RuntimePeerAddress& a, const RuntimePeerAddress& b)
 {
   return a.host == b.host && a.port == b.port;
@@ -23,25 +25,32 @@ std::string DescribeActiveNodeBucketCode(ActiveNodeBucketCode code)
   }
 }
 
-ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
-    const RuntimePeerAddress& peerAddress,
-    const HandshakePacketData& handshake,
-    uint32_t packetChecksum
-)
+TopologyNodeState ToTopologyNodeState(const ActiveNodeState& node)
+{
+  return {
+      .nodeId = node.nodeId,
+      .protocolVersion = node.protocolVersion,
+      .realmHash = node.realmHash,
+      .peerAddress = node.peerAddress,
+      .position = node.position,
+      .interestArea = node.interestArea,
+      .nodeRole = node.nodeRole,
+      .acceptsJoins = (uint8_t)(node.acceptsJoins ? 1 : 0),
+  };
+}
+
+ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candidate, uint64_t tick)
 {
   ActiveNodeBucketResult result = {};
-  result.node.nodeId = handshake.nodeId;
-  result.node.peerAddress = peerAddress;
-  result.node.protocolVersion = handshake.protocolVersion;
-  result.node.realmHash = handshake.realmHash;
-  result.node.lastPacketChecksum = packetChecksum;
-  result.node.acceptedPackets = 1;
+  result.node = candidate;
+  result.node.lastSeenTick = tick;
+  result.node.acceptedPackets = std::max(1u, result.node.acceptedPackets);
 
   for (ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == handshake.nodeId)
+    if (node.nodeId == candidate.nodeId)
     {
-      if (!RuntimePeerAddressEquals(node.peerAddress, peerAddress))
+      if (!RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress))
       {
         result.code = ActiveNodeBucketCode::DuplicateNodeId;
         result.accepted = false;
@@ -49,17 +58,22 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
         return result;
       }
 
-      node.protocolVersion = handshake.protocolVersion;
-      node.realmHash = handshake.realmHash;
-      node.lastPacketChecksum = packetChecksum;
-      node.acceptedPackets += 1;
+      node.protocolVersion = candidate.protocolVersion;
+      node.realmHash = candidate.realmHash;
+      node.position = candidate.position;
+      node.interestArea = candidate.interestArea;
+      node.nodeRole = candidate.nodeRole;
+      node.acceptsJoins = candidate.acceptsJoins;
+      node.lastPacketChecksum = candidate.lastPacketChecksum;
+      node.lastSeenTick = tick;
+      node.acceptedPackets += candidate.acceptedPackets > 0 ? candidate.acceptedPackets : 1;
       result.code = ActiveNodeBucketCode::Refreshed;
       result.accepted = true;
       result.node = node;
       return result;
     }
 
-    if (RuntimePeerAddressEquals(node.peerAddress, peerAddress) && node.nodeId != handshake.nodeId)
+    if (RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress) && node.nodeId != candidate.nodeId)
     {
       result.code = ActiveNodeBucketCode::DuplicatePeerAddress;
       result.accepted = false;
@@ -81,14 +95,83 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
   return result;
 }
 
+ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
+    const RuntimePeerAddress& peerAddress,
+    const HandshakePacketData& handshake,
+    uint32_t packetChecksum,
+    uint64_t tick)
+{
+  ActiveNodeState node = {};
+  node.nodeId = handshake.nodeId;
+  node.peerAddress = peerAddress;
+  node.protocolVersion = handshake.protocolVersion;
+  node.realmHash = handshake.realmHash;
+  node.position = handshake.position;
+  node.interestArea = handshake.interestArea;
+  node.nodeRole = handshake.nodeRole;
+  node.acceptsJoins = handshake.acceptsJoins != 0;
+  node.lastPacketChecksum = packetChecksum;
+  node.acceptedPackets = 1;
+  return UpsertNode(node, tick);
+}
+
+ActiveNodeBucketResult ActiveNodeBucket::RegisterTopologyNode(
+    const TopologyNodeState& topologyNode,
+    uint32_t packetChecksum,
+    uint64_t tick)
+{
+  ActiveNodeState node = {};
+  node.nodeId = topologyNode.nodeId;
+  node.peerAddress = topologyNode.peerAddress;
+  node.protocolVersion = topologyNode.protocolVersion;
+  node.realmHash = topologyNode.realmHash;
+  node.position = topologyNode.position;
+  node.interestArea = topologyNode.interestArea;
+  node.nodeRole = topologyNode.nodeRole;
+  node.acceptsJoins = topologyNode.acceptsJoins != 0;
+  node.lastPacketChecksum = packetChecksum;
+  node.acceptedPackets = 1;
+  return UpsertNode(node, tick);
+}
+
+void ActiveNodeBucket::MarkConnected(uint32_t nodeId, bool connected)
+{
+  ActiveNodeState* node = FindMutableByNodeId(nodeId);
+  if (node == nullptr) return;
+  node->connected = connected;
+}
+
+void ActiveNodeBucket::ForgetStaleNodes(uint64_t minimumTick)
+{
+  nodes.erase(
+      std::remove_if(nodes.begin(), nodes.end(), [&](const ActiveNodeState& node) {
+        return node.lastSeenTick < minimumTick;
+      }),
+      nodes.end());
+}
+
 size_t ActiveNodeBucket::GetCount() const
 {
   return nodes.size();
 }
 
+const std::vector<ActiveNodeState>& ActiveNodeBucket::GetNodes() const
+{
+  return nodes;
+}
+
 const ActiveNodeState* ActiveNodeBucket::FindByNodeId(uint32_t nodeId) const
 {
   for (const ActiveNodeState& node : nodes)
+  {
+    if (node.nodeId == nodeId) return &node;
+  }
+  return nullptr;
+}
+
+ActiveNodeState* ActiveNodeBucket::FindMutableByNodeId(uint32_t nodeId)
+{
+  for (ActiveNodeState& node : nodes)
   {
     if (node.nodeId == nodeId) return &node;
   }
@@ -104,42 +187,65 @@ const ActiveNodeState* ActiveNodeBucket::FindByPeerAddress(const RuntimePeerAddr
   return nullptr;
 }
 
-std::vector<RuntimePeerAddress> ActiveNodeBucket::BuildPeerAddresses(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount) const
+std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount) const
 {
-  std::vector<RuntimePeerAddress> peerAddresses = {};
-
+  std::vector<TopologyNodeState> snapshot = {};
   for (const ActiveNodeState& node : nodes)
   {
     if (node.nodeId == excludedNodeId) continue;
     if (node.realmHash != realmHash) continue;
-    peerAddresses.push_back(node.peerAddress);
-    if (peerAddresses.size() >= maxCount) break;
+    snapshot.push_back(ToTopologyNodeState(node));
+    if (snapshot.size() >= maxCount) break;
   }
-
-  return peerAddresses;
+  return snapshot;
 }
 
-std::vector<PeerDiscoveryNodeState> ActiveNodeBucket::BuildPeerDiscoveryNodes(
-    uint32_t requestingNodeId,
+std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
+    uint32_t excludedNodeId,
     uint64_t realmHash,
-    size_t maxCount
-) const
+    const RuntimeWorldPosition& targetPosition,
+    size_t maxCount,
+    bool requireJoinable) const
 {
-  std::vector<PeerDiscoveryNodeState> discoveredNodes = {};
-
+  std::vector<const ActiveNodeState*> ordered = {};
   for (const ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == requestingNodeId) continue;
+    if (node.nodeId == excludedNodeId) continue;
     if (node.realmHash != realmHash) continue;
-
-    PeerDiscoveryNodeState discoveredNode = {};
-    discoveredNode.nodeId = node.nodeId;
-    discoveredNode.protocolVersion = node.protocolVersion;
-    discoveredNode.realmHash = node.realmHash;
-    discoveredNode.peerAddress = node.peerAddress;
-    discoveredNodes.push_back(discoveredNode);
-    if (discoveredNodes.size() >= maxCount) break;
+    if (requireJoinable && !node.acceptsJoins) continue;
+    ordered.push_back(&node);
   }
 
-  return discoveredNodes;
+  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b) {
+    return ComputeRuntimeWorldDistanceSquared(a->position, targetPosition)
+        < ComputeRuntimeWorldDistanceSquared(b->position, targetPosition);
+  });
+
+  if (ordered.size() > maxCount) ordered.resize(maxCount);
+  return ordered;
+}
+
+std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildNeighborCandidates(
+    uint32_t excludedNodeId,
+    uint64_t realmHash,
+    const RuntimeWorldPosition& localPosition,
+    const RuntimeInterestArea& localInterestArea,
+    size_t maxCount) const
+{
+  std::vector<const ActiveNodeState*> ordered = {};
+  for (const ActiveNodeState& node : nodes)
+  {
+    if (node.nodeId == excludedNodeId) continue;
+    if (node.realmHash != realmHash) continue;
+    if (!RuntimeInterestAreasOverlap(localPosition, localInterestArea, node.position, node.interestArea)) continue;
+    ordered.push_back(&node);
+  }
+
+  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b) {
+    return ComputeRuntimeWorldDistanceSquared(a->position, localPosition)
+        < ComputeRuntimeWorldDistanceSquared(b->position, localPosition);
+  });
+
+  if (ordered.size() > maxCount) ordered.resize(maxCount);
+  return ordered;
 }

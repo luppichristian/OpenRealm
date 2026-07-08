@@ -30,9 +30,9 @@ Do not describe this repo as if it already contains distributed networking or co
 - Build system: `bbs`
 - Windowing/render/input/audio: `raylib`
 - Profiling dependency: `tracy`
-- Runtime node-to-node networking scaffold: ENet binary UDP transport
+- Runtime node-to-node networking scaffold: ENet binary UDP transport with explicit world-position joins, topology snapshots, and player snapshots
 - Blockchain JSON-RPC integration scaffold: `cpp-httplib` + `nlohmann/json`
-- Terminal configuration UI: vendored `term.h` (`node/cli/third_party/term.h`) with a small native C implementation unit linked into the node targets
+- `node/cli/` still exists as legacy TUI code, but relay/simulator now boot directly from `config.json` and the default native targets no longer link the CLI path
 
 ## Repository Layout
 
@@ -53,47 +53,44 @@ Do not describe this repo as if it already contains distributed networking or co
 
 - `node/runtime/`
   - Runtime node-to-node transport code and node-local runtime configuration.
-  - `NodeConfigFiles.*` loads root `config.json` so simulator/relay nodes can source wallet, bind, node-id, runtime-loop, and local node defaults from JSON instead of verbose CLI flags.
-  - Root `config.json` should stay target-agnostic for shared runtime settings: common runtime fields belong under shared sections like `runtime`, `runtime.interest`, and `runtime.limits` instead of being split per target type.
+  - `NodeConfigFiles.*` loads root `config.json` so simulator/relay nodes can source wallet, bind, node-id, runtime-loop, join-target, and topology defaults from JSON instead of verbose CLI flags.
+  - Root `config.json` should stay target-agnostic for shared runtime settings: common runtime fields belong under `runtime`, `runtime.position`, `runtime.areaOfInterest`, `runtime.join`, `runtime.limits`, and `runtime.periodsMs` instead of per-target splits.
   - `ProtocolVersion.h` centralizes the explicit runtime protocol version (`kRuntimeProtocolVersion`) and packet-header version (`kRuntimePacketVersion`).
   - `RuntimeClient.*` wraps the current ENet binary-packet scaffold.
-  - `Packet.*` owns the current runtime binary packet header/payload helpers, including handshake and peer-discovery payload encoding/decoding.
-  - `ActiveNodeBucket.*` tracks live runtime peers by node id and peer address so duplicate node identities can be rejected.
-  - `PacketValidator.*` validates incoming runtime packets, decodes handshake payloads, enforces explicit protocol-version + realm-hash matching, and rejects duplicate/self node ids.
+  - `Packet.*` now owns handshake, join-request/join-response, topology-snapshot, and player-snapshot packet encoding/decoding.
+  - `ActiveNodeBucket.*` tracks live runtime peers by node id, peer address, world position, AOI, and connection state so proximity-based neighbor selection can be maintained.
+  - `PacketValidator.*` validates incoming runtime packets, decodes handshakes, enforces explicit protocol-version + realm-hash matching, and rejects duplicate/self node ids.
   - `RuntimeRealm.*` builds the runtime realm fingerprint/hash from the explicit runtime protocol version plus blockchain config + fetched global params so peers can confirm they are on the same environment.
   - `RuntimeHash.*` owns the current 64-bit runtime hash helper used for realm fingerprints.
+  - `RuntimeSession.*` is the current topology/runtime coordinator for relay, simulator, and client nodes.
 - `node/cli/`
-  - Shared console configuration UI for non-client nodes.
-  - `NodeCli.*` is now a term.h-based full-screen TUI for relay/simulator nodes: arrow-key navigation, inline editors/toggles, realm picker, dirty-state tracking, reload/save/launch actions, and a live realm/launch summary panel.
-  - `NodeCliTerm.c` is the tiny C implementation unit that defines `TIMPLEMENTATION`; `node/cli/third_party/term.h` is vendored from the upstream `term.h` repository.
-  - Client nodes should not use this CLI because they are expected to get in-game GUI configuration later.
+  - Legacy console configuration UI for non-client nodes.
+  - It is no longer part of the default relay/simulator build path after the runtime-session cutover, so do not wire new runtime behavior through it unless the project explicitly revives that path.
 - `node/blockchain/`
   - Native-side orchestration-layer / JSON-RPC integration code.
   - `RealmConfigFiles.*` loads selected realm data from `<realm>/realm.json` and `<realm>/jump_nodes.json`, including blockchain config, realm name, and jump-node defaults.
   - `SmartContract.*` is the common base for native contract wrappers; the shared RPC/address helpers now live in `SmartContract.cpp` instead of being fully inlined in the header.
-  - `ProtocolVersion.h` centralizes the explicit blockchain/orchestration protocol version (`kBlockchainProtocolVersion`).
   - `BlockchainConfig.*` holds the native-side blockchain interaction configuration: protocol version, RPC URL, contract addresses, and request timeouts.
   - `BlockchainAbi.*` contains the current lightweight Ethereum ABI call encoding/decoding helpers used by the native wrappers.
   - `Wallet.*` currently abstracts the selected wallet account for the native layer; transaction signing/submission is not implemented yet.
   - `BlockchainRpcClient.*` wraps JSON-RPC calls to the orchestration-layer backend.
   - `GlobalParamsContract.*`, `PlayerRegistryContract.*`, `ChunkClaimsContract.*`, and `MarketplaceContract.*` are the native contract wrapper classes for the current runtime-facing orchestration reads; each wrapper keeps its own related POD read models in its header instead of using a shared blockchain-types header.
 - `node/client/Game.*`
-  - App shell and frame loop.
+
   - Owns window/audio init and shutdown.
   - Owns the top-level `World`, `ClientWorld`, `ClientMenu`, and `ColorMenu`.
   - Receives the shared `TaskManager` from the entrypoint instead of owning it.
   - Initializes the window/audio/task-manager shell up front, keeps the client main menu open before gameplay starts, and creates/shuts down the playable world session when entering or leaving play.
+  - Starts a `RuntimeSession` for client nodes, joins around the explicit target position selected in the client menu, and reapplies local spawn when the runtime resolves a better position.
 - `node/client/ClientMenu.*`
   - In-game GUI menu flow for client nodes.
   - Owns the main menu, play/network selection menu, options menu, credits screen, and pause menu.
-  - Persists client-only settings and selected realm/jump node through `config.json`.
-  - Menu hitboxes/interaction rows should share the same layout constants as the drawn widgets so clickable regions stay aligned with the visible controls.
+  - Persists client-only settings, selected realm/jump node, and explicit join target position through `config.json`.
   - Long client-menu text should be wrapped or width-fitted to the menu panel instead of being drawn as a single unbounded line.
 - `node/client/ClientConfigFiles.*`
   - Client-only config/realm file helpers.
   - Loads/saves the `client` block in root `config.json` and discovers playable realms from `realms/*`.
 - `node/client/ClientWorld.*`
-
   - Owns asset/audio caches, GPU upload state, and render orchestration for a `World`.
   - Receives the shared `TaskManager` from `Game` instead of owning worker threads directly.
 - `node/client/PlayerController.*`
@@ -102,11 +99,11 @@ Do not describe this repo as if it already contains distributed networking or co
   - Applies client-configured mouse sensitivity and invert-Y options before sending look events.
   - Draws HUD elements.
 - `node/client/ColorMenu.*`
-
+  - Color palette / theme menu flow for client nodes.
 - `node/client/AssetManager.*`
   - Lazy asset cache for textures, shaders, shader locations, and sounds.
 - `node/client/SoundPlayer.*`
-  - Local sound playback helper with pooled alias voices.
+
 - `node/client/WorldClientData.h`
   - Client-owned per-chunk-section render state.
   - Keeps `Model`, bounds, and queued/uploaded flags out of simulation data.
@@ -162,7 +159,8 @@ Do not describe this repo as if it already contains distributed networking or co
 - `config.json`
   - Root runtime node configuration file.
   - Stores the selected default realm plus target-agnostic runtime settings, service/simulation controls, client menu settings, and wallet account identity.
-  - Now also stores a `client` object for client-node menu settings (`realm`, `jumpNodeIndex`, `masterVolume`, `mouseSensitivity`, `invertMouseY`, `showFps`).
+  - The current clean runtime shape is: `runtime.position`, `runtime.areaOfInterest`, `runtime.join.targetPosition`, `runtime.join.maxCandidates`, `runtime.join.maxHops`, `runtime.limits.maxNodeConnections`, `runtime.limits.maxKnownNodes`, and `runtime.periodsMs.{neighborRefresh,topologyBroadcast,playerBroadcast}`.
+  - The `client` object also stores `joinTargetPosition` so the in-game menu can choose where the client wants to enter the world.
 - `blockchain/`
   - Root for the orchestration-layer work separate from the C++ runtime/client code.
 
@@ -188,11 +186,10 @@ Do not describe this repo as if it already contains distributed networking or co
 ## Architecture Notes
 
 - The `project.bbs` native targets are split by node type:
-  - `openrealm_client` builds `openrealm-client` from the client/world/task-manager folders plus `node/targets/Client.cpp`.
-  - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
-  - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/cli/*.cpp`, `node/blockchain/*.cpp`, and `node/targets/Relay.cpp`.
+  - `openrealm_client` builds `openrealm-client` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, `node/client/*.cpp`, and `node/targets/Client.cpp`.
+  - `openrealm_simulator` builds `openrealm-simulator` from `node/TaskManager.cpp`, `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Simulator.cpp`.
+  - `openrealm_relay` builds `openrealm-relay` from `node/runtime/*.cpp`, `node/blockchain/*.cpp`, `node/world/*.cpp`, and `node/targets/Relay.cpp`.
   - `openrealm_node_launcher` builds `openrealm-node-launcher` from `node_launcher/*.cpp` and is responsible for assembling disposable per-session configs/logs and spawning multiple headless relay/simulator node processes for a chosen realm.
-  - The term.h TUI is linked through a dedicated `termh_impl` C static library (`node/cli/NodeCliTerm.c`) instead of forcing the C implementation directly through the C++ targets.
   - The simulator/relay targets no longer hardcode `ws2_32` / `winmm`; ENet's package target supplies the required platform linkage transitively, which keeps `project.bbs` itself platform-agnostic.
 
 - The codebase is mostly split into two layers:
@@ -221,10 +218,10 @@ Do not describe this repo as if it already contains distributed networking or co
 - Region-of-interest should be a first-class runtime concept and may be centered around the local player, claimed/hosted chunks, settlements, or manually configured sim areas.
 - Current node-role vocabulary:
   - sim node: simulates world state without rendering
-  - relay node: forwards/relays network traffic to help connectivity without simulating gameplay locally
+  - relay node: participates in topology bootstrap and proximity-based runtime connectivity without being the player-facing renderer
   - client node: simulates, renders, and communicates as a player-facing node
-  - jump node: discoverable entrypoint label for a known node; conceptually a public-facing relay/discovery role rather than a gameplay authority
-- Client nodes are inherently simulation-capable for the regions they participate in; dedicated sim nodes should stay headless, and relay nodes should remain relay-only/lightweight by default.
+  - jump node: discoverable entrypoint label for a known node; conceptually a public-facing bootstrap role rather than a gameplay authority
+
 - Chunk liveness currently assumes no mandatory minimum replication factor for MVP: a single active sim-bearing node can keep a chunk alive, nearby nodes may inherit responsibility, and relay-only nodes do not keep chunks alive.
 - Runtime authority for chunks should be local and dynamic: nearby active simulation-capable nodes are the intended basis for authority, and ownership should not automatically equal simulation authority.
 - Runtime edit propagation should flow from client action to relevant sim-bearing authority, which validates against ownership/permission rules and then rebroadcasts accepted edits to neighboring peers.
@@ -233,18 +230,18 @@ Do not describe this repo as if it already contains distributed networking or co
 - Runtime permission enforcement is expected to cache ownership/permission state from the orchestration layer, reject unauthorized edits, and bind important actions to runtime identities linked to wallet-backed ownership where relevant.
 - Runtime identity delegation is currently expected to use wallet-authorized expiring runtime-session keys recorded in `PlayerRegistry`; runtime code should resolve incoming signers through the registry before applying ownership/permission rules.
 - Current runtime handshake validation is intentionally environment-aware: nodes advertise a realm hash derived from blockchain config plus fetched `GlobalParams`, and handshake acceptance also rejects duplicate node ids coming from different peer addresses.
-- Peer discovery packets currently advertise the requester's node id plus a filtered list of known same-realm peers from `ActiveNodeBucket`; the relay smoke target exercises discovery by excluding the requester and returning the remaining compatible peers.
-- Runtime chunk-interest packets currently advertise a node id plus center chunk/radius subscription data; the relay keeps the latest interest per node and uses it to prefer locality-aware forwarding of runtime world-event packets, with a same-realm peer fallback when no explicit interest match is available yet.
-- The current runtime sim-node verification path uses per-process config files with unique simulator `nodeId` and bind-port values; with two simulator nodes on the same relay, one simulator can publish a configured place event and another interested simulator can receive and apply that forwarded runtime world-event into its live world state.
-- Wallet identity currently assumes one wallet maps to one registered player identity at a time; guest/local-only play may exist, but guests should not exercise ownership-derived rights.
+- The current runtime packets are handshake, join-request/join-response, topology-snapshot, and player-snapshot packets.
+- Jump nodes are bootstrap/discovery addresses only: they help a node find nearby topology for an explicit target world position, but they do not define the joining node's in-world spawn point.
+- Runtime connectivity is now proximity-biased: nodes exchange topology snapshots, choose a capped set of nearby neighbors, and remote players replicate through player snapshots.
+
 - Important early runtime security concerns are fake edits, stale-state replay, false peer advertisements, spam/flooding, and eclipse/isolation attempts; early mitigations should include authentication hooks for important actions, rate limits, replay protection, permission checks, peer sanity checks, and handshake version checks.
 - Early marketplace scope should stay narrow: wallet connection, registration, chunk claims, and later simple buy/sell/transfer flows with percentage-fee marketplace mediation; NFT compatibility is acceptable, but gameplay needs take priority over NFT-first framing.
 - The current concrete orchestration-layer implementation is NFT-backed: `PlayerRegistry` manages one active player identity per wallet + unique handles, `ChunkClaims` mints one ERC721-like ownership token per claimed chunk and resets delegated-editor state on transfer, and `Marketplace` supports fixed-price listings plus English auctions with protocol-fee retention.
 - The current runtime-facing blockchain read model is: resolve signer/session via `PlayerRegistry`, read chunk ownership/permission state via `ChunkClaims.GetChunkRuntimeState(...)`, and read active sale state via `Marketplace.GetSaleStateForChunk(...)`.
 - Claimed chunks are expected to be economically meaningful even when voxel state is volatile; chunks nearer world origin `(0, 0)` are expected to be more valuable because they are more likely to stay alive due to denser node activity.
-- Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, add peer discovery/jump-node flow, implement region-of-interest topology + relay behavior, implement chunk responsibility/authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
+- Suggested implementation order is: strengthen headless/runtime separation, define network protocol + identity basics, refine bootstrap/topology walking, implement region-of-interest authority, then synchronized edit propagation, then wallet/contracts, then marketplace logic.
 - `World` is the main composition root for world-side systems.
-- World event buffering uses `std::queue<WorldEvent>` semantics with an explicit `MAX_WORLD_EVENTS` cap enforced by `World::SendEvent()`.
+
 - `ClientWorld` is the main composition root for client-only systems that consume `World`.
 - The code favors direct ownership and explicit orchestration over abstract interfaces.
 - Background task execution is centralized in `TaskManager`, owned outside both `Game` and `World` at the entrypoint layer; client mesh jobs submit directly into it from `WorldMeshSystem`, and other systems can reuse the same manager.

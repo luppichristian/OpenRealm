@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../runtime/RuntimeWorldPosition.h"
+
 #include <string>
 #include <vector>
 
@@ -22,6 +24,7 @@ struct ClientFilesConfig
   std::string configPath = "config.json";
   std::string selectedRealm = "realms/test";
   int jumpNodeIndex = 0;
+  RuntimeWorldPosition joinTargetPosition = {};
   float masterVolume = 1.0f;
   float mouseSensitivity = 1.0f;
   bool invertMouseY = false;

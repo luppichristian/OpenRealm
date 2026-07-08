@@ -11,7 +11,7 @@ Today, this repository primarily contains the **local engine/client foundation**
 
 It also now contains a separate `blockchain/` workspace for the early **orchestration layer**: wallet-linked player registration, NFT-backed chunk claims, and marketplace logic.
 
-> The decentralized multiplayer runtime is the project direction, not the current implementation state. This repo does **not** yet contain a full peer-to-peer runtime or consensus layer.
+> The decentralized multiplayer runtime is still early and incomplete, but the repo now contains a first real node-to-node runtime cut: ENet transport, explicit world-position joins, topology snapshots, proximity-based neighbor selection, and remote player snapshot replication. It is still not a full peer-to-peer game or consensus layer.
 
 ## High-level architecture
 
@@ -38,10 +38,11 @@ flowchart TD
   A --> A3[Audio]
   A --> A4[Chunk mesh uploads]
 
-  B[Runtime layer - planned] --> B1[Peer discovery]
-  B --> B2[Region-of-interest simulation]
-  B --> B3[Chunk authority / replication]
-  B --> B4[Edit propagation]
+  B[Runtime layer - current first cut] --> B1[Jump-node bootstrap]
+  B --> B2[Explicit join target position]
+  B --> B3[Topology snapshots]
+  B --> B4[Proximity neighbor selection]
+  B --> B5[Remote player snapshots]
 
   C[Orchestration layer] --> C1[Player registration]
   C --> C2[Chunk ownership]
@@ -98,13 +99,13 @@ flowchart LR
 ### Root node/client code
 - `node/targets/` — executable entry points for client, simulator, and relay node types
 - `node/targets/Client.cpp` — client node entrypoint; creates the shared `TaskManager` and starts `Game`
-- `node/targets/Simulator.cpp` — simulator node entrypoint for headless world simulation work
-- `node/targets/Relay.cpp` — relay node entrypoint plus the current runtime-networking/blockchain integration smoke test
+- `node/targets/Simulator.cpp` — simulator node entrypoint for headless world simulation plus the new runtime-session loop
+- `node/targets/Relay.cpp` — relay node entrypoint for topology bootstrap / relay participation in the runtime graph
 - `node/client/` — app shell, rendering, input glue, asset/audio caches, meshing, HUD/UI
 - `node/world/` — headless simulation-side world systems, voxel data, player system, world events
-- `node/runtime/` — node-to-node runtime transport code
-- `node/cli/` — console configuration UI for relay and simulator nodes
-- `node/blockchain/` — orchestration-layer / JSON-RPC integration code used by native nodes
+- `node/runtime/` — runtime transport, topology/session state, packet serialization, and config loading
+- `node/cli/` — legacy non-client node TUI; no longer part of the default relay/simulator build path
+
 - `node/TaskManager.*` — generic background worker queue
 - `assets/` — shaders and sounds used at runtime
 
@@ -153,14 +154,21 @@ Example multi-node local runtime session:
 bbs run -t openrealm_node_launcher -a --realm test --relays 1 --simulators 2 --run-seconds 5
 ```
 
+The current runtime model is:
+- jump nodes are network bootstrap points only
+- clients/simulators join around an explicit world target position
+- nodes exchange topology snapshots and keep only nearby neighbors
+- remote players are replicated through player snapshots
+
 ### Native dependencies
 - `raylib`
 - `tracy`
 - `cpp-httplib`
 - `nlohmann/json`
 
-The current relay scaffold uses:
+The current native runtime stack uses:
 - ENet for binary node-to-node packets
+- explicit runtime packets for handshake, join requests/responses, topology snapshots, and player snapshots
 - `cpp-httplib` + `nlohmann/json` only for blockchain JSON-RPC
 
 These are declared in `project.bbs`.
@@ -216,9 +224,9 @@ I have **not** wired a Solidity formatter into the repo in this change, but that
 
 The target architecture is roughly:
 1. keep strengthening the local client/runtime split
-2. introduce headless simulation/node behavior
-3. add peer discovery and jump-node flow
-4. add region-of-interest networking and chunk authority
+2. expand the current world-position runtime into full chunk/world replication
+3. add stronger topology walking, authority, and edit propagation
+4. add region-of-interest chunk state networking and ownership-aware simulation
 5. connect runtime permissions to blockchain-backed ownership and identity
 
 ## Status
@@ -229,7 +237,7 @@ Current implementation is strongest in:
 - initial NFT-backed orchestration-layer contracts and tests
 
 Still future work:
-- decentralized runtime networking
-- peer discovery / relay behavior
+- chunk/voxel replication across nodes
+- stronger topology walking / discovery refinement
 - authoritative chunk simulation across multiple nodes
 - real gameplay integration with wallet/ownership flows
