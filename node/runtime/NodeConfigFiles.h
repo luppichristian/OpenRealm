@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <string>
 
-static constexpr uint32_t DEFAULT_RUNTIME_NODE_ID = 7001;
 static constexpr uint32_t DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS = 50;
 static constexpr uint32_t DEFAULT_RUNTIME_JOIN_CANDIDATE_COUNT = 6;
 static constexpr uint32_t DEFAULT_RUNTIME_JOIN_MAX_HOPS = 8;
@@ -28,17 +27,13 @@ static constexpr uint32_t MAX_RUNTIME_PERIOD_MS = 600000;
 struct NodeFilesConfig
 {
   std::string configPath = "config.json";
-  std::string selectedRealm = "realms/test";
   Wallet wallet = {};
 
   RuntimePeerAddress runtimeBindAddress = {"127.0.0.1", 46010};
-  int runtimeJumpNodeIndex = 0;
-  uint32_t runtimeNodeId = DEFAULT_RUNTIME_NODE_ID;
   bool runtimeEnabled = false;
   bool runtimeAcceptsJoins = true;
   RuntimeWorldPosition runtimePosition = {};
   RuntimeInterestArea runtimeInterestArea = {};
-  RuntimeWorldPosition runtimeJoinTargetPosition = {};
   uint32_t runtimeReceiveTimeoutMs = DEFAULT_RUNTIME_RECEIVE_TIMEOUT_MS;
   size_t runtimeMaxNodeConnections = DEFAULT_RUNTIME_MAX_NODE_CONNECTIONS;
   size_t runtimeMaxKnownNodes = DEFAULT_RUNTIME_MAX_KNOWN_NODES;
@@ -57,7 +52,8 @@ struct NodeFilesConfig
 struct NodeBootConfig
 {
   std::string configPath = "config.json";
-  std::string realmDirectory = {};
+  std::string realmDirectory = "realms/test";
+  int jumpNodeIndex = 0;
 };
 
 NodeBootConfig ParseNodeBootConfig(int argc, char** argv);

@@ -57,8 +57,7 @@ class ChunkClaimsContract : public SmartContract
       int32_t x,
       int32_t y,
       const std::string& from,
-      const std::string& to
-  ) const;
+      const std::string& to) const;
   std::string OwnerOf(int32_t x, int32_t y) const;
   std::string TokenIdOfChunk(int32_t x, int32_t y) const;
   ChunkClaimState GetClaim(int32_t x, int32_t y) const;
@@ -79,8 +78,7 @@ class ChunkClaimsContract : public SmartContract
   BlockchainTransactionReceipt TransferFrom(
       const std::string& from,
       const std::string& to,
-      const std::string& tokenId
-  ) const;
+      const std::string& tokenId) const;
   std::string TokenURI(const std::string& tokenId) const;
 
  protected:

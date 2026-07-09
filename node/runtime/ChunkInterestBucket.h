@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ActiveNodeBucket.h"
 #include "../Utils.h"
+#include "ActiveNodeBucket.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +9,7 @@
 
 struct ChunkInterestState
 {
-  uint32_t nodeId = 0;
+  RuntimePeerAddress peerAddress = {};
   RuntimeWorldPosition position = {};
   RuntimeInterestArea interestArea = {};
 };
@@ -22,12 +22,12 @@ class ChunkInterestBucket
   {
   }
 
-  bool RegisterInterest(uint32_t nodeId, const RuntimeWorldPosition& position, const RuntimeInterestArea& interestArea);
+  bool RegisterInterest(const RuntimePeerAddress& peerAddress, const RuntimeWorldPosition& position, const RuntimeInterestArea& interestArea);
   size_t GetCount() const;
-  const ChunkInterestState* FindByNodeId(uint32_t nodeId) const;
+  const ChunkInterestState* FindByPeerAddress(const RuntimePeerAddress& peerAddress) const;
   std::vector<RuntimePeerAddress> BuildInterestedPeerAddresses(
       const ActiveNodeBucket& activeNodes,
-      uint32_t senderNodeId,
+      const RuntimePeerAddress& senderPeerAddress,
       const RuntimeWorldPosition& senderPosition,
       const RuntimeInterestArea& senderInterestArea) const;
 

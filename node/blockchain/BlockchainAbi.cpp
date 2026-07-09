@@ -19,9 +19,7 @@ static std::string StripHexPrefix(const std::string& value)
 static std::string Lowercase(std::string value)
 {
   std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
-  {
-    return (char)std::tolower(c);
-  });
+                 { return (char)std::tolower(c); });
   return value;
 }
 

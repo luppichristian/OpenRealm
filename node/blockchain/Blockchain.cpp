@@ -3,13 +3,7 @@
 #include <utility>
 
 Blockchain::Blockchain(BlockchainConfig blockchainConfig, Wallet connectedWallet)
-    : config(std::move(blockchainConfig))
-    , wallet(std::move(connectedWallet))
-    , rpcClient(config)
-    , globalParams(&rpcClient, &wallet, config.globalParamsAddress)
-    , playerRegistry(&rpcClient, &wallet, config.playerRegistryAddress)
-    , chunkClaims(&rpcClient, &wallet, config.chunkClaimsAddress)
-    , marketplace(&rpcClient, &wallet, config.marketplaceAddress)
+    : config(std::move(blockchainConfig)), wallet(std::move(connectedWallet)), rpcClient(config), globalParams(&rpcClient, &wallet, config.globalParamsAddress), playerRegistry(&rpcClient, &wallet, config.playerRegistryAddress), chunkClaims(&rpcClient, &wallet, config.chunkClaimsAddress), marketplace(&rpcClient, &wallet, config.marketplaceAddress)
 {
 }
 

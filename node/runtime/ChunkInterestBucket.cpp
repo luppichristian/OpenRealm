@@ -1,10 +1,10 @@
 #include "ChunkInterestBucket.h"
 
-bool ChunkInterestBucket::RegisterInterest(uint32_t nodeId, const RuntimeWorldPosition& position, const RuntimeInterestArea& interestArea)
+bool ChunkInterestBucket::RegisterInterest(const RuntimePeerAddress& peerAddress, const RuntimeWorldPosition& position, const RuntimeInterestArea& interestArea)
 {
   for (ChunkInterestState& state : interests)
   {
-    if (state.nodeId != nodeId) continue;
+    if (!RuntimePeerAddressEquals(state.peerAddress, peerAddress)) continue;
     state.position = position;
     state.interestArea = interestArea;
     return true;
@@ -12,7 +12,7 @@ bool ChunkInterestBucket::RegisterInterest(uint32_t nodeId, const RuntimeWorldPo
 
   if (interests.size() >= maxInterests) return false;
   interests.push_back({
-      .nodeId = nodeId,
+      .peerAddress = peerAddress,
       .position = position,
       .interestArea = interestArea,
   });
@@ -24,27 +24,27 @@ size_t ChunkInterestBucket::GetCount() const
   return interests.size();
 }
 
-const ChunkInterestState* ChunkInterestBucket::FindByNodeId(uint32_t nodeId) const
+const ChunkInterestState* ChunkInterestBucket::FindByPeerAddress(const RuntimePeerAddress& peerAddress) const
 {
   for (const ChunkInterestState& state : interests)
   {
-    if (state.nodeId == nodeId) return &state;
+    if (RuntimePeerAddressEquals(state.peerAddress, peerAddress)) return &state;
   }
   return nullptr;
 }
 
 std::vector<RuntimePeerAddress> ChunkInterestBucket::BuildInterestedPeerAddresses(
     const ActiveNodeBucket& activeNodes,
-    uint32_t senderNodeId,
+    const RuntimePeerAddress& senderPeerAddress,
     const RuntimeWorldPosition& senderPosition,
     const RuntimeInterestArea& senderInterestArea) const
 {
   std::vector<RuntimePeerAddress> peerAddresses = {};
   for (const ChunkInterestState& state : interests)
   {
-    if (state.nodeId == senderNodeId) continue;
+    if (RuntimePeerAddressEquals(state.peerAddress, senderPeerAddress)) continue;
     if (!RuntimeInterestAreasOverlap(senderPosition, senderInterestArea, state.position, state.interestArea)) continue;
-    const ActiveNodeState* activeNode = activeNodes.FindByNodeId(state.nodeId);
+    const ActiveNodeState* activeNode = activeNodes.FindByPeerAddress(state.peerAddress);
     if (activeNode == nullptr) continue;
     peerAddresses.push_back(activeNode->peerAddress);
   }

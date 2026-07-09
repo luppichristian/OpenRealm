@@ -37,14 +37,10 @@ inline bool RuntimeInterestAreasOverlap(
     const RuntimeWorldPosition& bPosition,
     const RuntimeInterestArea& bArea)
 {
-  return ComputeRuntimeAxisDistance(aPosition.x, bPosition.x) <= (aArea.radiusX + bArea.radiusX)
-      && ComputeRuntimeAxisDistance(aPosition.y, bPosition.y) <= (aArea.radiusY + bArea.radiusY)
-      && ComputeRuntimeAxisDistance(aPosition.z, bPosition.z) <= (aArea.radiusZ + bArea.radiusZ);
+  return ComputeRuntimeAxisDistance(aPosition.x, bPosition.x) <= (aArea.radiusX + bArea.radiusX) && ComputeRuntimeAxisDistance(aPosition.y, bPosition.y) <= (aArea.radiusY + bArea.radiusY) && ComputeRuntimeAxisDistance(aPosition.z, bPosition.z) <= (aArea.radiusZ + bArea.radiusZ);
 }
 
 inline std::string DescribeRuntimeWorldPosition(const RuntimeWorldPosition& position)
 {
-  return "(" + std::to_string(position.x)
-      + ", " + std::to_string(position.y)
-      + ", " + std::to_string(position.z) + ")";
+  return "(" + std::to_string(position.x) + ", " + std::to_string(position.y) + ", " + std::to_string(position.z) + ")";
 }

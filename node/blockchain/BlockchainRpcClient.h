@@ -29,22 +29,19 @@ class BlockchainRpcClient
       const std::string& callData,
       std::string* resultHex,
       const std::string& fromAddress = {},
-      const std::string& valueHex = {}
-  ) const;
+      const std::string& valueHex = {}) const;
   bool EthSendTransaction(
       const std::string& fromAddress,
       const std::string& contractAddress,
       const std::string& callData,
       std::string* transactionHash,
-      const std::string& valueHex = {}
-  ) const;
+      const std::string& valueHex = {}) const;
   bool EthGetTransactionReceipt(const std::string& transactionHash, BlockchainTransactionReceipt* receipt) const;
   bool WaitForTransactionReceipt(
       const std::string& transactionHash,
       BlockchainTransactionReceipt* receipt,
       int timeoutMilliseconds = 15000,
-      int pollMilliseconds = 200
-  ) const;
+      int pollMilliseconds = 200) const;
 
  private:
   BlockchainConfig config = {};

@@ -1,6 +1,7 @@
 #include "NodeConfigFiles.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 
@@ -96,6 +97,13 @@ static RuntimeInterestArea ReadInterestAreaValue(const nlohmann::json& json, con
   return area;
 }
 
+static const nlohmann::json& ReadObjectOrEmpty(const nlohmann::json& json, const char* key)
+{
+  static const nlohmann::json empty = nlohmann::json::object();
+  if (!json.is_object() || key == nullptr || !json.contains(key) || !json[key].is_object()) return empty;
+  return json[key];
+}
+
 static size_t ClampSizeValue(size_t value, size_t minimumValue, size_t maximumValue)
 {
   return std::max(minimumValue, std::min(value, maximumValue));
@@ -121,6 +129,11 @@ NodeBootConfig ParseNodeBootConfig(int argc, char** argv)
       config.realmDirectory = argv[++i];
       continue;
     }
+    if (std::strcmp(argv[i], "--jump-node-index") == 0 && i + 1 < argc)
+    {
+      config.jumpNodeIndex = std::max(0, std::atoi(argv[++i]));
+      continue;
+    }
   }
   return config;
 }
@@ -137,41 +150,39 @@ bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config,
   if (!LoadJsonFile(configPath, &root, errorMessage)) return false;
 
   config->configPath = configPath;
-  config->selectedRealm = ReadStringValue(root, "realm", config->selectedRealm);
 
-  const nlohmann::json walletJson = root.value("wallet", nlohmann::json::object());
-  config->wallet.Connect(ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress()));
+  const nlohmann::json& walletJson = ReadObjectOrEmpty(root, "wallet");
+  config->wallet.Connect(ReadStringValue(root, "accountAddress", ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress())));
 
-  const nlohmann::json runtimeJson = root.value("runtime", nlohmann::json::object());
-  const nlohmann::json joinJson = runtimeJson.value("join", nlohmann::json::object());
-  const nlohmann::json limitsJson = runtimeJson.value("limits", nlohmann::json::object());
-  const nlohmann::json periodsJson = runtimeJson.value("periodsMs", nlohmann::json::object());
-  const nlohmann::json simulationJson = root.value("simulation", nlohmann::json::object());
-  const nlohmann::json serviceJson = root.value("service", nlohmann::json::object());
+  const nlohmann::json& runtimeJson = ReadObjectOrEmpty(root, "runtime");
+  const nlohmann::json& joinJson = ReadObjectOrEmpty(root, "join");
+  const nlohmann::json& legacyJoinJson = ReadObjectOrEmpty(runtimeJson, "join");
+  const nlohmann::json& limitsJson = ReadObjectOrEmpty(root, "limits");
+  const nlohmann::json& legacyLimitsJson = ReadObjectOrEmpty(runtimeJson, "limits");
+  const nlohmann::json& periodsJson = ReadObjectOrEmpty(root, "periodsMs");
+  const nlohmann::json& legacyPeriodsJson = ReadObjectOrEmpty(runtimeJson, "periodsMs");
+  const nlohmann::json& simulationJson = ReadObjectOrEmpty(root, "simulation");
+  const nlohmann::json& serviceJson = ReadObjectOrEmpty(root, "service");
 
-  config->runtimeBindAddress = ReadPeerAddressValue(runtimeJson.value("bindAddress", nlohmann::json::object()), config->runtimeBindAddress);
-  config->runtimeJumpNodeIndex = ReadIntValue(runtimeJson, "jumpNodeIndex", config->runtimeJumpNodeIndex);
-  config->runtimeNodeId = ReadU32Value(runtimeJson, "nodeId", config->runtimeNodeId);
-  config->runtimeEnabled = ReadBoolValue(runtimeJson, "enabled", config->runtimeEnabled);
-  config->runtimeAcceptsJoins = ReadBoolValue(runtimeJson, "acceptsJoins", config->runtimeAcceptsJoins);
-  config->runtimePosition = ReadWorldPositionValue(runtimeJson.value("position", nlohmann::json::object()), config->runtimePosition);
-  config->runtimeInterestArea = ReadInterestAreaValue(runtimeJson.value("areaOfInterest", nlohmann::json::object()), config->runtimeInterestArea);
-  config->runtimeJoinTargetPosition = ReadWorldPositionValue(joinJson.value("targetPosition", nlohmann::json::object()), config->runtimeJoinTargetPosition);
-  config->runtimeReceiveTimeoutMs = ReadU32Value(runtimeJson, "receiveTimeoutMs", config->runtimeReceiveTimeoutMs);
-  config->runtimeMaxNodeConnections = ReadSizeValue(limitsJson, "maxNodeConnections", config->runtimeMaxNodeConnections);
-  config->runtimeMaxKnownNodes = ReadSizeValue(limitsJson, "maxKnownNodes", config->runtimeMaxKnownNodes);
-  config->runtimeJoinCandidateCount = ReadU32Value(joinJson, "maxCandidates", config->runtimeJoinCandidateCount);
-  config->runtimeJoinMaxHops = ReadU32Value(joinJson, "maxHops", config->runtimeJoinMaxHops);
-  config->runtimeNeighborRefreshMs = ReadU32Value(periodsJson, "neighborRefresh", config->runtimeNeighborRefreshMs);
-  config->runtimeTopologyBroadcastMs = ReadU32Value(periodsJson, "topologyBroadcast", config->runtimeTopologyBroadcastMs);
-  config->runtimePlayerBroadcastMs = ReadU32Value(periodsJson, "playerBroadcast", config->runtimePlayerBroadcastMs);
+  config->runtimeBindAddress = ReadPeerAddressValue(ReadObjectOrEmpty(root, "bindAddress"), ReadPeerAddressValue(ReadObjectOrEmpty(runtimeJson, "bindAddress"), config->runtimeBindAddress));
+  config->runtimeEnabled = ReadBoolValue(root, "enabled", ReadBoolValue(runtimeJson, "enabled", config->runtimeEnabled));
+  config->runtimeAcceptsJoins = ReadBoolValue(root, "acceptsJoins", ReadBoolValue(runtimeJson, "acceptsJoins", config->runtimeAcceptsJoins));
+  config->runtimePosition = ReadWorldPositionValue(ReadObjectOrEmpty(root, "position"), ReadWorldPositionValue(ReadObjectOrEmpty(runtimeJson, "position"), config->runtimePosition));
+  config->runtimeInterestArea = ReadInterestAreaValue(ReadObjectOrEmpty(root, "areaOfInterest"), ReadInterestAreaValue(ReadObjectOrEmpty(runtimeJson, "areaOfInterest"), config->runtimeInterestArea));
+  config->runtimeReceiveTimeoutMs = ReadU32Value(root, "receiveTimeoutMs", ReadU32Value(runtimeJson, "receiveTimeoutMs", config->runtimeReceiveTimeoutMs));
+  config->runtimeMaxNodeConnections = ReadSizeValue(limitsJson, "maxNodeConnections", ReadSizeValue(legacyLimitsJson, "maxNodeConnections", config->runtimeMaxNodeConnections));
+  config->runtimeMaxKnownNodes = ReadSizeValue(limitsJson, "maxKnownNodes", ReadSizeValue(legacyLimitsJson, "maxKnownNodes", config->runtimeMaxKnownNodes));
+  config->runtimeJoinCandidateCount = ReadU32Value(joinJson, "maxCandidates", ReadU32Value(legacyJoinJson, "maxCandidates", config->runtimeJoinCandidateCount));
+  config->runtimeJoinMaxHops = ReadU32Value(joinJson, "maxHops", ReadU32Value(legacyJoinJson, "maxHops", config->runtimeJoinMaxHops));
+  config->runtimeNeighborRefreshMs = ReadU32Value(periodsJson, "neighborRefresh", ReadU32Value(legacyPeriodsJson, "neighborRefresh", config->runtimeNeighborRefreshMs));
+  config->runtimeTopologyBroadcastMs = ReadU32Value(periodsJson, "topologyBroadcast", ReadU32Value(legacyPeriodsJson, "topologyBroadcast", config->runtimeTopologyBroadcastMs));
+  config->runtimePlayerBroadcastMs = ReadU32Value(periodsJson, "playerBroadcast", ReadU32Value(legacyPeriodsJson, "playerBroadcast", config->runtimePlayerBroadcastMs));
 
-  config->simulatorFrames = ReadIntValue(simulationJson, "frames", config->simulatorFrames);
-  config->simulatorFrameTime = ReadFloatValue(simulationJson, "frameTime", config->simulatorFrameTime);
-  config->simulatorSleepMs = ReadIntValue(simulationJson, "sleepMs", config->simulatorSleepMs);
-  config->relayTicks = ReadIntValue(serviceJson, "ticks", config->relayTicks);
+  config->simulatorFrames = ReadIntValue(root, "frames", ReadIntValue(simulationJson, "frames", config->simulatorFrames));
+  config->simulatorFrameTime = ReadFloatValue(root, "frameTime", ReadFloatValue(simulationJson, "frameTime", config->simulatorFrameTime));
+  config->simulatorSleepMs = ReadIntValue(root, "sleepMs", ReadIntValue(simulationJson, "sleepMs", config->simulatorSleepMs));
+  config->relayTicks = ReadIntValue(root, "ticks", ReadIntValue(serviceJson, "ticks", config->relayTicks));
 
-  config->runtimeJumpNodeIndex = std::max(0, config->runtimeJumpNodeIndex);
   config->runtimeReceiveTimeoutMs = ClampU32Value(config->runtimeReceiveTimeoutMs, 1, MAX_RUNTIME_RECEIVE_TIMEOUT_MS);
   config->runtimeMaxNodeConnections = ClampSizeValue(config->runtimeMaxNodeConnections, 1, MAX_RUNTIME_NODE_CONNECTIONS);
   config->runtimeMaxKnownNodes = ClampSizeValue(config->runtimeMaxKnownNodes, config->runtimeMaxNodeConnections, MAX_RUNTIME_KNOWN_NODES);

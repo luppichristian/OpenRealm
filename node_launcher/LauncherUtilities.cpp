@@ -1,7 +1,7 @@
 #include "LauncherUtilities.h"
 
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <ctime>
 #include <iomanip>
 #include <sstream>

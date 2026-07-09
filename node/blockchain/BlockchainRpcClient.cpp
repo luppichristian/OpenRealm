@@ -92,8 +92,7 @@ bool BlockchainRpcClient::EthCall(
     const std::string& callData,
     std::string* resultHex,
     const std::string& fromAddress,
-    const std::string& valueHex
-) const
+    const std::string& valueHex) const
 {
   if (resultHex == nullptr || IsZeroBlockchainAddress(contractAddress) || callData.empty())
   {
@@ -102,7 +101,7 @@ bool BlockchainRpcClient::EthCall(
 
   nlohmann::json callObject = {
       {  "to", NormalizeBlockchainAddress(contractAddress)},
-      {"data",                           callData        }
+      {"data",                                    callData}
   };
   if (!fromAddress.empty() && !IsZeroBlockchainAddress(fromAddress))
   {
@@ -114,9 +113,9 @@ bool BlockchainRpcClient::EthCall(
   }
 
   const nlohmann::json payload = {
-      {"jsonrpc",                                 "2.0"},
-      {     "id",                                     1},
-      { "method",                            "eth_call"},
+      {"jsonrpc",                                         "2.0"},
+      {     "id",                                             1},
+      { "method",                                    "eth_call"},
       { "params", nlohmann::json::array({callObject, "latest"})}
   };
 
@@ -139,8 +138,7 @@ bool BlockchainRpcClient::EthSendTransaction(
     const std::string& contractAddress,
     const std::string& callData,
     std::string* transactionHash,
-    const std::string& valueHex
-) const
+    const std::string& valueHex) const
 {
   if (
       transactionHash == nullptr || IsZeroBlockchainAddress(fromAddress) || IsZeroBlockchainAddress(contractAddress) ||
@@ -150,9 +148,9 @@ bool BlockchainRpcClient::EthSendTransaction(
   }
 
   nlohmann::json txObject = {
-      {"from", NormalizeBlockchainAddress(fromAddress)},
+      {"from",     NormalizeBlockchainAddress(fromAddress)},
       {  "to", NormalizeBlockchainAddress(contractAddress)},
-      {"data",                           callData        }
+      {"data",                                    callData}
   };
   if (!valueHex.empty())
   {
@@ -160,9 +158,9 @@ bool BlockchainRpcClient::EthSendTransaction(
   }
 
   const nlohmann::json payload = {
-      {"jsonrpc",                              "2.0"},
-      {     "id",                                  1},
-      { "method",              "eth_sendTransaction"},
+      {"jsonrpc",                             "2.0"},
+      {     "id",                                 1},
+      { "method",             "eth_sendTransaction"},
       { "params", nlohmann::json::array({txObject})}
   };
 
@@ -188,9 +186,9 @@ bool BlockchainRpcClient::EthGetTransactionReceipt(const std::string& transactio
   }
 
   const nlohmann::json payload = {
-      {"jsonrpc",                                                    "2.0"},
-      {     "id",                                                        1},
-      { "method",                                "eth_getTransactionReceipt"},
+      {"jsonrpc",                                    "2.0"},
+      {     "id",                                        1},
+      { "method",              "eth_getTransactionReceipt"},
       { "params", nlohmann::json::array({transactionHash})}
   };
 
@@ -215,11 +213,11 @@ bool BlockchainRpcClient::EthGetTransactionReceipt(const std::string& transactio
 
   const nlohmann::json& result = response["result"];
   receipt->available = true;
-  receipt->transactionHash = result.value("transactionHash", std::string{});
-  receipt->blockNumber = result.value("blockNumber", std::string{});
-  receipt->gasUsed = result.value("gasUsed", std::string{});
-  receipt->status = result.value("status", std::string{});
-  receipt->contractAddress = result.value("contractAddress", std::string{});
+  receipt->transactionHash = result.value("transactionHash", std::string {});
+  receipt->blockNumber = result.value("blockNumber", std::string {});
+  receipt->gasUsed = result.value("gasUsed", std::string {});
+  receipt->status = result.value("status", std::string {});
+  receipt->contractAddress = result.value("contractAddress", std::string {});
   receipt->success = NormalizeBlockchainUintHex(receipt->status) == "0x1";
   return true;
 }
@@ -228,8 +226,7 @@ bool BlockchainRpcClient::WaitForTransactionReceipt(
     const std::string& transactionHash,
     BlockchainTransactionReceipt* receipt,
     int timeoutMilliseconds,
-    int pollMilliseconds
-) const
+    int pollMilliseconds) const
 {
   if (receipt == nullptr || transactionHash.empty())
   {

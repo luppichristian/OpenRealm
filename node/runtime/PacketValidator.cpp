@@ -4,17 +4,16 @@ std::string DescribePacketValidationCode(PacketValidationCode code)
 {
   switch (code)
   {
-    case PacketValidationCode::Accepted: return "accepted";
-    case PacketValidationCode::PacketParseFailed: return "packet_parse_failed";
+    case PacketValidationCode::Accepted:                return "accepted";
+    case PacketValidationCode::PacketParseFailed:       return "packet_parse_failed";
     case PacketValidationCode::InvalidHandshakePayload: return "invalid_handshake_payload";
-    case PacketValidationCode::SelfNodeId: return "self_node_id";
+    case PacketValidationCode::SelfPeerAddress:         return "self_peer_address";
     case PacketValidationCode::ProtocolVersionMismatch: return "protocol_version_mismatch";
-    case PacketValidationCode::RealmMismatch: return "realm_mismatch";
-    case PacketValidationCode::DuplicateNodeId: return "duplicate_node_id";
-    case PacketValidationCode::DuplicatePeerAddress: return "duplicate_peer_address";
+    case PacketValidationCode::RealmMismatch:           return "realm_mismatch";
+    case PacketValidationCode::DuplicatePeerAddress:    return "duplicate_peer_address";
     case PacketValidationCode::MissingActiveNodeBucket: return "missing_active_node_bucket";
-    case PacketValidationCode::ActiveNodeLimitReached: return "active_node_limit_reached";
-    default: return "unknown";
+    case PacketValidationCode::ActiveNodeLimitReached:  return "active_node_limit_reached";
+    default:                                            return "unknown";
   }
 }
 
@@ -40,9 +39,9 @@ PacketValidationResult ValidateIncomingPacket(
     return result;
   }
 
-  if (result.handshake.nodeId == context.localNodeId)
+  if (RuntimePeerAddressEquals(peerAddress, context.localPeerAddress))
   {
-    result.code = PacketValidationCode::SelfNodeId;
+    result.code = PacketValidationCode::SelfPeerAddress;
     return result;
   }
 
@@ -71,11 +70,9 @@ PacketValidationResult ValidateIncomingPacket(
       context.tick);
   if (!result.activeNode.accepted)
   {
-    result.code = result.activeNode.code == ActiveNodeBucketCode::DuplicateNodeId
-        ? PacketValidationCode::DuplicateNodeId
-        : (result.activeNode.code == ActiveNodeBucketCode::DuplicatePeerAddress
-               ? PacketValidationCode::DuplicatePeerAddress
-               : PacketValidationCode::ActiveNodeLimitReached);
+    result.code = result.activeNode.code == ActiveNodeBucketCode::DuplicatePeerAddress
+                      ? PacketValidationCode::DuplicatePeerAddress
+                      : PacketValidationCode::ActiveNodeLimitReached;
     return result;
   }
 

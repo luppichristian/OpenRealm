@@ -20,8 +20,6 @@ struct LaunchOptions
   int simulatorCount = 0;
   int relayBasePort = 46001;
   int simulatorBasePort = 46101;
-  uint32_t relayBaseNodeId = 10001;
-  uint32_t simulatorBaseNodeId = 20001;
   int relayTicks = 0;
   int simulatorFrames = 0;
   int simulatorSleepMs = 16;
@@ -45,8 +43,8 @@ struct ChildProcess
   std::filesystem::path configPath = {};
   std::filesystem::path logPath = {};
   std::filesystem::path realmDir = {};
-  uint32_t nodeId = 0;
   int bindPort = 0;
+  int jumpNodeIndex = 0;
   bool running = false;
   bool stoppedByLauncher = false;
   int exitCode = -1;

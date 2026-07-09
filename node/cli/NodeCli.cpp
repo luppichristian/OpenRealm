@@ -213,10 +213,10 @@ static void NormalizeConfigSchema(nlohmann::json* root)
   nlohmann::json& runtimeJson = EnsureRuntimeObject(*root);
 
   EnsureAddress(runtimeJson);
+  runtimeJson.erase(std::string("node") + "Id");
   EnsureRuntimeInterestObject(*root);
   EnsureSimulationObject(*root);
   EnsureServiceObject(*root);
-
 }
 
 static const wchar_t* RoleTitle(NodeCliRole role)
@@ -228,8 +228,6 @@ static const wchar_t* RoleSubtitle(NodeCliRole role)
 {
   return role == NodeCliRole::Relay ? L"Discovery and packet-forwarding role" : L"Headless world simulation role";
 }
-
-
 
 static std::string FormatFloat(float value)
 {
@@ -336,7 +334,6 @@ enum class NodeCliFieldId
   WalletAccountAddress,
   BindHost,
   BindPort,
-  NodeId,
   RelayReceiveTimeoutMs,
   RelayTicks,
   SimulatorJumpNodeIndex,
@@ -364,13 +361,12 @@ struct NodeCliFieldSpec
 static const std::vector<NodeCliFieldSpec>& GetRelayFields()
 {
   static const std::vector<NodeCliFieldSpec> fields = {
-      {NodeCliFieldId::Realm, NodeCliFieldKind::Realm, L"Realm", L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
-      {NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String, L"Wallet", L"Account address", L"Wallet account used for ownership/economic actions."},
-      {NodeCliFieldId::BindHost, NodeCliFieldKind::String, L"Relay", L"Bind host", L"Interface the relay listener binds to."},
-      {NodeCliFieldId::BindPort, NodeCliFieldKind::Int, L"Relay", L"Bind port", L"UDP port exposed by the relay node."},
-      {NodeCliFieldId::NodeId, NodeCliFieldKind::Int, L"Relay", L"Node id", L"Unique node identity advertised to peers."},
-      {NodeCliFieldId::RelayReceiveTimeoutMs, NodeCliFieldKind::Int, L"Relay", L"Receive timeout ms", L"Polling timeout used while waiting for packets."},
-      {NodeCliFieldId::RelayTicks, NodeCliFieldKind::Int, L"Relay", L"Ticks budget", L"0 runs indefinitely; positive values stop after that many service ticks."},
+      {                NodeCliFieldId::Realm,  NodeCliFieldKind::Realm,  L"Realm",     L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
+      { NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String, L"Wallet",    L"Account address",                        L"Wallet account used for ownership/economic actions."},
+      {             NodeCliFieldId::BindHost, NodeCliFieldKind::String,  L"Relay",          L"Bind host",                                     L"Interface the relay listener binds to."},
+      {             NodeCliFieldId::BindPort,    NodeCliFieldKind::Int,  L"Relay",          L"Bind port",                                        L"UDP port exposed by the relay node."},
+      {NodeCliFieldId::RelayReceiveTimeoutMs,    NodeCliFieldKind::Int,  L"Relay", L"Receive timeout ms",                            L"Polling timeout used while waiting for packets."},
+      {           NodeCliFieldId::RelayTicks,    NodeCliFieldKind::Int,  L"Relay",       L"Ticks budget",   L"0 runs indefinitely; positive values stop after that many service ticks."},
   };
   return fields;
 }
@@ -378,22 +374,21 @@ static const std::vector<NodeCliFieldSpec>& GetRelayFields()
 static const std::vector<NodeCliFieldSpec>& GetSimulatorFields()
 {
   static const std::vector<NodeCliFieldSpec> fields = {
-      {NodeCliFieldId::Realm, NodeCliFieldKind::Realm, L"Realm", L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
-      {NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String, L"Wallet", L"Account address", L"Wallet account used for ownership/economic actions."},
-      {NodeCliFieldId::BindHost, NodeCliFieldKind::String, L"Runtime", L"Bind host", L"Interface the simulator runtime listener binds to."},
-      {NodeCliFieldId::BindPort, NodeCliFieldKind::Int, L"Runtime", L"Bind port", L"UDP port exposed by the simulator node."},
-      {NodeCliFieldId::NodeId, NodeCliFieldKind::Int, L"Runtime", L"Node id", L"Unique node identity advertised to peers."},
-      {NodeCliFieldId::SimulatorJumpNodeIndex, NodeCliFieldKind::Int, L"Runtime", L"Jump node index", L"Which discovered jump node becomes the relay/bootstrap target."},
-      {NodeCliFieldId::SimulatorInterestChunkX, NodeCliFieldKind::Int, L"Runtime", L"Interest chunk X", L"Center chunk X used when publishing runtime interest."},
-      {NodeCliFieldId::SimulatorInterestChunkY, NodeCliFieldKind::Int, L"Runtime", L"Interest chunk Y", L"Center chunk Y used when publishing runtime interest."},
-      {NodeCliFieldId::SimulatorInterestRadius, NodeCliFieldKind::Int, L"Runtime", L"Interest radius", L"Chunk radius advertised to relay nodes for forwarding decisions."},
-      {NodeCliFieldId::SimulatorFrames, NodeCliFieldKind::Int, L"Simulation", L"Frames", L"0 runs indefinitely; positive values stop after that many world updates."},
-      {NodeCliFieldId::SimulatorFrameTime, NodeCliFieldKind::Float, L"Simulation", L"Frame time", L"Fixed world-update timestep in seconds."},
-      {NodeCliFieldId::SimulatorSleepMs, NodeCliFieldKind::Int, L"Simulation", L"Sleep ms", L"Sleep inserted between frames to throttle the headless loop."},
-      {NodeCliFieldId::SimulatorRuntimeEnabled, NodeCliFieldKind::Bool, L"Simulation", L"Runtime enabled", L"Enable ENet runtime startup, handshake, and interest publication."},
-      {NodeCliFieldId::SimulatorEmitPlaceEvent, NodeCliFieldKind::Bool, L"Simulation", L"Emit place event", L"Send a test place-world-event during runtime startup."},
-      {NodeCliFieldId::SimulatorPlaceVoxelValue, NodeCliFieldKind::Int, L"Simulation", L"Place voxel value", L"Voxel value written by the optional test place event."},
-      {NodeCliFieldId::SimulatorReceiveTimeoutMs, NodeCliFieldKind::Int, L"Simulation", L"Receive timeout ms", L"Timeout used while waiting for relay discovery and runtime packets."},
+      {                    NodeCliFieldId::Realm,  NodeCliFieldKind::Realm,      L"Realm",     L"Selected realm", L"Choose the runtime realm directory used for blockchain and jump-node data."},
+      {     NodeCliFieldId::WalletAccountAddress, NodeCliFieldKind::String,     L"Wallet",    L"Account address",                        L"Wallet account used for ownership/economic actions."},
+      {                 NodeCliFieldId::BindHost, NodeCliFieldKind::String,    L"Runtime",          L"Bind host",                         L"Interface the simulator runtime listener binds to."},
+      {                 NodeCliFieldId::BindPort,    NodeCliFieldKind::Int,    L"Runtime",          L"Bind port",                                    L"UDP port exposed by the simulator node."},
+      {   NodeCliFieldId::SimulatorJumpNodeIndex,    NodeCliFieldKind::Int,    L"Runtime",    L"Jump node index",             L"Which discovered jump node becomes the relay/bootstrap target."},
+      {  NodeCliFieldId::SimulatorInterestChunkX,    NodeCliFieldKind::Int,    L"Runtime",   L"Interest chunk X",                      L"Center chunk X used when publishing runtime interest."},
+      {  NodeCliFieldId::SimulatorInterestChunkY,    NodeCliFieldKind::Int,    L"Runtime",   L"Interest chunk Y",                      L"Center chunk Y used when publishing runtime interest."},
+      {  NodeCliFieldId::SimulatorInterestRadius,    NodeCliFieldKind::Int,    L"Runtime",    L"Interest radius",           L"Chunk radius advertised to relay nodes for forwarding decisions."},
+      {          NodeCliFieldId::SimulatorFrames,    NodeCliFieldKind::Int, L"Simulation",             L"Frames",   L"0 runs indefinitely; positive values stop after that many world updates."},
+      {       NodeCliFieldId::SimulatorFrameTime,  NodeCliFieldKind::Float, L"Simulation",         L"Frame time",                                    L"Fixed world-update timestep in seconds."},
+      {         NodeCliFieldId::SimulatorSleepMs,    NodeCliFieldKind::Int, L"Simulation",           L"Sleep ms",               L"Sleep inserted between frames to throttle the headless loop."},
+      {  NodeCliFieldId::SimulatorRuntimeEnabled,   NodeCliFieldKind::Bool, L"Simulation",    L"Runtime enabled",          L"Enable ENet runtime startup, handshake, and interest publication."},
+      {  NodeCliFieldId::SimulatorEmitPlaceEvent,   NodeCliFieldKind::Bool, L"Simulation",   L"Emit place event",                      L"Send a test place-world-event during runtime startup."},
+      { NodeCliFieldId::SimulatorPlaceVoxelValue,    NodeCliFieldKind::Int, L"Simulation",  L"Place voxel value",                      L"Voxel value written by the optional test place event."},
+      {NodeCliFieldId::SimulatorReceiveTimeoutMs,    NodeCliFieldKind::Int, L"Simulation", L"Receive timeout ms",        L"Timeout used while waiting for relay discovery and runtime packets."},
   };
   return fields;
 }
@@ -414,23 +409,22 @@ static std::string GetFieldValue(const nlohmann::json& root, NodeCliFieldId fiel
 
   switch (fieldId)
   {
-    case NodeCliFieldId::Realm: return JsonString(root, "realm", "realms/test");
-    case NodeCliFieldId::WalletAccountAddress: return JsonString(wallet, "accountAddress", {});
-    case NodeCliFieldId::BindHost: return JsonString(bindAddress, "host", "127.0.0.1");
-    case NodeCliFieldId::BindPort: return std::to_string(JsonInt(bindAddress, "port", 46010));
-    case NodeCliFieldId::NodeId: return std::to_string(JsonInt(runtimeJson, "nodeId", 7001));
-    case NodeCliFieldId::RelayReceiveTimeoutMs: return std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000));
-    case NodeCliFieldId::RelayTicks: return std::to_string(JsonInt(serviceJson, "ticks", 0));
-    case NodeCliFieldId::SimulatorJumpNodeIndex: return std::to_string(JsonInt(runtimeJson, "jumpNodeIndex", 0));
-    case NodeCliFieldId::SimulatorInterestChunkX: return std::to_string(JsonInt(interestJson, "chunkX", 0));
-    case NodeCliFieldId::SimulatorInterestChunkY: return std::to_string(JsonInt(interestJson, "chunkY", 0));
-    case NodeCliFieldId::SimulatorInterestRadius: return std::to_string(JsonInt(interestJson, "radius", 1));
-    case NodeCliFieldId::SimulatorFrames: return std::to_string(JsonInt(simulationJson, "frames", 0));
-    case NodeCliFieldId::SimulatorFrameTime: return FormatFloat(JsonFloat(simulationJson, "frameTime", 1.0f / 60.0f));
-    case NodeCliFieldId::SimulatorSleepMs: return std::to_string(JsonInt(simulationJson, "sleepMs", 16));
-    case NodeCliFieldId::SimulatorRuntimeEnabled: return JsonBool(runtimeJson, "enabled", false) ? "true" : "false";
-    case NodeCliFieldId::SimulatorEmitPlaceEvent: return JsonBool(simulationJson, "emitPlaceEvent", false) ? "true" : "false";
-    case NodeCliFieldId::SimulatorPlaceVoxelValue: return std::to_string(JsonInt(simulationJson, "placeVoxelValue", 255));
+    case NodeCliFieldId::Realm:                     return JsonString(root, "realm", "realms/test");
+    case NodeCliFieldId::WalletAccountAddress:      return JsonString(wallet, "accountAddress", {});
+    case NodeCliFieldId::BindHost:                  return JsonString(bindAddress, "host", "127.0.0.1");
+    case NodeCliFieldId::BindPort:                  return std::to_string(JsonInt(bindAddress, "port", 46010));
+    case NodeCliFieldId::RelayReceiveTimeoutMs:     return std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000));
+    case NodeCliFieldId::RelayTicks:                return std::to_string(JsonInt(serviceJson, "ticks", 0));
+    case NodeCliFieldId::SimulatorJumpNodeIndex:    return std::to_string(JsonInt(runtimeJson, "jumpNodeIndex", 0));
+    case NodeCliFieldId::SimulatorInterestChunkX:   return std::to_string(JsonInt(interestJson, "chunkX", 0));
+    case NodeCliFieldId::SimulatorInterestChunkY:   return std::to_string(JsonInt(interestJson, "chunkY", 0));
+    case NodeCliFieldId::SimulatorInterestRadius:   return std::to_string(JsonInt(interestJson, "radius", 1));
+    case NodeCliFieldId::SimulatorFrames:           return std::to_string(JsonInt(simulationJson, "frames", 0));
+    case NodeCliFieldId::SimulatorFrameTime:        return FormatFloat(JsonFloat(simulationJson, "frameTime", 1.0f / 60.0f));
+    case NodeCliFieldId::SimulatorSleepMs:          return std::to_string(JsonInt(simulationJson, "sleepMs", 16));
+    case NodeCliFieldId::SimulatorRuntimeEnabled:   return JsonBool(runtimeJson, "enabled", false) ? "true" : "false";
+    case NodeCliFieldId::SimulatorEmitPlaceEvent:   return JsonBool(simulationJson, "emitPlaceEvent", false) ? "true" : "false";
+    case NodeCliFieldId::SimulatorPlaceVoxelValue:  return std::to_string(JsonInt(simulationJson, "placeVoxelValue", 255));
     case NodeCliFieldId::SimulatorReceiveTimeoutMs: return std::to_string(JsonInt(runtimeJson, "receiveTimeoutMs", 1000));
   }
 
@@ -499,15 +493,6 @@ static bool SetFieldValue(
       if (!ParseInt64(value, &parsed)) return fail("bind port must be an integer");
       if (parsed < 1 || parsed > 65535) return fail("bind port must be between 1 and 65535");
       bindAddress["port"] = (int)parsed;
-      return true;
-    }
-
-    case NodeCliFieldId::NodeId:
-    {
-      int64_t parsed = 0;
-      if (!ParseInt64(value, &parsed)) return fail("node id must be an integer");
-      if (parsed < 1 || parsed > 2147483647LL) return fail("node id must be positive");
-      runtimeJson["nodeId"] = (int)parsed;
       return true;
     }
 
@@ -707,10 +692,10 @@ static tcolor_t ToneColor(StatusTone tone)
 {
   switch (tone)
   {
-    case StatusTone::Info: return COLOR_INFO;
+    case StatusTone::Info:    return COLOR_INFO;
     case StatusTone::Success: return COLOR_SUCCESS;
     case StatusTone::Warning: return COLOR_WARNING;
-    case StatusTone::Error: return COLOR_ERROR;
+    case StatusTone::Error:   return COLOR_ERROR;
   }
   return COLOR_INFO;
 }
@@ -789,7 +774,6 @@ static std::vector<std::string> BuildSummaryLines(const nlohmann::json& root, No
   lines.push_back(
       std::string("Bind: ") + JsonString(bindAddress, "host", "127.0.0.1") + ":" +
       std::to_string(JsonInt(bindAddress, "port", 46010)));
-  lines.push_back(std::string("Node id: ") + std::to_string(JsonInt(runtimeJson, "nodeId", 7001)));
 
   if (role == NodeCliRole::Relay)
   {

@@ -22,7 +22,6 @@ struct RuntimeSessionConfig
   RuntimeNodeRole role = RuntimeNodeRole::Client;
   RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
   RuntimePeerAddress jumpNode = {};
-  uint32_t localNodeId = 7001;
   uint64_t realmHash = 0;
   RuntimeWorldPosition initialNodePosition = {};
   RuntimeInterestArea interestArea = {};
@@ -68,7 +67,7 @@ class RuntimeSession
  private:
   struct RemotePlayerReplica
   {
-    uint32_t nodeId = 0;
+    RuntimePeerAddress peerAddress = {};
     int playerId = 0;
     uint64_t lastSeenMs = 0;
     bool active = false;
@@ -77,18 +76,18 @@ class RuntimeSession
   void PumpIncomingPackets(World* world);
   void HandleParsedPacket(const Packet& packet, const RuntimePeerAddress& peerAddress, World* world);
   void HandleJoinRequest(const JoinRequestPacketData& joinRequest, const RuntimePeerAddress& peerAddress);
-  void HandleJoinResponse(const JoinResponsePacketData& joinResponse);
-  void HandleTopologySnapshot(const TopologySnapshotPacketData& topologySnapshot);
-  void HandlePlayerSnapshot(const PlayerSnapshotPacketData& playerSnapshot, World* world);
+  void HandleJoinResponse(const JoinResponsePacketData& joinResponse, const RuntimePeerAddress& peerAddress);
+  void HandleTopologySnapshot(const TopologySnapshotPacketData& topologySnapshot, const RuntimePeerAddress& peerAddress);
+  void HandlePlayerSnapshot(const PlayerSnapshotPacketData& playerSnapshot, const RuntimePeerAddress& peerAddress, World* world);
   void RefreshConnections();
   void BroadcastHandshake();
   void BroadcastTopology();
   void BroadcastLocalPlayer(World* world);
   void MaybeRequestJoin();
   void PruneStaleState(World* world);
-  void ApplyRemotePlayerSnapshot(const PlayerSnapshotPacketData& playerSnapshot, World* world);
-  int AcquireRemotePlayerId(uint32_t nodeId);
-  void DespawnRemotePlayer(uint32_t nodeId, World* world);
+  void ApplyRemotePlayerSnapshot(const RuntimePeerAddress& peerAddress, const PlayerSnapshotPacketData& playerSnapshot, World* world);
+  int AcquireRemotePlayerId(const RuntimePeerAddress& peerAddress);
+  void DespawnRemotePlayer(const RuntimePeerAddress& peerAddress, World* world);
   HandshakePacketData BuildLocalHandshake() const;
   TopologyNodeState BuildLocalTopologyNode() const;
   void SendPacketTo(const RuntimePeerAddress& peerAddress, const Packet& packet);
@@ -97,7 +96,7 @@ class RuntimeSession
   RuntimeSessionConfig config = {};
   RuntimeClient client = {};
   ActiveNodeBucket knownNodes = ActiveNodeBucket(1);
-  std::vector<uint32_t> connectedNodeIds = {};
+  std::vector<RuntimePeerAddress> connectedPeerAddresses = {};
   std::vector<RemotePlayerReplica> remotePlayers = {};
   RuntimeWorldPosition localNodePosition = {};
   RuntimeWorldPosition resolvedSpawnPosition = {};

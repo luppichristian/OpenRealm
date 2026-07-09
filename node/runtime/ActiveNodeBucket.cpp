@@ -16,19 +16,17 @@ std::string DescribeActiveNodeBucketCode(ActiveNodeBucketCode code)
 {
   switch (code)
   {
-    case ActiveNodeBucketCode::Added: return "added";
-    case ActiveNodeBucketCode::Refreshed: return "refreshed";
-    case ActiveNodeBucketCode::DuplicateNodeId: return "duplicate_node_id";
+    case ActiveNodeBucketCode::Added:                return "added";
+    case ActiveNodeBucketCode::Refreshed:            return "refreshed";
     case ActiveNodeBucketCode::DuplicatePeerAddress: return "duplicate_peer_address";
-    case ActiveNodeBucketCode::CapacityReached: return "capacity_reached";
-    default: return "unknown";
+    case ActiveNodeBucketCode::CapacityReached:      return "capacity_reached";
+    default:                                         return "unknown";
   }
 }
 
 TopologyNodeState ToTopologyNodeState(const ActiveNodeState& node)
 {
   return {
-      .nodeId = node.nodeId,
       .protocolVersion = node.protocolVersion,
       .realmHash = node.realmHash,
       .peerAddress = node.peerAddress,
@@ -48,38 +46,21 @@ ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candi
 
   for (ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == candidate.nodeId)
-    {
-      if (!RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress))
-      {
-        result.code = ActiveNodeBucketCode::DuplicateNodeId;
-        result.accepted = false;
-        result.node = node;
-        return result;
-      }
+    if (!RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress)) continue;
 
-      node.protocolVersion = candidate.protocolVersion;
-      node.realmHash = candidate.realmHash;
-      node.position = candidate.position;
-      node.interestArea = candidate.interestArea;
-      node.nodeRole = candidate.nodeRole;
-      node.acceptsJoins = candidate.acceptsJoins;
-      node.lastPacketChecksum = candidate.lastPacketChecksum;
-      node.lastSeenTick = tick;
-      node.acceptedPackets += candidate.acceptedPackets > 0 ? candidate.acceptedPackets : 1;
-      result.code = ActiveNodeBucketCode::Refreshed;
-      result.accepted = true;
-      result.node = node;
-      return result;
-    }
-
-    if (RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress) && node.nodeId != candidate.nodeId)
-    {
-      result.code = ActiveNodeBucketCode::DuplicatePeerAddress;
-      result.accepted = false;
-      result.node = node;
-      return result;
-    }
+    node.protocolVersion = candidate.protocolVersion;
+    node.realmHash = candidate.realmHash;
+    node.position = candidate.position;
+    node.interestArea = candidate.interestArea;
+    node.nodeRole = candidate.nodeRole;
+    node.acceptsJoins = candidate.acceptsJoins;
+    node.lastPacketChecksum = candidate.lastPacketChecksum;
+    node.lastSeenTick = tick;
+    node.acceptedPackets += candidate.acceptedPackets > 0 ? candidate.acceptedPackets : 1;
+    result.code = ActiveNodeBucketCode::Refreshed;
+    result.accepted = true;
+    result.node = node;
+    return result;
   }
 
   if (nodes.size() >= maxNodes)
@@ -102,7 +83,6 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
     uint64_t tick)
 {
   ActiveNodeState node = {};
-  node.nodeId = handshake.nodeId;
   node.peerAddress = peerAddress;
   node.protocolVersion = handshake.protocolVersion;
   node.realmHash = handshake.realmHash;
@@ -121,7 +101,6 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterTopologyNode(
     uint64_t tick)
 {
   ActiveNodeState node = {};
-  node.nodeId = topologyNode.nodeId;
   node.peerAddress = topologyNode.peerAddress;
   node.protocolVersion = topologyNode.protocolVersion;
   node.realmHash = topologyNode.realmHash;
@@ -134,9 +113,9 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterTopologyNode(
   return UpsertNode(node, tick);
 }
 
-void ActiveNodeBucket::MarkConnected(uint32_t nodeId, bool connected)
+void ActiveNodeBucket::MarkConnected(const RuntimePeerAddress& peerAddress, bool connected)
 {
-  ActiveNodeState* node = FindMutableByNodeId(nodeId);
+  ActiveNodeState* node = FindMutableByPeerAddress(peerAddress);
   if (node == nullptr) return;
   node->connected = connected;
 }
@@ -144,9 +123,8 @@ void ActiveNodeBucket::MarkConnected(uint32_t nodeId, bool connected)
 void ActiveNodeBucket::ForgetStaleNodes(uint64_t minimumTick)
 {
   nodes.erase(
-      std::remove_if(nodes.begin(), nodes.end(), [&](const ActiveNodeState& node) {
-        return node.lastSeenTick < minimumTick;
-      }),
+      std::remove_if(nodes.begin(), nodes.end(), [&](const ActiveNodeState& node)
+                     { return node.lastSeenTick < minimumTick; }),
       nodes.end());
 }
 
@@ -160,24 +138,6 @@ const std::vector<ActiveNodeState>& ActiveNodeBucket::GetNodes() const
   return nodes;
 }
 
-const ActiveNodeState* ActiveNodeBucket::FindByNodeId(uint32_t nodeId) const
-{
-  for (const ActiveNodeState& node : nodes)
-  {
-    if (node.nodeId == nodeId) return &node;
-  }
-  return nullptr;
-}
-
-ActiveNodeState* ActiveNodeBucket::FindMutableByNodeId(uint32_t nodeId)
-{
-  for (ActiveNodeState& node : nodes)
-  {
-    if (node.nodeId == nodeId) return &node;
-  }
-  return nullptr;
-}
-
 const ActiveNodeState* ActiveNodeBucket::FindByPeerAddress(const RuntimePeerAddress& peerAddress) const
 {
   for (const ActiveNodeState& node : nodes)
@@ -187,12 +147,24 @@ const ActiveNodeState* ActiveNodeBucket::FindByPeerAddress(const RuntimePeerAddr
   return nullptr;
 }
 
-std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount) const
+ActiveNodeState* ActiveNodeBucket::FindMutableByPeerAddress(const RuntimePeerAddress& peerAddress)
+{
+  for (ActiveNodeState& node : nodes)
+  {
+    if (RuntimePeerAddressEquals(node.peerAddress, peerAddress)) return &node;
+  }
+  return nullptr;
+}
+
+std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(
+    const RuntimePeerAddress& excludedPeerAddress,
+    uint64_t realmHash,
+    size_t maxCount) const
 {
   std::vector<TopologyNodeState> snapshot = {};
   for (const ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == excludedNodeId) continue;
+    if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
     snapshot.push_back(ToTopologyNodeState(node));
     if (snapshot.size() >= maxCount) break;
@@ -201,7 +173,7 @@ std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(uint32_t 
 }
 
 std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
-    uint32_t excludedNodeId,
+    const RuntimePeerAddress& excludedPeerAddress,
     uint64_t realmHash,
     const RuntimeWorldPosition& targetPosition,
     size_t maxCount,
@@ -210,23 +182,21 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
   std::vector<const ActiveNodeState*> ordered = {};
   for (const ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == excludedNodeId) continue;
+    if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
     if (requireJoinable && !node.acceptsJoins) continue;
     ordered.push_back(&node);
   }
 
-  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b) {
-    return ComputeRuntimeWorldDistanceSquared(a->position, targetPosition)
-        < ComputeRuntimeWorldDistanceSquared(b->position, targetPosition);
-  });
+  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b)
+            { return ComputeRuntimeWorldDistanceSquared(a->position, targetPosition) < ComputeRuntimeWorldDistanceSquared(b->position, targetPosition); });
 
   if (ordered.size() > maxCount) ordered.resize(maxCount);
   return ordered;
 }
 
 std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildNeighborCandidates(
-    uint32_t excludedNodeId,
+    const RuntimePeerAddress& excludedPeerAddress,
     uint64_t realmHash,
     const RuntimeWorldPosition& localPosition,
     const RuntimeInterestArea& localInterestArea,
@@ -235,16 +205,14 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildNeighborCandidates(
   std::vector<const ActiveNodeState*> ordered = {};
   for (const ActiveNodeState& node : nodes)
   {
-    if (node.nodeId == excludedNodeId) continue;
+    if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
     if (!RuntimeInterestAreasOverlap(localPosition, localInterestArea, node.position, node.interestArea)) continue;
     ordered.push_back(&node);
   }
 
-  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b) {
-    return ComputeRuntimeWorldDistanceSquared(a->position, localPosition)
-        < ComputeRuntimeWorldDistanceSquared(b->position, localPosition);
-  });
+  std::sort(ordered.begin(), ordered.end(), [&](const ActiveNodeState* a, const ActiveNodeState* b)
+            { return ComputeRuntimeWorldDistanceSquared(a->position, localPosition) < ComputeRuntimeWorldDistanceSquared(b->position, localPosition); });
 
   if (ordered.size() > maxCount) ordered.resize(maxCount);
   return ordered;

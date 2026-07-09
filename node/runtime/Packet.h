@@ -38,7 +38,6 @@ struct Packet
 struct HandshakePacketData
 {
   uint32_t protocolVersion = 0;
-  uint32_t nodeId = 0;
   uint64_t realmHash = 0;
   RuntimeWorldPosition position = {};
   RuntimeInterestArea interestArea = {};
@@ -49,7 +48,6 @@ struct HandshakePacketData
 
 struct TopologyNodeState
 {
-  uint32_t nodeId = 0;
   uint32_t protocolVersion = 0;
   uint64_t realmHash = 0;
   RuntimePeerAddress peerAddress = {};
@@ -61,7 +59,6 @@ struct TopologyNodeState
 
 struct JoinRequestPacketData
 {
-  uint32_t requestingNodeId = 0;
   RuntimeWorldPosition targetPosition = {};
   uint32_t maxCandidates = 0;
   uint32_t maxHops = 0;
@@ -70,7 +67,6 @@ struct JoinRequestPacketData
 
 struct JoinResponsePacketData
 {
-  uint32_t respondingNodeId = 0;
   uint32_t requestToken = 0;
   RuntimeWorldPosition resolvedPosition = {};
   std::vector<TopologyNodeState> candidates = {};
@@ -78,13 +74,11 @@ struct JoinResponsePacketData
 
 struct TopologySnapshotPacketData
 {
-  uint32_t senderNodeId = 0;
   std::vector<TopologyNodeState> nodes = {};
 };
 
 struct PlayerSnapshotPacketData
 {
-  uint32_t nodeId = 0;
   RuntimeWorldPosition nodePosition = {};
   RuntimeWorldPosition playerPosition = {};
   float yaw = 0.0f;

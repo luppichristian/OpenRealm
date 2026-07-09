@@ -329,8 +329,7 @@ MarketplaceAuctionTransaction MarketplaceContract::CreateAuction(
     int32_t y,
     const std::string& reservePrice,
     const std::string& minBidIncrement,
-    uint64_t durationSeconds
-) const
+    uint64_t durationSeconds) const
 {
   MarketplaceAuctionTransaction result = {};
   const std::string callData = BuildBlockchainCallData(

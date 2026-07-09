@@ -26,20 +26,17 @@ class SmartContract
       const std::string& callData,
       std::string* resultHex,
       const std::string& fromAddress = {},
-      const std::string& valueHex = {}
-  ) const;
+      const std::string& valueHex = {}) const;
   bool CallWords(
       const std::string& callData,
       std::vector<std::string>* words,
       const std::string& fromAddress = {},
-      const std::string& valueHex = {}
-  ) const;
+      const std::string& valueHex = {}) const;
   bool SendTransaction(
       const std::string& callData,
       BlockchainTransactionReceipt* receipt,
       const std::string& valueHex = {},
-      const std::string& fromAddress = {}
-  ) const;
+      const std::string& fromAddress = {}) const;
 
   virtual const char* GetContractName() const = 0;
 

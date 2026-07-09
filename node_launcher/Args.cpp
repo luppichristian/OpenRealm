@@ -13,14 +13,6 @@ static bool ParseInt(const std::string& text, int* value)
   return true;
 }
 
-static bool ParseU32(const std::string& text, uint32_t* value)
-{
-  int parsed = 0;
-  if (!ParseInt(text, &parsed) || parsed < 0) return false;
-  if (value != nullptr) *value = (uint32_t)parsed;
-  return true;
-}
-
 static bool ParseFloat(const std::string& text, float* value)
 {
   if (value == nullptr) return false;
@@ -42,8 +34,6 @@ void PrintUsage()
   std::cout << "  --config <path>                Base config.json to clone (default: config.json)\n";
   std::cout << "  --relay-base-port <port>       First relay UDP port (default: 46001)\n";
   std::cout << "  --sim-base-port <port>         First simulator UDP port (default: 46101)\n";
-  std::cout << "  --relay-base-node-id <id>      First relay node id (default: 10001)\n";
-  std::cout << "  --sim-base-node-id <id>        First simulator node id (default: 20001)\n";
   std::cout << "  --relay-ticks <count>          Relay service ticks, 0 = infinite (default: 0)\n";
   std::cout << "  --sim-frames <count>           Simulator frames, 0 = infinite (default: 0)\n";
   std::cout << "  --sim-sleep-ms <ms>            Simulator frame sleep (default: 16)\n";
@@ -132,26 +122,6 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
       if (!requireValue("--sim-base-port", &value) || !ParseInt(value, &options->simulatorBasePort))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-base-port must be an integer";
-        return false;
-      }
-      continue;
-    }
-
-    if (argument == "--relay-base-node-id")
-    {
-      if (!requireValue("--relay-base-node-id", &value) || !ParseU32(value, &options->relayBaseNodeId))
-      {
-        if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--relay-base-node-id must be a non-negative integer";
-        return false;
-      }
-      continue;
-    }
-
-    if (argument == "--sim-base-node-id")
-    {
-      if (!requireValue("--sim-base-node-id", &value) || !ParseU32(value, &options->simulatorBaseNodeId))
-      {
-        if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-base-node-id must be a non-negative integer";
         return false;
       }
       continue;

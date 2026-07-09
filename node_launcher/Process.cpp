@@ -23,6 +23,7 @@ bool LaunchChildProcess(
     const std::filesystem::path& executablePath,
     const std::filesystem::path& configPath,
     const std::filesystem::path& realmDir,
+    int jumpNodeIndex,
     ChildProcess* child,
     std::string* errorMessage)
 {
@@ -32,14 +33,20 @@ bool LaunchChildProcess(
     return false;
   }
 
-  const std::vector<std::string> arguments = {
+  std::vector<std::string> arguments = {
       FormatPath(executablePath),
       "--config",
       FormatPath(configPath),
       "--realm-dir",
       FormatPath(realmDir),
-      "--no-cli",
   };
+  if (jumpNodeIndex > 0)
+  {
+    arguments.push_back("--jump-node-index");
+    arguments.push_back(std::to_string(jumpNodeIndex));
+  }
+  arguments.push_back("--no-cli");
+
   return LaunchPlatformChildProcess(repoRoot, arguments, child, errorMessage);
 }
 
@@ -71,9 +78,9 @@ void StopAndCloseChildren(std::vector<ChildProcess>* children)
 void PrintLaunchLine(const ChildProcess& child)
 {
   std::cout << "- launched " << child.role << ' ' << child.index
-            << ": pid=" << child.processId << ", nodeId=" << child.nodeId
-            << ", bind=127.0.0.1:" << child.bindPort << ", config=" << FormatPath(child.configPath)
-            << ", log=" << FormatPath(child.logPath) << "\n";
+            << ": pid=" << child.processId << ", bind=127.0.0.1:" << child.bindPort
+            << ", jumpNodeIndex=" << child.jumpNodeIndex
+            << ", config=" << FormatPath(child.configPath) << ", log=" << FormatPath(child.logPath) << "\n";
 }
 
 void PrintStatusLines(const std::vector<ChildProcess>& children)

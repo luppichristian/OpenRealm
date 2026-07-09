@@ -95,7 +95,6 @@ void Game::StartGameplay(TaskManager& taskManager)
       sessionConfig.role = RuntimeNodeRole::Client;
       sessionConfig.bindAddress = nodeConfig.runtimeBindAddress;
       sessionConfig.jumpNode = jumpNode;
-      sessionConfig.localNodeId = nodeConfig.runtimeNodeId;
       sessionConfig.realmHash = realmHash;
       sessionConfig.initialNodePosition = clientConfig.joinTargetPosition;
       sessionConfig.interestArea = nodeConfig.runtimeInterestArea;

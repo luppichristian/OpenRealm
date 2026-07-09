@@ -3,8 +3,8 @@
 #include "../TaskManager.h"
 #include "../runtime/RuntimeSession.h"
 #include "ClientMenu.h"
-#include "ColorMenu.h"
 #include "ClientWorld.h"
+#include "ColorMenu.h"
 
 class Game
 {

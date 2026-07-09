@@ -127,3 +127,9 @@ Guidance:
 ## Documentation/agent convention
 
 Agent-facing durable repo knowledge belongs in `.agents/`, not in user-facing README files.
+
+Config convention reminder:
+- `config.json` is a shared flat root config for all node targets
+- do not reintroduce top-level groups like `wallet`, `client`, `runtime`, `service`, or `simulation`
+- do not persist a manual `nodeId`; runtime identity is derived from the live bind address
+- launch-time selections such as realm choice, jump-node choice, and client join target are runtime inputs, not persisted config fields

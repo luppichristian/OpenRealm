@@ -55,20 +55,11 @@ static bool ReadBoolValue(const nlohmann::json& json, const char* key, bool fall
   return json[key].get<bool>();
 }
 
-static RuntimeWorldPosition ReadWorldPositionValue(const nlohmann::json& json, const RuntimeWorldPosition& fallback)
+static const nlohmann::json& ReadObjectOrEmpty(const nlohmann::json& json, const char* key)
 {
-  RuntimeWorldPosition position = fallback;
-  if (!json.is_object()) return position;
-  position.x = ReadFloatValue(json, "x", position.x);
-  position.y = ReadFloatValue(json, "y", position.y);
-  position.z = ReadFloatValue(json, "z", position.z);
-  return position;
-}
-
-static nlohmann::json& EnsureObject(nlohmann::json& root, const char* key)
-{
-  if (!root.contains(key) || !root[key].is_object()) root[key] = nlohmann::json::object();
-  return root[key];
+  static const nlohmann::json empty = nlohmann::json::object();
+  if (!json.is_object() || key == nullptr || !json.contains(key) || !json[key].is_object()) return empty;
+  return json[key];
 }
 
 static std::string NormalizeRealmName(const std::string& value)
@@ -88,16 +79,11 @@ bool LoadClientFilesConfig(const std::string& configPath, ClientFilesConfig* con
   if (!LoadJsonFile(configPath, &root, errorMessage)) return false;
 
   config->configPath = configPath;
-  const nlohmann::json clientJson = root.value("client", nlohmann::json::object());
-  const nlohmann::json runtimeJson = root.value("runtime", nlohmann::json::object());
-  const nlohmann::json joinJson = runtimeJson.value("join", nlohmann::json::object());
-  config->selectedRealm = ReadStringValue(clientJson, "realm", ReadStringValue(root, "realm", config->selectedRealm));
-  config->jumpNodeIndex = ReadIntValue(clientJson, "jumpNodeIndex", ReadIntValue(runtimeJson, "jumpNodeIndex", config->jumpNodeIndex));
-  config->joinTargetPosition = ReadWorldPositionValue(clientJson.value("joinTargetPosition", joinJson.value("targetPosition", nlohmann::json::object())), config->joinTargetPosition);
-  config->masterVolume = ReadFloatValue(clientJson, "masterVolume", config->masterVolume);
-  config->mouseSensitivity = ReadFloatValue(clientJson, "mouseSensitivity", config->mouseSensitivity);
-  config->invertMouseY = ReadBoolValue(clientJson, "invertMouseY", config->invertMouseY);
-  config->showFps = ReadBoolValue(clientJson, "showFps", config->showFps);
+  const nlohmann::json& clientJson = ReadObjectOrEmpty(root, "client");
+  config->masterVolume = ReadFloatValue(root, "masterVolume", ReadFloatValue(clientJson, "masterVolume", config->masterVolume));
+  config->mouseSensitivity = ReadFloatValue(root, "mouseSensitivity", ReadFloatValue(clientJson, "mouseSensitivity", config->mouseSensitivity));
+  config->invertMouseY = ReadBoolValue(root, "invertMouseY", ReadBoolValue(clientJson, "invertMouseY", config->invertMouseY));
+  config->showFps = ReadBoolValue(root, "showFps", ReadBoolValue(clientJson, "showFps", config->showFps));
   return true;
 }
 
@@ -111,29 +97,26 @@ bool SaveClientFilesConfig(const ClientFilesConfig& config, std::string* errorMe
     return false;
   }
 
-  nlohmann::json& clientJson = EnsureObject(root, "client");
-  nlohmann::json& runtimeJson = EnsureObject(root, "runtime");
-  nlohmann::json& joinJson = EnsureObject(runtimeJson, "join");
+  root["masterVolume"] = config.masterVolume;
+  root["mouseSensitivity"] = config.mouseSensitivity;
+  root["invertMouseY"] = config.invertMouseY;
+  root["showFps"] = config.showFps;
 
-  clientJson["realm"] = config.selectedRealm;
-  clientJson["jumpNodeIndex"] = config.jumpNodeIndex;
-  clientJson["joinTargetPosition"] = {
-      {"x", config.joinTargetPosition.x},
-      {"y", config.joinTargetPosition.y},
-      {"z", config.joinTargetPosition.z},
-  };
-  clientJson["masterVolume"] = config.masterVolume;
-  clientJson["mouseSensitivity"] = config.mouseSensitivity;
-  clientJson["invertMouseY"] = config.invertMouseY;
-  clientJson["showFps"] = config.showFps;
+  if (root.contains("realm")) root.erase("realm");
+  if (root.contains("client")) root.erase("client");
 
-  root["realm"] = config.selectedRealm;
-  runtimeJson["jumpNodeIndex"] = config.jumpNodeIndex;
-  joinJson["targetPosition"] = {
-      {"x", config.joinTargetPosition.x},
-      {"y", config.joinTargetPosition.y},
-      {"z", config.joinTargetPosition.z},
-  };
+  if (root.contains("runtime") && root["runtime"].is_object())
+  {
+    nlohmann::json& runtimeJson = root["runtime"];
+    if (runtimeJson.contains("jumpNodeIndex")) runtimeJson.erase("jumpNodeIndex");
+    if (runtimeJson.contains("join") && runtimeJson["join"].is_object())
+    {
+      nlohmann::json& joinJson = runtimeJson["join"];
+      if (joinJson.contains("targetPosition")) joinJson.erase("targetPosition");
+      if (joinJson.empty()) runtimeJson.erase("join");
+    }
+    if (runtimeJson.empty()) root.erase("runtime");
+  }
 
   std::ofstream stream(config.configPath, std::ios::trunc);
   if (!stream.is_open())

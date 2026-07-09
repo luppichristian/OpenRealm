@@ -10,8 +10,8 @@
 
 #include "Args.h"
 #include "Config.h"
-#include "Process.h"
 #include "LauncherUtilities.h"
+#include "Process.h"
 
 int RunApp(int argc, char** argv)
 {
@@ -86,8 +86,8 @@ int RunApp(int argc, char** argv)
     child.configPath = sessionPaths.sessionDir / ("relay-" + std::to_string(i + 1) + ".json");
     child.logPath = sessionPaths.sessionDir / ("relay-" + std::to_string(i + 1) + ".log");
     child.realmDir = sessionPaths.realmDir;
-    child.nodeId = options.relayBaseNodeId + (uint32_t)i;
     child.bindPort = options.relayBasePort + i;
+    child.jumpNodeIndex = 0;
 
     if (!BuildRelayConfig(baseConfig, options, sessionPaths.realmDir, i, child.configPath, &error))
     {
@@ -96,7 +96,7 @@ int RunApp(int argc, char** argv)
       return 1;
     }
 
-    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, &child, &error))
+    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, &child, &error))
     {
       std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
       StopAndCloseChildren(&children);
@@ -117,8 +117,8 @@ int RunApp(int argc, char** argv)
     child.configPath = sessionPaths.sessionDir / ("simulator-" + std::to_string(i + 1) + ".json");
     child.logPath = sessionPaths.sessionDir / ("simulator-" + std::to_string(i + 1) + ".log");
     child.realmDir = sessionPaths.realmDir;
-    child.nodeId = options.simulatorBaseNodeId + (uint32_t)i;
     child.bindPort = options.simulatorBasePort + i;
+    child.jumpNodeIndex = options.relayCount > 0 ? (i % options.relayCount) : 0;
 
     if (!BuildSimulatorConfig(baseConfig, options, sessionPaths.realmDir, i, options.relayCount, child.configPath, &error))
     {
@@ -127,7 +127,7 @@ int RunApp(int argc, char** argv)
       return 1;
     }
 
-    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, &child, &error))
+    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, &child, &error))
     {
       std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
       StopAndCloseChildren(&children);

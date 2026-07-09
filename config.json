@@ -1,66 +1,41 @@
 {
-  "realm": "realms/test",
-  "wallet": {
-    "accountAddress": "0x0000000000000000000000000000000000000001"
+  "accountAddress": "0x0000000000000000000000000000000000000001",
+  "bindAddress": {
+    "host": "127.0.0.1",
+    "port": 46010
   },
-  "client": {
-    "realm": "realms/test",
-    "jumpNodeIndex": 0,
-    "joinTargetPosition": {
-      "x": 0.0,
-      "y": 0.0,
-      "z": 0.0
-    },
-    "masterVolume": 0.5,
-    "mouseSensitivity": 1.0,
-    "invertMouseY": false,
-    "showFps": true
+  "enabled": false,
+  "acceptsJoins": true,
+  "position": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
   },
-  "runtime": {
-    "enabled": false,
-    "acceptsJoins": true,
-    "bindAddress": {
-      "host": "127.0.0.1",
-      "port": 46010
-    },
-    "jumpNodeIndex": 0,
-    "nodeId": 7001,
-    "position": {
-      "x": 0.0,
-      "y": 0.0,
-      "z": 0.0
-    },
-    "areaOfInterest": {
-      "radiusX": 96.0,
-      "radiusY": 96.0,
-      "radiusZ": 64.0
-    },
-    "join": {
-      "targetPosition": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "maxCandidates": 6,
-      "maxHops": 8
-    },
-    "limits": {
-      "maxNodeConnections": 8,
-      "maxKnownNodes": 64
-    },
-    "periodsMs": {
-      "neighborRefresh": 250,
-      "topologyBroadcast": 500,
-      "playerBroadcast": 50
-    },
-    "receiveTimeoutMs": 50
+  "areaOfInterest": {
+    "radiusX": 96.0,
+    "radiusY": 96.0,
+    "radiusZ": 64.0
   },
-  "service": {
-    "ticks": 0
+  "join": {
+    "maxCandidates": 6,
+    "maxHops": 8
   },
-  "simulation": {
-    "frames": 0,
-    "frameTime": 0.016666667,
-    "sleepMs": 16
-  }
+  "limits": {
+    "maxNodeConnections": 8,
+    "maxKnownNodes": 64
+  },
+  "periodsMs": {
+    "neighborRefresh": 250,
+    "topologyBroadcast": 500,
+    "playerBroadcast": 50
+  },
+  "receiveTimeoutMs": 50,
+  "masterVolume": 0.5,
+  "mouseSensitivity": 1.0,
+  "invertMouseY": false,
+  "showFps": true,
+  "ticks": 0,
+  "frames": 0,
+  "frameTime": 0.016666667,
+  "sleepMs": 16
 }

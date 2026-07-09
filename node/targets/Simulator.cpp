@@ -29,31 +29,29 @@ int main(int argc, char** argv)
     TraceLog(LOG_ERROR, "Failed to load node config: %s", nodeError.c_str());
     return 1;
   }
-  if (!bootConfig.realmDirectory.empty()) nodeFiles.selectedRealm = bootConfig.realmDirectory;
 
   RealmConfigFiles realmFiles = {};
   std::string realmError = {};
-  if (!LoadRealmConfigFiles(nodeFiles.selectedRealm, &realmFiles, &realmError))
+  if (!LoadRealmConfigFiles(bootConfig.realmDirectory, &realmFiles, &realmError))
   {
     TraceLog(LOG_ERROR, "Failed to load realm config: %s", realmError.c_str());
     return 1;
   }
 
   RuntimePeerAddress jumpNode = {};
-  if (!realmFiles.jumpNodes.empty() && nodeFiles.runtimeJumpNodeIndex >= 0 && (size_t)nodeFiles.runtimeJumpNodeIndex < realmFiles.jumpNodes.size())
+  if (!realmFiles.jumpNodes.empty() && bootConfig.jumpNodeIndex >= 0 && (size_t)bootConfig.jumpNodeIndex < realmFiles.jumpNodes.size())
   {
-    jumpNode = realmFiles.jumpNodes[(size_t)nodeFiles.runtimeJumpNodeIndex].peerAddress;
+    jumpNode = realmFiles.jumpNodes[(size_t)bootConfig.jumpNodeIndex].peerAddress;
   }
 
   RuntimeSessionConfig runtimeConfig = {};
   runtimeConfig.role = RuntimeNodeRole::Simulator;
   runtimeConfig.bindAddress = nodeFiles.runtimeBindAddress;
   runtimeConfig.jumpNode = jumpNode;
-  runtimeConfig.localNodeId = nodeFiles.runtimeNodeId;
   runtimeConfig.realmHash = BuildRealmHash(realmFiles);
   runtimeConfig.initialNodePosition = nodeFiles.runtimePosition;
   runtimeConfig.interestArea = nodeFiles.runtimeInterestArea;
-  runtimeConfig.joinTargetPosition = nodeFiles.runtimeJoinTargetPosition;
+  runtimeConfig.joinTargetPosition = nodeFiles.runtimePosition;
   runtimeConfig.receiveTimeoutMs = nodeFiles.runtimeReceiveTimeoutMs;
   runtimeConfig.maxNodeConnections = nodeFiles.runtimeMaxNodeConnections;
   runtimeConfig.maxKnownNodes = nodeFiles.runtimeMaxKnownNodes;
@@ -88,8 +86,9 @@ int main(int argc, char** argv)
       const RuntimeSessionStatus status = runtimeSession.GetStatus();
       TraceLog(
           LOG_INFO,
-          "sim nodeId=%u known=%d connected=%d resolved=%d pos=(%.1f, %.1f, %.1f)",
-          runtimeConfig.localNodeId,
+          "sim bind=%s:%d known=%d connected=%d resolved=%d pos=(%.1f, %.1f, %.1f)",
+          runtimeConfig.bindAddress.host.c_str(),
+          runtimeConfig.bindAddress.port,
           (int)status.knownNodes,
           (int)status.connectedNodes,
           status.joinResolved ? 1 : 0,

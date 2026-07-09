@@ -25,10 +25,10 @@ static StepperRowLayout BuildStepperRowLayout(const Rectangle& panel, float top)
   const float valueWidth = controlsWidth - leftButtonWidth - rightButtonWidth - gap * 2.0f;
   const float controlsLeft = panel.x + panel.width - kPanelPadding - controlsWidth;
   return {
-      .labelBounds = {panel.x + kPanelPadding, top, controlsLeft - panel.x - kPanelPadding - 16.0f, 42.0f},
-      .leftButton = {controlsLeft, top, leftButtonWidth, 42.0f},
-      .valueBounds = {controlsLeft + leftButtonWidth + gap, top, valueWidth, 42.0f},
-      .rightButton = {controlsLeft + leftButtonWidth + gap + valueWidth + gap, top, rightButtonWidth, 42.0f},
+      .labelBounds = {                                panel.x + kPanelPadding, top, controlsLeft - panel.x - kPanelPadding - 16.0f, 42.0f},
+      .leftButton = {                                           controlsLeft, top,                                leftButtonWidth, 42.0f},
+      .valueBounds = {                   controlsLeft + leftButtonWidth + gap, top,                                     valueWidth, 42.0f},
+      .rightButton = {controlsLeft + leftButtonWidth + gap + valueWidth + gap, top,                               rightButtonWidth, 42.0f},
   };
 }
 
@@ -54,7 +54,8 @@ static float DrawWrappedText(const std::string& text, float x, float y, float ma
   std::string word = {};
   float currentY = y;
 
-  auto flushLine = [&](const std::string& value) {
+  auto flushLine = [&](const std::string& value)
+  {
     if (value.empty()) return;
     DrawText(value.c_str(), (int)x, (int)currentY, fontSize, color);
     currentY += (float)fontSize + lineSpacing;
@@ -548,12 +549,12 @@ void ClientMenu::Draw(bool gameplayActive) const
 
   switch (mode)
   {
-    case ClientMenuMode::Main: DrawMainMenu(); break;
-    case ClientMenuMode::Play: DrawPlayMenu(); break;
+    case ClientMenuMode::Main:    DrawMainMenu(); break;
+    case ClientMenuMode::Play:    DrawPlayMenu(); break;
     case ClientMenuMode::Options: DrawOptionsMenu(); break;
     case ClientMenuMode::Credits: DrawCreditsMenu(); break;
-    case ClientMenuMode::Pause: DrawPauseMenu(); break;
-    case ClientMenuMode::None: break;
+    case ClientMenuMode::Pause:   DrawPauseMenu(); break;
+    case ClientMenuMode::None:    break;
   }
 
   if (!statusMessage.empty())
@@ -573,7 +574,7 @@ void ClientMenu::DrawButton(const Button& button, bool primary) const
 {
   const bool hovered = CheckCollisionPointRec(GetMousePosition(), button.bounds);
   const unsigned char alpha = (unsigned char)(hovered ? 255 : 225);
-  const Color fillColor = primary ? Color{53, 118, 255, alpha} : Color{32, 38, 56, alpha};
+  const Color fillColor = primary ? Color {53, 118, 255, alpha} : Color {32, 38, 56, alpha};
   const Color borderColor = primary ? Fade(SKYBLUE, 0.95f) : Fade(RAYWHITE, 0.5f);
   DrawRectangleRounded(button.bounds, 0.2f, 8, fillColor);
   DrawRectangleLinesEx(button.bounds, primary ? 2.0f : 1.5f, borderColor);
@@ -633,7 +634,7 @@ void ClientMenu::DrawToggleRow(float top, const std::string& label, bool value) 
   const bool hovered = CheckCollisionPointRec(GetMousePosition(), buttonBounds);
   DrawText(FitTextToWidth(label, 22, panel.width - 228.0f).c_str(), (int)panel.x + 28, (int)top + 10, 22, WHITE);
   const unsigned char alpha = (unsigned char)(hovered ? 255 : 225);
-  DrawRectangleRounded(buttonBounds, 0.18f, 6, value ? Color{53, 118, 255, alpha} : Fade(DARKGRAY, hovered ? 0.95f : 0.8f));
+  DrawRectangleRounded(buttonBounds, 0.18f, 6, value ? Color {53, 118, 255, alpha} : Fade(DARKGRAY, hovered ? 0.95f : 0.8f));
   DrawRectangleLinesEx(buttonBounds, 1.5f, Fade(RAYWHITE, 0.45f));
   const char* text = value ? "On" : "Off";
   const int textWidth = MeasureText(text, 22);
@@ -732,8 +733,8 @@ void ClientMenu::DrawMenuBackdrop(bool gameplayActive) const
 {
   if (!gameplayActive)
   {
-    ClearBackground(Color{12, 16, 28, 255});
-    DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), Color{18, 28, 48, 255}, Color{7, 10, 18, 255});
+    ClearBackground(Color {12, 16, 28, 255});
+    DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), Color {18, 28, 48, 255}, Color {7, 10, 18, 255});
     return;
   }
 

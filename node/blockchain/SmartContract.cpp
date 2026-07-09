@@ -1,9 +1,7 @@
 #include "SmartContract.h"
 
 SmartContract::SmartContract(const BlockchainRpcClient* rpcClient, const Wallet* walletState, std::string address)
-    : rpc(rpcClient)
-    , wallet(walletState)
-    , contractAddress(std::move(address))
+    : rpc(rpcClient), wallet(walletState), contractAddress(std::move(address))
 {
 }
 
@@ -34,15 +32,14 @@ bool SmartContract::HasContractAddress() const
 
 std::string SmartContract::GetWalletTransactionSender() const
 {
-  return wallet != nullptr ? wallet->GetTransactionSenderAddress() : std::string{};
+  return wallet != nullptr ? wallet->GetTransactionSenderAddress() : std::string {};
 }
 
 bool SmartContract::Call(
     const std::string& callData,
     std::string* resultHex,
     const std::string& fromAddress,
-    const std::string& valueHex
-) const
+    const std::string& valueHex) const
 {
   return rpc != nullptr && rpc->EthCall(contractAddress, callData, resultHex, fromAddress, valueHex);
 }
@@ -51,8 +48,7 @@ bool SmartContract::CallWords(
     const std::string& callData,
     std::vector<std::string>* words,
     const std::string& fromAddress,
-    const std::string& valueHex
-) const
+    const std::string& valueHex) const
 {
   if (words == nullptr)
   {
@@ -73,8 +69,7 @@ bool SmartContract::SendTransaction(
     const std::string& callData,
     BlockchainTransactionReceipt* receipt,
     const std::string& valueHex,
-    const std::string& fromAddress
-) const
+    const std::string& fromAddress) const
 {
   if (rpc == nullptr || receipt == nullptr)
   {

@@ -9,7 +9,6 @@
 
 struct ActiveNodeState
 {
-  uint32_t nodeId = 0;
   RuntimePeerAddress peerAddress = {};
   uint32_t protocolVersion = 0;
   uint64_t realmHash = 0;
@@ -27,9 +26,8 @@ enum class ActiveNodeBucketCode : uint8_t
 {
   Added = 0,
   Refreshed = 1,
-  DuplicateNodeId = 2,
-  DuplicatePeerAddress = 3,
-  CapacityReached = 4,
+  DuplicatePeerAddress = 2,
+  CapacityReached = 3,
 };
 
 struct ActiveNodeBucketResult
@@ -51,32 +49,29 @@ class ActiveNodeBucket
       const RuntimePeerAddress& peerAddress,
       const HandshakePacketData& handshake,
       uint32_t packetChecksum,
-      uint64_t tick
-  );
+      uint64_t tick);
 
   ActiveNodeBucketResult RegisterTopologyNode(
       const TopologyNodeState& topologyNode,
       uint32_t packetChecksum,
-      uint64_t tick
-  );
+      uint64_t tick);
 
-  void MarkConnected(uint32_t nodeId, bool connected);
+  void MarkConnected(const RuntimePeerAddress& peerAddress, bool connected);
   void ForgetStaleNodes(uint64_t minimumTick);
 
   size_t GetCount() const;
   const std::vector<ActiveNodeState>& GetNodes() const;
-  const ActiveNodeState* FindByNodeId(uint32_t nodeId) const;
-  ActiveNodeState* FindMutableByNodeId(uint32_t nodeId);
   const ActiveNodeState* FindByPeerAddress(const RuntimePeerAddress& peerAddress) const;
-  std::vector<TopologyNodeState> BuildTopologySnapshot(uint32_t excludedNodeId, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
+  ActiveNodeState* FindMutableByPeerAddress(const RuntimePeerAddress& peerAddress);
+  std::vector<TopologyNodeState> BuildTopologySnapshot(const RuntimePeerAddress& excludedPeerAddress, uint64_t realmHash, size_t maxCount = SIZE_MAX) const;
   std::vector<const ActiveNodeState*> BuildClosestNodes(
-      uint32_t excludedNodeId,
+      const RuntimePeerAddress& excludedPeerAddress,
       uint64_t realmHash,
       const RuntimeWorldPosition& targetPosition,
       size_t maxCount,
       bool requireJoinable) const;
   std::vector<const ActiveNodeState*> BuildNeighborCandidates(
-      uint32_t excludedNodeId,
+      const RuntimePeerAddress& excludedPeerAddress,
       uint64_t realmHash,
       const RuntimeWorldPosition& localPosition,
       const RuntimeInterestArea& localInterestArea,

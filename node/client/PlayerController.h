@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ColorMenu.h"
 #include "../runtime/RuntimeWorldPosition.h"
 #include "../world/World.h"
+#include "ColorMenu.h"
 
 inline constexpr int LOCAL_PLAYER_ID = 0;
 

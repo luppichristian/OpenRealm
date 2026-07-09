@@ -10,34 +10,20 @@ static nlohmann::json& EnsureObject(nlohmann::json& root, const char* key)
   return root[key];
 }
 
-static nlohmann::json& EnsureRuntimeObject(nlohmann::json& root)
+static void MigrateKeyIfMissing(nlohmann::json* root, const nlohmann::json& source, const char* key)
 {
-  return EnsureObject(root, "runtime");
+  if (root == nullptr || key == nullptr || !source.is_object() || !source.contains(key) || root->contains(key)) return;
+  (*root)[key] = source[key];
 }
 
-static nlohmann::json& EnsureSimulationObject(nlohmann::json& root)
+static nlohmann::json& EnsureInterestObject(nlohmann::json& root)
 {
-  return EnsureObject(root, "simulation");
-}
-
-static nlohmann::json& EnsureServiceObject(nlohmann::json& root)
-{
-  return EnsureObject(root, "service");
-}
-
-static nlohmann::json& EnsureWalletObject(nlohmann::json& root)
-{
-  return EnsureObject(root, "wallet");
-}
-
-static nlohmann::json& EnsureRuntimeInterestObject(nlohmann::json& root)
-{
-  return EnsureObject(EnsureRuntimeObject(root), "interest");
+  return EnsureObject(root, "interest");
 }
 
 static nlohmann::json& EnsureBindAddressObject(nlohmann::json& root)
 {
-  return EnsureObject(EnsureRuntimeObject(root), "bindAddress");
+  return EnsureObject(root, "bindAddress");
 }
 
 bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json* json, std::string* errorMessage)
@@ -84,11 +70,57 @@ bool SaveJsonFile(const std::filesystem::path& path, const nlohmann::json& json,
 void NormalizeConfigSchema(nlohmann::json* root)
 {
   if (root == nullptr || !root->is_object()) return;
-  EnsureWalletObject(*root);
+
+  const nlohmann::json walletJson = root->value("wallet", nlohmann::json::object());
+  const nlohmann::json clientJson = root->value("client", nlohmann::json::object());
+  const nlohmann::json runtimeJson = root->value("runtime", nlohmann::json::object());
+  const nlohmann::json serviceJson = root->value("service", nlohmann::json::object());
+  const nlohmann::json simulationJson = root->value("simulation", nlohmann::json::object());
+  const nlohmann::json runtimeJoinJson = runtimeJson.value("join", nlohmann::json::object());
+  const nlohmann::json runtimeLimitsJson = runtimeJson.value("limits", nlohmann::json::object());
+  const nlohmann::json runtimePeriodsJson = runtimeJson.value("periodsMs", nlohmann::json::object());
+
+  MigrateKeyIfMissing(root, walletJson, "accountAddress");
+  MigrateKeyIfMissing(root, clientJson, "masterVolume");
+  MigrateKeyIfMissing(root, clientJson, "mouseSensitivity");
+  MigrateKeyIfMissing(root, clientJson, "invertMouseY");
+  MigrateKeyIfMissing(root, clientJson, "showFps");
+  MigrateKeyIfMissing(root, runtimeJson, "bindAddress");
+  MigrateKeyIfMissing(root, runtimeJson, "enabled");
+  MigrateKeyIfMissing(root, runtimeJson, "acceptsJoins");
+  MigrateKeyIfMissing(root, runtimeJson, "position");
+  MigrateKeyIfMissing(root, runtimeJson, "areaOfInterest");
+  MigrateKeyIfMissing(root, runtimeJson, "receiveTimeoutMs");
+  MigrateKeyIfMissing(root, runtimeJoinJson, "maxCandidates");
+  MigrateKeyIfMissing(root, runtimeJoinJson, "maxHops");
+  MigrateKeyIfMissing(root, runtimeLimitsJson, "maxNodeConnections");
+  MigrateKeyIfMissing(root, runtimeLimitsJson, "maxKnownNodes");
+  MigrateKeyIfMissing(root, runtimePeriodsJson, "neighborRefresh");
+  MigrateKeyIfMissing(root, runtimePeriodsJson, "topologyBroadcast");
+  MigrateKeyIfMissing(root, runtimePeriodsJson, "playerBroadcast");
+  MigrateKeyIfMissing(root, runtimeJson, "interest");
+  MigrateKeyIfMissing(root, serviceJson, "ticks");
+  MigrateKeyIfMissing(root, simulationJson, "frames");
+  MigrateKeyIfMissing(root, simulationJson, "frameTime");
+  MigrateKeyIfMissing(root, simulationJson, "sleepMs");
+  MigrateKeyIfMissing(root, simulationJson, "emitPlaceEvent");
+  MigrateKeyIfMissing(root, simulationJson, "placeVoxelValue");
+
   EnsureBindAddressObject(*root);
-  EnsureRuntimeInterestObject(*root);
-  EnsureSimulationObject(*root);
-  EnsureServiceObject(*root);
+  EnsureObject(*root, "position");
+  EnsureObject(*root, "areaOfInterest");
+  EnsureObject(*root, "join");
+  EnsureObject(*root, "limits");
+  EnsureObject(*root, "periodsMs");
+  EnsureInterestObject(*root);
+
+  root->erase("wallet");
+  root->erase("client");
+  root->erase("runtime");
+  root->erase("service");
+  root->erase("simulation");
+  root->erase("realm");
+  root->erase(std::string("node") + "Id");
 }
 
 std::filesystem::path ResolveRealmDirectory(const std::filesystem::path& repoRoot, const std::string& realmArgument)
@@ -180,23 +212,18 @@ bool BuildRelayConfig(
     const std::filesystem::path& outputPath,
     std::string* errorMessage)
 {
+  (void)realmDir;
+
   nlohmann::json config = baseConfig;
   NormalizeConfigSchema(&config);
 
   const int bindPort = options.relayBasePort + relayIndex;
-  const uint32_t nodeId = options.relayBaseNodeId + (uint32_t)relayIndex;
 
-  config["realm"] = FormatPath(realmDir);
   nlohmann::json& bindAddress = EnsureBindAddressObject(config);
   bindAddress["host"] = "127.0.0.1";
   bindAddress["port"] = bindPort;
-
-  nlohmann::json& runtimeJson = EnsureRuntimeObject(config);
-  runtimeJson["nodeId"] = nodeId;
-  runtimeJson["enabled"] = true;
-
-  nlohmann::json& serviceJson = EnsureServiceObject(config);
-  serviceJson["ticks"] = options.relayTicks;
+  config["enabled"] = true;
+  config["ticks"] = options.relayTicks;
 
   return SaveJsonFile(outputPath, config, errorMessage);
 }
@@ -210,32 +237,28 @@ bool BuildSimulatorConfig(
     const std::filesystem::path& outputPath,
     std::string* errorMessage)
 {
+  (void)realmDir;
+  (void)launchedRelayCount;
+
   nlohmann::json config = baseConfig;
   NormalizeConfigSchema(&config);
 
   const int bindPort = options.simulatorBasePort + simulatorIndex;
-  const uint32_t nodeId = options.simulatorBaseNodeId + (uint32_t)simulatorIndex;
   const std::pair<int, int> interest = BuildSimulatorInterestCoords(simulatorIndex);
 
-  config["realm"] = FormatPath(realmDir);
   nlohmann::json& bindAddress = EnsureBindAddressObject(config);
   bindAddress["host"] = "127.0.0.1";
   bindAddress["port"] = bindPort;
+  config["enabled"] = true;
 
-  nlohmann::json& runtimeJson = EnsureRuntimeObject(config);
-  runtimeJson["nodeId"] = nodeId;
-  runtimeJson["enabled"] = true;
-  runtimeJson["jumpNodeIndex"] = launchedRelayCount > 0 ? (simulatorIndex % launchedRelayCount) : 0;
-
-  nlohmann::json& interestJson = EnsureRuntimeInterestObject(config);
+  nlohmann::json& interestJson = EnsureInterestObject(config);
   interestJson["chunkX"] = interest.first;
   interestJson["chunkY"] = interest.second;
 
-  nlohmann::json& simulationJson = EnsureSimulationObject(config);
-  simulationJson["frames"] = options.simulatorFrames;
-  simulationJson["sleepMs"] = options.simulatorSleepMs;
-  simulationJson["frameTime"] = options.simulatorFrameTime;
-  simulationJson["emitPlaceEvent"] = options.emitPlaceEvent && simulatorIndex == 0;
+  config["frames"] = options.simulatorFrames;
+  config["sleepMs"] = options.simulatorSleepMs;
+  config["frameTime"] = options.simulatorFrameTime;
+  config["emitPlaceEvent"] = options.emitPlaceEvent && simulatorIndex == 0;
 
   return SaveJsonFile(outputPath, config, errorMessage);
 }

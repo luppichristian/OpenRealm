@@ -9,7 +9,7 @@
 
 struct PacketValidationContext
 {
-  uint32_t localNodeId = 0;
+  RuntimePeerAddress localPeerAddress = {};
   uint32_t expectedProtocolVersion = kRuntimeProtocolVersion;
   uint64_t expectedRealmHash = 0;
   ActiveNodeBucket* activeNodes = nullptr;
@@ -21,13 +21,12 @@ enum class PacketValidationCode : uint8_t
   Accepted = 0,
   PacketParseFailed = 1,
   InvalidHandshakePayload = 2,
-  SelfNodeId = 3,
+  SelfPeerAddress = 3,
   ProtocolVersionMismatch = 4,
   RealmMismatch = 5,
-  DuplicateNodeId = 6,
-  DuplicatePeerAddress = 7,
-  MissingActiveNodeBucket = 8,
-  ActiveNodeLimitReached = 9,
+  DuplicatePeerAddress = 6,
+  MissingActiveNodeBucket = 7,
+  ActiveNodeLimitReached = 8,
 };
 
 struct PacketValidationResult

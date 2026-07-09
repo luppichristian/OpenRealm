@@ -67,7 +67,7 @@ static constexpr const char* SELECTOR_TOKEN_URI = "0xc87b56dd";
 
 static std::string DecodeStringResult(const std::vector<std::string>& words)
 {
-  return words.empty() ? std::string{} : DecodeBlockchainStringAt(words, 0);
+  return words.empty() ? std::string {} : DecodeBlockchainStringAt(words, 0);
 }
 
 static ChunkClaimState DecodeChunkClaim(const std::vector<std::string>& words)
@@ -214,8 +214,7 @@ BlockchainTransactionReceipt ChunkClaimsContract::MarketplaceTransferChunk(
     int32_t x,
     int32_t y,
     const std::string& from,
-    const std::string& to
-) const
+    const std::string& to) const
 {
   BlockchainTransactionReceipt receipt = {};
   SendTransaction(
@@ -467,8 +466,7 @@ BlockchainTransactionReceipt ChunkClaimsContract::SetApprovalForAll(const std::s
 BlockchainTransactionReceipt ChunkClaimsContract::TransferFrom(
     const std::string& from,
     const std::string& to,
-    const std::string& tokenId
-) const
+    const std::string& tokenId) const
 {
   BlockchainTransactionReceipt receipt = {};
   SendTransaction(

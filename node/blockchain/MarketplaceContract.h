@@ -94,8 +94,7 @@ class MarketplaceContract : public SmartContract
       int32_t y,
       const std::string& reservePrice,
       const std::string& minBidIncrement,
-      uint64_t durationSeconds
-  ) const;
+      uint64_t durationSeconds) const;
   BlockchainTransactionReceipt PlaceAuctionBid(const std::string& auctionId, const std::string& bidValue) const;
   BlockchainTransactionReceipt CancelAuction(const std::string& auctionId) const;
   BlockchainTransactionReceipt InvalidateStaleAuction(const std::string& auctionId) const;

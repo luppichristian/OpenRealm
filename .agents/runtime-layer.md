@@ -132,43 +132,55 @@ So the repo contains both:
 
 ## Config schema that the runtime actually reads
 
-### Canonical root config fields consumed by `NodeConfigFiles.cpp`
-From `config.json`, the runtime loader reads:
-- `realm`
-- `wallet.accountAddress`
-- `runtime.bindAddress.{host,port}`
-- `runtime.jumpNodeIndex`
-- `runtime.nodeId`
-- `runtime.enabled`
-- `runtime.acceptsJoins`
-- `runtime.position.{x,y,z}`
-- `runtime.areaOfInterest.{radiusX,radiusY,radiusZ}`
-- `runtime.join.targetPosition.{x,y,z}`
-- `runtime.join.maxCandidates`
-- `runtime.join.maxHops`
-- `runtime.limits.maxNodeConnections`
-- `runtime.limits.maxKnownNodes`
-- `runtime.periodsMs.{neighborRefresh,topologyBroadcast,playerBroadcast}`
-- `runtime.receiveTimeoutMs`
-- `simulation.{frames,frameTime,sleepMs}`
-- `service.ticks`
+### Canonical shared root config fields
+`config.json` is target-agnostic and flat at the root. Do not reintroduce top-level target/group wrappers such as `wallet`, `client`, `runtime`, `service`, or `simulation`.
+
+Identity rule: do not persist a manual `nodeId` in `config.json`. Runtime identity is derived from the live bind address at startup, so peer identity is not operator-configurable.
+
+Shared root fields:
+- `accountAddress`
+- `bindAddress.{host,port}`
+- `enabled`
+- `acceptsJoins`
+- `position.{x,y,z}`
+- `areaOfInterest.{radiusX,radiusY,radiusZ}`
+- `join.maxCandidates`
+- `join.maxHops`
+- `limits.maxNodeConnections`
+- `limits.maxKnownNodes`
+- `periodsMs.{neighborRefresh,topologyBroadcast,playerBroadcast}`
+- `receiveTimeoutMs`
+- `masterVolume`
+- `mouseSensitivity`
+- `invertMouseY`
+- `showFps`
+- `frames`
+- `frameTime`
+- `sleepMs`
+- `ticks`
+
+Launch-time selections do not belong in `config.json`:
+- realm selection is chosen at runtime (`--realm-dir` for headless targets, client menu selection for the playable client)
+- jump-node selection is chosen at runtime (`--jump-node-index` for headless targets, client menu selection for the playable client)
+- join target selection is chosen at runtime by the client menu and is not persisted in `config.json`
 
 Clamp/default behavior is implemented in `NodeConfigFiles.cpp` and `NodeConfigFiles.h`.
 
-### Important current schema caveat
-There is a second runtime-related config surface used by launcher/CLI code:
-- `runtime.interest.chunkX`
-- `runtime.interest.chunkY`
-- optional `runtime.interest.radius`
-- `simulation.emitPlaceEvent`
+### Secondary launcher/CLI fields
+There is still a second config surface used by launcher/CLI-oriented code:
+- `interest.chunkX`
+- `interest.chunkY`
+- optional `interest.radius`
+- `emitPlaceEvent`
 
 Where this appears today:
-- `node_launcher/Config.cpp` writes `runtime.interest.chunkX/chunkY` for simulator-generated configs
-- `node/cli/NodeCli.cpp` reads and edits `runtime.interest.*` and `simulation.emitPlaceEvent`
+- `node_launcher/Config.cpp` writes `interest.chunkX/chunkY` for simulator-generated configs
+- `node/cli/NodeCli.cpp` still reflects the older launcher-oriented config workflow
 
 But:
-- `NodeConfigFiles.cpp` does not read `runtime.interest.*`
-- the canonical runtime loader still reads `runtime.areaOfInterest.*`
+- `NodeConfigFiles.cpp` does not read `interest.*`
+- the canonical runtime loader still reads `areaOfInterest.*`
+- `node/cli/` is not compiled into the current targets, so treat it as non-authoritative when it disagrees with the live target code
 
 Treat this as current repo reality and potential drift, not as a fully unified config design.
 
