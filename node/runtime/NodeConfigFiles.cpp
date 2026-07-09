@@ -22,7 +22,7 @@ static bool LoadJsonFile(const std::string& path, nlohmann::json* json, std::str
     return false;
   }
 
-  *json = nlohmann::json::parse(stream, nullptr, false);
+  *json = nlohmann::json::parse(stream, nullptr, false, true);
   if (json->is_discarded())
   {
     if (errorMessage != nullptr) *errorMessage = "failed to parse " + path;

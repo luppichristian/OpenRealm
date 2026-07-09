@@ -41,7 +41,7 @@ bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json* json, std::
     return false;
   }
 
-  *json = nlohmann::json::parse(stream, nullptr, false);
+  *json = nlohmann::json::parse(stream, nullptr, false, true);
   if (json->is_discarded())
   {
     if (errorMessage != nullptr) *errorMessage = "failed to parse " + FormatPath(path);

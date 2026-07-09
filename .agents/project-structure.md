@@ -23,6 +23,8 @@ Current top-level repo surface:
   - orchestration CI/deploy workflows
 - `.agents/`
   - canonical agent-facing repo documentation
+- `.agents/audits/`
+  - saved repository audits with per-audit date and commit metadata
 - `build/`
   - generated native build artifacts and launcher session output
 - `AGENTS.md`, `CLAUDE.md`

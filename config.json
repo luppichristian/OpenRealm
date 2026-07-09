@@ -1,41 +1,127 @@
 {
+  // Wallet/account identity used by OpenRealm's blockchain-facing systems.
+  // This is the address the client or node presents when gameplay actions need
+  // to be associated with an on-chain account. The runtime does not derive this
+  // value automatically, so keep it aligned with the wallet/account you want to use.
   "accountAddress": "0x0000000000000000000000000000000000000001",
+
+  // Local UDP socket used by the runtime node.
+  // - host: interface/address to bind on this machine.
+  // - port: UDP port other peers or local tools connect to.
+  // For a normal local setup, 127.0.0.1 keeps the node private to the machine.
+  // If you want remote peers to reach this process, the host and firewall/network
+  // setup must allow it.
   "bindAddress": {
     "host": "127.0.0.1",
     "port": 46010
   },
+
+  // Enables the ENet runtime layer.
+  // false = client can still run in local/offline style mode, and headless nodes
+  // will not participate in runtime networking.
+  // true  = start the runtime session, perform join/bootstrap work, and publish
+  //         topology/player state according to the other runtime settings below.
   "enabled": false,
+
+  // Controls whether this node is willing to accept join/bootstrap traffic from
+  // other peers once the runtime is enabled.
+  // Typical meaning:
+  // - true: this node can act as a reachable relay/participant for other nodes.
+  // - false: this node may still join others, but should not advertise itself as
+  //          a node that accepts new joins.
   "acceptsJoins": true,
+
+  // Initial world-space position published by the runtime for this node.
+  // This is not the selected realm, not a jump-node choice, and not a persisted
+  // menu join target. It is the node's current runtime/world position baseline.
+  // Units are the game's world units used by the native runtime/world code.
   "position": {
     "x": 0.0,
     "y": 0.0,
     "z": 0.0
   },
+
+  // Axis-aligned interest extents around the node's runtime position.
+  // These values tell the runtime roughly how far this node cares about activity
+  // along each axis. Larger values broaden the area considered relevant and can
+  // increase the amount of topology/player traffic the node keeps track of.
+  // Smaller values make the node more selective.
   "areaOfInterest": {
     "radiusX": 96.0,
     "radiusY": 96.0,
     "radiusZ": 64.0
   },
+
+  // Join-search limits used while resolving a path into the runtime network.
   "join": {
+    // Maximum number of candidate nodes considered/returned during join expansion.
+    // Higher values can widen the search but also increase work and network chatter.
     "maxCandidates": 6,
+
+    // Maximum number of hops the join/discovery process is allowed to walk through
+    // the known topology before giving up.
+    // Larger values help in broader networks; smaller values keep join resolution tighter.
     "maxHops": 8
   },
+
+  // Safety/scale limits for the runtime peer graph kept in memory.
   "limits": {
+    // Hard cap on actively maintained live node connections.
+    // Once reached, the runtime has to be selective about which peers stay connected.
     "maxNodeConnections": 8,
+
+    // Hard cap on the broader set of known nodes remembered from topology exchange,
+    // even if they are not all connected at the same time.
     "maxKnownNodes": 64
   },
+
+  // Periodic runtime task intervals, in milliseconds.
   "periodsMs": {
+    // How often the node refreshes/reevaluates its nearby-neighbor set.
     "neighborRefresh": 250,
+
+    // How often the node broadcasts topology information to peers.
     "topologyBroadcast": 500,
+
+    // How often a world-backed node publishes player snapshot updates.
+    // Lower values feel more responsive but send traffic more often.
     "playerBroadcast": 50
   },
+
+  // Polling timeout used while waiting for runtime packets.
+  // Lower values reduce waiting latency but wake the loop more often.
+  // Higher values reduce polling churn but can make the runtime feel less reactive.
   "receiveTimeoutMs": 50,
+
+  // Global client audio volume multiplier.
+  // Intended range in the current UI is 0.0 to 1.0, where 0.0 is muted and 1.0 is full volume.
   "masterVolume": 0.5,
+
+  // Client mouse look sensitivity multiplier.
+  // The current menu clamps it to roughly 0.25x .. 2.5x, with 1.0 as the normal baseline.
   "mouseSensitivity": 1.0,
+
+  // When true, vertical mouse look is inverted in the client.
   "invertMouseY": false,
+
+  // When true, the client renders the FPS overlay/debug readout.
   "showFps": true,
+
+  // Relay service tick budget.
+  // 0 means run indefinitely.
+  // A positive number means stop the relay loop after that many service ticks.
   "ticks": 0,
+
+  // Simulator frame budget.
+  // 0 means run indefinitely.
+  // A positive number means stop the headless simulation after that many world updates.
   "frames": 0,
+
+  // Fixed simulator timestep, in seconds, used by the headless world update loop.
+  // 0.016666667 is approximately 1/60 second.
   "frameTime": 0.016666667,
+
+  // Sleep inserted between simulator frames, in milliseconds.
+  // This throttles the headless loop so it does not spin as fast as possible.
   "sleepMs": 16
 }

@@ -16,3 +16,4 @@ Read only the file you need:
 - `scripting-utils.md` — command entrypoints and wrappers
 - `coding-conventions.md` — formatting and code-style rules
 - `github-workflows.md` — CI and manual deploy workflow behavior
+- `audits.md` — audit storage rules and required metadata for saved audits

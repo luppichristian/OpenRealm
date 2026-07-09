@@ -166,6 +166,8 @@ Launch-time selections do not belong in `config.json`:
 
 Clamp/default behavior is implemented in `NodeConfigFiles.cpp` and `NodeConfigFiles.h`.
 
+Comments are now accepted in file-based JSON configs loaded by the native repo (`config.json`, realm files, launcher-generated variants) because the loaders parse with comment ignoring enabled. Treat these files as JSON-with-comments for hand editing, but remember any code path that rewrites them via `json.dump(...)` will drop the comments.
+
 ### Secondary launcher/CLI fields
 There is still a second config surface used by launcher/CLI-oriented code:
 - `interest.chunkX`
