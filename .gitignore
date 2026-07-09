@@ -60,3 +60,6 @@ Thumbs.db
 
 # Prevent accidental nested workspace debris
 /blockchain/blockchain/
+
+# AI agents
+.hermes/

@@ -27,6 +27,8 @@ Current top-level repo surface:
   - generated native build artifacts and launcher session output
 - `AGENTS.md`, `CLAUDE.md`
   - root pointer files into `.agents/`
+- `LICENSE`
+  - MIT license for the repository
 
 Generated subtrees currently worth knowing about:
 - `build/default-windows-x86_64/`
@@ -38,7 +40,7 @@ Generated subtrees currently worth knowing about:
 - `blockchain/deployments/`
   - generated deployment records such as `test.json`, `main.json`, and `local.json`
 
-There is no current root `README.md` and no current `dist/` tree in the repository.
+A human-facing root `README.md` is present again. There is still no current `dist/` tree in the repository.
 
 ## Native directory ownership
 
