@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 Canonical agent documentation for this repository lives at `.agents/README.md`.
 
