@@ -9,16 +9,13 @@
 #include <chrono>
 #include <thread>
 
-namespace
-{
-uint64_t BuildRealmHash(const RealmConfigFiles& realmFiles)
+static uint64_t BuildRealmHash(const RealmConfigFiles& realmFiles)
 {
   RuntimeRealmState runtimeRealmState = {};
   runtimeRealmState.runtimeProtocolVersion = kRuntimeProtocolVersion;
   runtimeRealmState.chainId = realmFiles.directory;
   runtimeRealmState.blockchainConfig = realmFiles.blockchainConfig;
   return ComputeRuntimeRealmHash(runtimeRealmState);
-}
 }
 
 int main(int argc, char** argv)
@@ -43,8 +40,7 @@ int main(int argc, char** argv)
   }
 
   RuntimePeerAddress jumpNode = {};
-  if (!realmFiles.jumpNodes.empty() && nodeFiles.runtimeJumpNodeIndex >= 0
-      && (size_t)nodeFiles.runtimeJumpNodeIndex < realmFiles.jumpNodes.size())
+  if (!realmFiles.jumpNodes.empty() && nodeFiles.runtimeJumpNodeIndex >= 0 && (size_t)nodeFiles.runtimeJumpNodeIndex < realmFiles.jumpNodes.size())
   {
     jumpNode = realmFiles.jumpNodes[(size_t)nodeFiles.runtimeJumpNodeIndex].peerAddress;
   }

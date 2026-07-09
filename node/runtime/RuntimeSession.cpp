@@ -6,12 +6,9 @@
 
 #include <algorithm>
 
-namespace
-{
 constexpr uint64_t kJoinRetryIntervalMs = 500;
 constexpr uint64_t kStaleNodeMultiplier = 6;
 constexpr uint64_t kStalePlayerMultiplier = 10;
-}
 
 RuntimeSession::~RuntimeSession()
 {
@@ -410,19 +407,18 @@ void RuntimeSession::MaybeRequestJoin()
 void RuntimeSession::PruneStaleState(World* world)
 {
   const uint64_t staleNodeCutoff = nowMs > config.topologyBroadcastMs * kStaleNodeMultiplier
-      ? nowMs - config.topologyBroadcastMs * kStaleNodeMultiplier
-      : 0;
+                                       ? nowMs - config.topologyBroadcastMs * kStaleNodeMultiplier
+                                       : 0;
   knownNodes.ForgetStaleNodes(staleNodeCutoff);
 
   connectedNodeIds.erase(
-      std::remove_if(connectedNodeIds.begin(), connectedNodeIds.end(), [&](uint32_t nodeId) {
-        return knownNodes.FindByNodeId(nodeId) == nullptr;
-      }),
+      std::remove_if(connectedNodeIds.begin(), connectedNodeIds.end(), [&](uint32_t nodeId)
+                     { return knownNodes.FindByNodeId(nodeId) == nullptr; }),
       connectedNodeIds.end());
 
   const uint64_t stalePlayerCutoff = nowMs > config.playerBroadcastMs * kStalePlayerMultiplier
-      ? nowMs - config.playerBroadcastMs * kStalePlayerMultiplier
-      : 0;
+                                         ? nowMs - config.playerBroadcastMs * kStalePlayerMultiplier
+                                         : 0;
   for (RemotePlayerReplica& replica : remotePlayers)
   {
     if (!replica.active || replica.lastSeenMs >= stalePlayerCutoff) continue;

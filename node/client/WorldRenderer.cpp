@@ -1,71 +1,68 @@
 #include "WorldRenderer.h"
 
-namespace
+struct ChunkVisibilityQuery
 {
-  struct ChunkVisibilityQuery
-  {
-    const BoundingBox* bounds = nullptr;
-    PlayerSystem::CameraVectors camera = {};
-    float aspectRatio = 1.0f;
-  };
+  const BoundingBox* bounds = nullptr;
+  PlayerSystem::CameraVectors camera = {};
+  float aspectRatio = 1.0f;
+};
 
-  struct WorldDrawPass
-  {
-    const VoxelWorld* voxelWorld = nullptr;
-    const WorldClientData* clientData = nullptr;
-    PlayerSystem::CameraVectors camera = {};
-    float aspectRatio = 1.0f;
-  };
+struct WorldDrawPass
+{
+  const VoxelWorld* voxelWorld = nullptr;
+  const WorldClientData* clientData = nullptr;
+  PlayerSystem::CameraVectors camera = {};
+  float aspectRatio = 1.0f;
+};
 
-  static bool IsChunkVisible(const ChunkVisibilityQuery& query)
-  {
-    const BoundingBox& bounds = *query.bounds;
-    const PlayerSystem::CameraVectors& camera = query.camera;
-    if (bounds.min.x == bounds.max.x && bounds.min.y == bounds.max.y && bounds.min.z == bounds.max.z) return false;
+static bool IsChunkVisible(const ChunkVisibilityQuery& query)
+{
+  const BoundingBox& bounds = *query.bounds;
+  const PlayerSystem::CameraVectors& camera = query.camera;
+  if (bounds.min.x == bounds.max.x && bounds.min.y == bounds.max.y && bounds.min.z == bounds.max.z) return false;
 
-    if (camera.position.x >= bounds.min.x && camera.position.x <= bounds.max.x && camera.position.y >= bounds.min.y && camera.position.y <= bounds.max.y &&
-        camera.position.z >= bounds.min.z && camera.position.z <= bounds.max.z)
-      return true;
-
-    Vector3 center = {(bounds.min.x + bounds.max.x) * 0.5f, (bounds.min.y + bounds.max.y) * 0.5f, (bounds.min.z + bounds.max.z) * 0.5f};
-    Vector3 extents = {(bounds.max.x - bounds.min.x) * 0.5f, (bounds.max.y - bounds.min.y) * 0.5f, (bounds.max.z - bounds.min.z) * 0.5f};
-    Vector3 toCenter = Vector3Subtract(center, camera.position);
-    float centerForward = Vector3DotProduct(toCenter, camera.forward);
-    float centerRight = Vector3DotProduct(toCenter, camera.right);
-    float centerUp = Vector3DotProduct(toCenter, camera.up);
-    float radiusForward = extents.x * fabsf(camera.forward.x) + extents.y * fabsf(camera.forward.y) + extents.z * fabsf(camera.forward.z);
-    float radiusRight = extents.x * fabsf(camera.right.x) + extents.y * fabsf(camera.right.y) + extents.z * fabsf(camera.right.z);
-    float radiusUp = extents.x * fabsf(camera.up.x) + extents.y * fabsf(camera.up.y) + extents.z * fabsf(camera.up.z);
-    const float nearPlane = 0.01f;
-    const float farPlane = 1000.0f;
-
-    if (centerForward + radiusForward < nearPlane) return false;
-    if (centerForward - radiusForward > farPlane) return false;
-
-    float halfVertical = tanf(VERTICAL_FOV_RADIANS * 0.5f);
-    float halfHorizontal = halfVertical * query.aspectRatio;
-    float forwardMax = fmaxf(centerForward + radiusForward, nearPlane);
-    if (fabsf(centerRight) - radiusRight > forwardMax * halfHorizontal) return false;
-    if (fabsf(centerUp) - radiusUp > forwardMax * halfVertical) return false;
-
+  if (camera.position.x >= bounds.min.x && camera.position.x <= bounds.max.x && camera.position.y >= bounds.min.y && camera.position.y <= bounds.max.y &&
+      camera.position.z >= bounds.min.z && camera.position.z <= bounds.max.z)
     return true;
-  }
 
-  static void DrawVoxelWorld(const WorldDrawPass& pass)
+  Vector3 center = {(bounds.min.x + bounds.max.x) * 0.5f, (bounds.min.y + bounds.max.y) * 0.5f, (bounds.min.z + bounds.max.z) * 0.5f};
+  Vector3 extents = {(bounds.max.x - bounds.min.x) * 0.5f, (bounds.max.y - bounds.min.y) * 0.5f, (bounds.max.z - bounds.min.z) * 0.5f};
+  Vector3 toCenter = Vector3Subtract(center, camera.position);
+  float centerForward = Vector3DotProduct(toCenter, camera.forward);
+  float centerRight = Vector3DotProduct(toCenter, camera.right);
+  float centerUp = Vector3DotProduct(toCenter, camera.up);
+  float radiusForward = extents.x * fabsf(camera.forward.x) + extents.y * fabsf(camera.forward.y) + extents.z * fabsf(camera.forward.z);
+  float radiusRight = extents.x * fabsf(camera.right.x) + extents.y * fabsf(camera.right.y) + extents.z * fabsf(camera.right.z);
+  float radiusUp = extents.x * fabsf(camera.up.x) + extents.y * fabsf(camera.up.y) + extents.z * fabsf(camera.up.z);
+  const float nearPlane = 0.01f;
+  const float farPlane = 1000.0f;
+
+  if (centerForward + radiusForward < nearPlane) return false;
+  if (centerForward - radiusForward > farPlane) return false;
+
+  float halfVertical = tanf(VERTICAL_FOV_RADIANS * 0.5f);
+  float halfHorizontal = halfVertical * query.aspectRatio;
+  float forwardMax = fmaxf(centerForward + radiusForward, nearPlane);
+  if (fabsf(centerRight) - radiusRight > forwardMax * halfHorizontal) return false;
+  if (fabsf(centerUp) - radiusUp > forwardMax * halfVertical) return false;
+
+  return true;
+}
+
+static void DrawVoxelWorld(const WorldDrawPass& pass)
+{
+  // Mesh bounds are conservative, so this culling pass just avoids obviously off-screen sections.
+  for (int chunkIndex = 0; chunkIndex < pass.voxelWorld->GetChunkCount(); chunkIndex++)
   {
-    // Mesh bounds are conservative, so this culling pass just avoids obviously off-screen sections.
-    for (int chunkIndex = 0; chunkIndex < pass.voxelWorld->GetChunkCount(); chunkIndex++)
+    for (int sectionIndex = 0; sectionIndex < CHUNK_SECTION_COUNT; sectionIndex++)
     {
-      for (int sectionIndex = 0; sectionIndex < CHUNK_SECTION_COUNT; sectionIndex++)
-      {
-        const ClientChunkSectionState& sectionState = pass.clientData->chunkSections[chunkIndex][sectionIndex];
-        if (!sectionState.uploaded) continue;
-        if (!IsChunkVisible({.bounds = &sectionState.bounds, .camera = pass.camera, .aspectRatio = pass.aspectRatio})) continue;
-        DrawModel(sectionState.model, Vector3Zero(), 1.0f, WHITE);
-      }
+      const ClientChunkSectionState& sectionState = pass.clientData->chunkSections[chunkIndex][sectionIndex];
+      if (!sectionState.uploaded) continue;
+      if (!IsChunkVisible({.bounds = &sectionState.bounds, .camera = pass.camera, .aspectRatio = pass.aspectRatio})) continue;
+      DrawModel(sectionState.model, Vector3Zero(), 1.0f, WHITE);
     }
   }
-}  // namespace
+}
 
 static void DrawOtherPlayers(const PlayerSystem& playerSystem, int cameraPlayerId)
 {

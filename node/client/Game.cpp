@@ -7,12 +7,9 @@
 #include "../runtime/ProtocolVersion.h"
 #include "../runtime/RuntimeRealm.h"
 
-namespace
-{
-RuntimeWorldPosition BuildFallbackSpawnPosition(const ClientFilesConfig& clientConfig)
+static RuntimeWorldPosition BuildFallbackSpawnPosition(const ClientFilesConfig& clientConfig)
 {
   return clientConfig.joinTargetPosition;
-}
 }
 
 void Game::Initialize(TaskManager& taskManager)
@@ -82,8 +79,7 @@ void Game::StartGameplay(TaskManager& taskManager)
     else
     {
       RuntimePeerAddress jumpNode = {};
-      if (!selectedRealm.jumpNodes.empty() && clientConfig.jumpNodeIndex >= 0
-          && (size_t)clientConfig.jumpNodeIndex < selectedRealm.jumpNodes.size())
+      if (!selectedRealm.jumpNodes.empty() && clientConfig.jumpNodeIndex >= 0 && (size_t)clientConfig.jumpNodeIndex < selectedRealm.jumpNodes.size())
       {
         jumpNode.host = selectedRealm.jumpNodes[(size_t)clientConfig.jumpNodeIndex].host;
         jumpNode.port = selectedRealm.jumpNodes[(size_t)clientConfig.jumpNodeIndex].port;
@@ -200,8 +196,7 @@ void Game::ApplyResolvedRuntimeSpawn()
 
   const RuntimeSessionStatus status = runtimeSession.GetStatus();
   if (!status.joinResolved) return;
-  if (runtimeSpawnApplied
-      && ComputeRuntimeWorldDistanceSquared(appliedSpawnPosition, status.resolvedSpawnPosition) < 0.0001f)
+  if (runtimeSpawnApplied && ComputeRuntimeWorldDistanceSquared(appliedSpawnPosition, status.resolvedSpawnPosition) < 0.0001f)
   {
     return;
   }

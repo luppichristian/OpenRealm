@@ -15,9 +15,7 @@
 #  include <unistd.h>
 #endif
 
-namespace
-{
-std::string QuoteCommandArgument(const std::string& value)
+static std::string QuoteCommandArgument(const std::string& value)
 {
   bool needsQuotes = value.empty();
   for (char ch : value)
@@ -42,7 +40,7 @@ std::string QuoteCommandArgument(const std::string& value)
   return result;
 }
 
-std::string BuildCommandLine(const std::vector<std::string>& arguments)
+static std::string BuildCommandLine(const std::vector<std::string>& arguments)
 {
   std::ostringstream stream = {};
   for (size_t i = 0; i < arguments.size(); ++i)
@@ -51,7 +49,6 @@ std::string BuildCommandLine(const std::vector<std::string>& arguments)
     stream << QuoteCommandArgument(arguments[i]);
   }
   return stream.str();
-}
 }
 
 bool PollPlatformChildProcess(ChildProcess* child)

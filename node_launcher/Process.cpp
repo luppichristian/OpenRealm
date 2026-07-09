@@ -6,10 +6,7 @@
 #include "LauncherUtilities.h"
 #include "Platform.h"
 
-namespace
-{
-std::atomic_bool gStopRequested = false;
-}
+static std::atomic_bool gStopRequested = false;
 
 void HandleStopSignal(int)
 {

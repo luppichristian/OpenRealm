@@ -4,43 +4,40 @@
 
 #include "LauncherUtilities.h"
 
-namespace
-{
-nlohmann::json& EnsureObject(nlohmann::json& root, const char* key)
+static nlohmann::json& EnsureObject(nlohmann::json& root, const char* key)
 {
   if (!root.contains(key) || !root[key].is_object()) root[key] = nlohmann::json::object();
   return root[key];
 }
 
-nlohmann::json& EnsureRuntimeObject(nlohmann::json& root)
+static nlohmann::json& EnsureRuntimeObject(nlohmann::json& root)
 {
   return EnsureObject(root, "runtime");
 }
 
-nlohmann::json& EnsureSimulationObject(nlohmann::json& root)
+static nlohmann::json& EnsureSimulationObject(nlohmann::json& root)
 {
   return EnsureObject(root, "simulation");
 }
 
-nlohmann::json& EnsureServiceObject(nlohmann::json& root)
+static nlohmann::json& EnsureServiceObject(nlohmann::json& root)
 {
   return EnsureObject(root, "service");
 }
 
-nlohmann::json& EnsureWalletObject(nlohmann::json& root)
+static nlohmann::json& EnsureWalletObject(nlohmann::json& root)
 {
   return EnsureObject(root, "wallet");
 }
 
-nlohmann::json& EnsureRuntimeInterestObject(nlohmann::json& root)
+static nlohmann::json& EnsureRuntimeInterestObject(nlohmann::json& root)
 {
   return EnsureObject(EnsureRuntimeObject(root), "interest");
 }
 
-nlohmann::json& EnsureBindAddressObject(nlohmann::json& root)
+static nlohmann::json& EnsureBindAddressObject(nlohmann::json& root)
 {
   return EnsureObject(EnsureRuntimeObject(root), "bindAddress");
-}
 }
 
 bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json* json, std::string* errorMessage)

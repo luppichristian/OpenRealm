@@ -3,9 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace
-{
-bool ParseInt(const std::string& text, int* value)
+static bool ParseInt(const std::string& text, int* value)
 {
   if (value == nullptr) return false;
   char* end = nullptr;
@@ -15,7 +13,7 @@ bool ParseInt(const std::string& text, int* value)
   return true;
 }
 
-bool ParseU32(const std::string& text, uint32_t* value)
+static bool ParseU32(const std::string& text, uint32_t* value)
 {
   int parsed = 0;
   if (!ParseInt(text, &parsed) || parsed < 0) return false;
@@ -23,7 +21,7 @@ bool ParseU32(const std::string& text, uint32_t* value)
   return true;
 }
 
-bool ParseFloat(const std::string& text, float* value)
+static bool ParseFloat(const std::string& text, float* value)
 {
   if (value == nullptr) return false;
   char* end = nullptr;
@@ -31,7 +29,6 @@ bool ParseFloat(const std::string& text, float* value)
   if (end == text.c_str() || (end != nullptr && *end != '\0')) return false;
   *value = parsed;
   return true;
-}
 }
 
 void PrintUsage()
