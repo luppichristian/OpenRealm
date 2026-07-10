@@ -15,6 +15,7 @@ In the current codebase it:
 - lets the player choose a realm, jump node, and explicit world join target from the GUI
 - starts a local `World`
 - attempts to start a runtime session with role `Client`
+- participates in the same local runtime hardening as headless nodes: packet-family validation, suspicious-peer scoring, in-memory quarantine/ban, and topology-hint confirmation before third-party peers become active
 - falls back to local-only play if the runtime session cannot start
 - renders gameplay, HUD, remote-player state, and menu overlays
 

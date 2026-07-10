@@ -10,10 +10,14 @@
 struct PacketValidationContext
 {
   RuntimePeerAddress localPeerAddress = {};
+  RuntimePeerAddress bootstrapPeerAddress = {};
   uint32_t expectedProtocolVersion = kRuntimeProtocolVersion;
   uint64_t expectedRealmHash = 0;
   ActiveNodeBucket* activeNodes = nullptr;
   uint64_t tick = 0;
+  size_t maxKnownNodes = 64;
+  uint32_t maxJoinCandidates = 6;
+  uint32_t maxJoinHops = 8;
 };
 
 enum class PacketValidationCode : uint8_t
@@ -24,9 +28,17 @@ enum class PacketValidationCode : uint8_t
   SelfPeerAddress = 3,
   ProtocolVersionMismatch = 4,
   RealmMismatch = 5,
-  DuplicatePeerAddress = 6,
-  MissingActiveNodeBucket = 7,
-  ActiveNodeLimitReached = 8,
+  MissingActiveNodeBucket = 6,
+  ActiveNodeLimitReached = 7,
+  UnknownPeer = 8,
+  InvalidSession = 9,
+  InvalidSequence = 10,
+  QuarantinedPeer = 11,
+  BannedPeer = 12,
+  InvalidJoinRequestPayload = 13,
+  InvalidJoinResponsePayload = 14,
+  InvalidTopologySnapshotPayload = 15,
+  InvalidPlayerSnapshotPayload = 16,
 };
 
 struct PacketValidationResult

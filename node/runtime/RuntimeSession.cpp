@@ -5,22 +5,75 @@
 #include "../client/PlayerController.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 
 constexpr uint64_t kJoinRetryIntervalMs = 500;
+constexpr uint64_t kJoinResponseWindowMs = 4000;
 constexpr uint64_t kStaleNodeMultiplier = 6;
 constexpr uint64_t kStalePlayerMultiplier = 10;
+constexpr uint64_t kPeerHintLifetimeMs = 15000;
+constexpr float kMaxPlayerSpeedPerSecond = 128.0f;
+constexpr float kMaxPlayerTeleportDistance = 160.0f;
+constexpr float kMaxPlayerNodeDriftDistance = 96.0f;
 
-static uint32_t HashPeerAddress(const RuntimePeerAddress& peerAddress)
+static uint64_t MixU64(uint64_t value)
 {
-  uint32_t hash = 2166136261u;
+  value ^= value >> 30;
+  value *= 0xbf58476d1ce4e5b9ULL;
+  value ^= value >> 27;
+  value *= 0x94d049bb133111ebULL;
+  value ^= value >> 31;
+  return value;
+}
+
+static uint64_t HashPeerAddress(const RuntimePeerAddress& peerAddress)
+{
+  uint64_t hash = 1469598103934665603ULL;
   for (char ch : peerAddress.host)
   {
     hash ^= (uint8_t)ch;
-    hash *= 16777619u;
+    hash *= 1099511628211ULL;
   }
-  hash ^= (uint32_t)std::max(peerAddress.port, 0);
-  hash *= 16777619u;
-  return hash == 0 ? 1u : hash;
+  hash ^= (uint64_t)std::max(peerAddress.port, 0);
+  hash *= 1099511628211ULL;
+  return hash == 0 ? 1ULL : hash;
+}
+
+static uint64_t GenerateRuntimeSessionId(const RuntimePeerAddress& peerAddress)
+{
+  const uint64_t timeSeed = (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  const uint64_t mixed = MixU64(HashPeerAddress(peerAddress) ^ timeSeed ^ 0x9e3779b97f4a7c15ULL);
+  return mixed == 0 ? 1ULL : mixed;
+}
+
+static bool IsFinitePosition(const RuntimeWorldPosition& position)
+{
+  return std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z);
+}
+
+static bool IsFiniteInterestArea(const RuntimeInterestArea& area)
+{
+  return std::isfinite(area.radiusX) && std::isfinite(area.radiusY) && std::isfinite(area.radiusZ) && area.radiusX >= 0.0f && area.radiusY >= 0.0f && area.radiusZ >= 0.0f;
+}
+
+static bool IsValidPeerAddress(const RuntimePeerAddress& peerAddress)
+{
+  return !peerAddress.host.empty() && peerAddress.port > 0 && peerAddress.port <= 65535;
+}
+
+static bool IsHintExpired(uint64_t nowMs, uint64_t lastHintMs)
+{
+  return lastHintMs == 0 || nowMs - lastHintMs > kPeerHintLifetimeMs;
+}
+
+static void TouchKnownNode(ActiveNodeBucket* knownNodes, const RuntimePeerAddress& peerAddress, uint64_t tick)
+{
+  if (knownNodes == nullptr) return;
+  ActiveNodeState* node = knownNodes->FindMutableByPeerAddress(peerAddress);
+  if (node == nullptr) return;
+  node->lastSeenTick = tick;
+  node->acceptedPackets += 1;
 }
 
 RuntimeSession::~RuntimeSession()
@@ -35,14 +88,17 @@ bool RuntimeSession::Start(const RuntimeSessionConfig& sessionConfig)
   knownNodes = ActiveNodeBucket(config.maxKnownNodes);
   connectedPeerAddresses.clear();
   remotePlayers.clear();
+  peerHints.clear();
   localNodePosition = config.initialNodePosition;
   resolvedSpawnPosition = config.joinTargetPosition;
   nowMs = 0;
+  localSessionId = GenerateRuntimeSessionId(config.bindAddress);
   lastNeighborRefreshMs = 0;
   lastTopologyBroadcastMs = 0;
   lastPlayerBroadcastMs = 0;
   lastJoinRequestMs = 0;
-  joinRequestToken = HashPeerAddress(config.bindAddress) ^ 0x9e3779b9u;
+  joinRequestToken = 0;
+  nextPacketSequence = 1;
   joinResolved = !config.enabled || config.jumpNode.host.empty() || config.jumpNode.port <= 0;
   if (joinResolved)
   {
@@ -82,12 +138,16 @@ void RuntimeSession::Stop(World* world)
   }
 
   remotePlayers.clear();
+  peerHints.clear();
   connectedPeerAddresses.clear();
   knownNodes = ActiveNodeBucket(1);
   client.Stop();
   running = false;
   joinResolved = false;
   nowMs = 0;
+  localSessionId = 0;
+  joinRequestToken = 0;
+  nextPacketSequence = 1;
 }
 
 bool RuntimeSession::IsRunning() const
@@ -167,10 +227,14 @@ void RuntimeSession::PumpIncomingPackets(World* world)
 
     PacketValidationContext validationContext = {};
     validationContext.localPeerAddress = config.bindAddress;
+    validationContext.bootstrapPeerAddress = config.jumpNode;
     validationContext.expectedProtocolVersion = kRuntimeProtocolVersion;
     validationContext.expectedRealmHash = config.realmHash;
     validationContext.activeNodes = &knownNodes;
     validationContext.tick = nowMs;
+    validationContext.maxKnownNodes = config.maxKnownNodes;
+    validationContext.maxJoinCandidates = config.maxJoinCandidates;
+    validationContext.maxJoinHops = config.maxJoinHops;
 
     PacketValidationResult validation = ValidateIncomingPacket(bytes, peerAddress, validationContext);
     if (!validation.accepted)
@@ -178,6 +242,27 @@ void RuntimeSession::PumpIncomingPackets(World* world)
       if (validation.code != PacketValidationCode::SelfPeerAddress)
       {
         TraceLog(LOG_WARNING, "runtime dropped packet from %s: %s", DescribeRuntimePeerAddress(peerAddress).c_str(), DescribePacketValidationCode(validation.code).c_str());
+      }
+
+      switch (validation.code)
+      {
+        case PacketValidationCode::InvalidSession:
+          AddPeerStrike(peerAddress, "invalid_session", 3, 2);
+          break;
+        case PacketValidationCode::InvalidSequence:
+          AddPeerStrike(peerAddress, "replayed_or_out_of_order_packet", 2, 1);
+          break;
+        case PacketValidationCode::QuarantinedPeer:
+        case PacketValidationCode::BannedPeer:
+          break;
+        case PacketValidationCode::InvalidJoinRequestPayload:
+        case PacketValidationCode::InvalidJoinResponsePayload:
+        case PacketValidationCode::InvalidTopologySnapshotPayload:
+        case PacketValidationCode::InvalidPlayerSnapshotPayload:
+          AddPeerStrike(peerAddress, DescribePacketValidationCode(validation.code), 2, 1);
+          break;
+        default:
+          break;
       }
       continue;
     }
@@ -234,15 +319,19 @@ void RuntimeSession::HandleParsedPacket(const Packet& packet, const RuntimePeerA
 void RuntimeSession::HandleJoinRequest(const JoinRequestPacketData& joinRequest, const RuntimePeerAddress& peerAddress)
 {
   if (!config.acceptsJoins) return;
+  if (knownNodes.IsPeerIsolated(peerAddress, nowMs)) return;
+  if (knownNodes.FindByPeerAddress(peerAddress) == nullptr) return;
 
   std::vector<const ActiveNodeState*> closest = knownNodes.BuildClosestNodes(
       peerAddress,
       config.realmHash,
       joinRequest.targetPosition,
       std::min((size_t)joinRequest.maxCandidates, config.maxKnownNodes),
-      true);
+      true,
+      nowMs);
 
   JoinResponsePacketData response = {};
+  response.proof = BuildLocalProof();
   response.requestToken = joinRequest.requestToken;
   response.resolvedPosition = localNodePosition;
 
@@ -262,64 +351,169 @@ void RuntimeSession::HandleJoinRequest(const JoinRequestPacketData& joinRequest,
     }
   }
 
+  TouchKnownNode(&knownNodes, peerAddress, nowMs);
   SendPacketTo(peerAddress, MakeJoinResponsePacket(response));
 }
 
 void RuntimeSession::HandleJoinResponse(const JoinResponsePacketData& joinResponse, const RuntimePeerAddress& peerAddress)
 {
-  if (!RuntimePeerAddressEquals(peerAddress, config.jumpNode) && knownNodes.FindByPeerAddress(peerAddress) == nullptr)
+  if (!IsPeerTrustedResponder(peerAddress))
   {
+    AddPeerStrike(peerAddress, "untrusted_join_responder", 2, 1);
     return;
   }
-  if (joinResponse.requestToken != joinRequestToken) return;
-
-  for (const TopologyNodeState& node : joinResponse.candidates)
+  if (joinRequestToken == 0 || joinResponse.requestToken != joinRequestToken)
   {
-    if (RuntimePeerAddressEquals(node.peerAddress, config.bindAddress)) continue;
-    knownNodes.RegisterTopologyNode(node, 0, nowMs);
+    AddPeerStrike(peerAddress, "join_response_request_token_mismatch", 2, 1);
+    return;
+  }
+  if (nowMs - lastJoinRequestMs > kJoinResponseWindowMs)
+  {
+    AddPeerStrike(peerAddress, "join_response_outside_request_window", 1, 1);
+    return;
   }
 
+  bool sawResponderSelf = false;
   float bestDistance = ComputeRuntimeWorldDistanceSquared(joinResponse.resolvedPosition, config.joinTargetPosition);
   RuntimeWorldPosition bestPosition = joinResponse.resolvedPosition;
+
   for (const TopologyNodeState& node : joinResponse.candidates)
   {
+    if (!IsValidPeerAddress(node.peerAddress) || !IsFinitePosition(node.position) || !IsFiniteInterestArea(node.interestArea))
+    {
+      AddPeerStrike(peerAddress, "join_response_invalid_candidate_shape", 2, 1);
+      continue;
+    }
+    if (RuntimePeerAddressEquals(node.peerAddress, config.bindAddress)) continue;
+
     const float candidateDistance = ComputeRuntimeWorldDistanceSquared(node.position, config.joinTargetPosition);
     if (candidateDistance < bestDistance)
     {
       bestDistance = candidateDistance;
       bestPosition = node.position;
     }
+
+    if (RuntimePeerAddressEquals(node.peerAddress, peerAddress))
+    {
+      if (node.sessionId != joinResponse.proof.sessionId)
+      {
+        AddPeerStrike(peerAddress, "join_response_self_entry_session_mismatch", 3, 2);
+        continue;
+      }
+      sawResponderSelf = true;
+      knownNodes.RegisterTopologyNode(node, 0, nowMs);
+      continue;
+    }
+
+    const ActiveNodeState* knownNode = knownNodes.FindByPeerAddress(node.peerAddress);
+    if (knownNode != nullptr && knownNode->sessionId != 0 && knownNode->sessionId != node.sessionId)
+    {
+      AddPeerStrike(peerAddress, "join_response_third_party_session_mismatch", 2, 1);
+      continue;
+    }
+
+    RememberPeerHint(node, peerAddress);
+  }
+
+  if (!sawResponderSelf)
+  {
+    AddPeerStrike(peerAddress, "join_response_missing_self_entry", 1, 1);
   }
 
   resolvedSpawnPosition = bestPosition;
   localNodePosition = bestPosition;
   joinResolved = true;
+  joinRequestToken = 0;
+  TouchKnownNode(&knownNodes, peerAddress, nowMs);
+  SendHandshakeToHintedPeers();
 }
 
 void RuntimeSession::HandleTopologySnapshot(const TopologySnapshotPacketData& topologySnapshot, const RuntimePeerAddress& peerAddress)
 {
-  if (!RuntimePeerAddressEquals(peerAddress, config.jumpNode) && knownNodes.FindByPeerAddress(peerAddress) == nullptr)
+  if (!IsPeerTrustedResponder(peerAddress))
   {
+    AddPeerStrike(peerAddress, "untrusted_topology_sender", 2, 1);
     return;
   }
 
+  bool sawSenderSelf = false;
   for (const TopologyNodeState& node : topologySnapshot.nodes)
   {
+    if (!IsValidPeerAddress(node.peerAddress) || !IsFinitePosition(node.position) || !IsFiniteInterestArea(node.interestArea))
+    {
+      AddPeerStrike(peerAddress, "topology_invalid_node_shape", 2, 1);
+      continue;
+    }
     if (RuntimePeerAddressEquals(node.peerAddress, config.bindAddress)) continue;
-    if (node.realmHash != config.realmHash) continue;
-    knownNodes.RegisterTopologyNode(node, 0, nowMs);
+
+    if (RuntimePeerAddressEquals(node.peerAddress, peerAddress))
+    {
+      if (node.sessionId != topologySnapshot.proof.sessionId)
+      {
+        AddPeerStrike(peerAddress, "topology_self_entry_session_mismatch", 3, 2);
+        continue;
+      }
+      sawSenderSelf = true;
+      knownNodes.RegisterTopologyNode(node, 0, nowMs);
+      continue;
+    }
+
+    const ActiveNodeState* knownNode = knownNodes.FindByPeerAddress(node.peerAddress);
+    if (knownNode != nullptr && knownNode->sessionId != 0 && knownNode->sessionId != node.sessionId)
+    {
+      AddPeerStrike(peerAddress, "topology_third_party_session_mismatch", 2, 1);
+      continue;
+    }
+
+    RememberPeerHint(node, peerAddress);
   }
+
+  if (!sawSenderSelf)
+  {
+    AddPeerStrike(peerAddress, "topology_missing_self_entry", 1, 1);
+  }
+  TouchKnownNode(&knownNodes, peerAddress, nowMs);
 }
 
 void RuntimeSession::HandlePlayerSnapshot(const PlayerSnapshotPacketData& playerSnapshot, const RuntimePeerAddress& peerAddress, World* world)
 {
   if (RuntimePeerAddressEquals(peerAddress, config.bindAddress)) return;
+  if (knownNodes.IsPeerIsolated(peerAddress, nowMs)) return;
+
   ActiveNodeState* node = knownNodes.FindMutableByPeerAddress(peerAddress);
-  if (node != nullptr)
+  if (node == nullptr) return;
+
+  const RuntimeWorldPosition previousPosition = node->position;
+  const uint64_t previousTick = node->lastSeenTick;
+  const uint64_t deltaMs = previousTick > 0 && nowMs > previousTick ? nowMs - previousTick : 0;
+
+  if (deltaMs > 0)
   {
-    node->position = playerSnapshot.nodePosition;
-    node->lastSeenTick = nowMs;
+    const float maxDistance = std::max(kMaxPlayerTeleportDistance, kMaxPlayerSpeedPerSecond * (float)deltaMs / 1000.0f);
+    const float movementDistanceSquared = ComputeRuntimeWorldDistanceSquared(previousPosition, playerSnapshot.nodePosition);
+    if (movementDistanceSquared > maxDistance * maxDistance)
+    {
+      AddPeerStrike(peerAddress, "player_snapshot_impossible_node_movement", 3, 2);
+      return;
+    }
   }
+
+  const float playerNodeDriftSquared = ComputeRuntimeWorldDistanceSquared(playerSnapshot.nodePosition, playerSnapshot.playerPosition);
+  if (playerNodeDriftSquared > kMaxPlayerNodeDriftDistance * kMaxPlayerNodeDriftDistance)
+  {
+    AddPeerStrike(peerAddress, "player_snapshot_position_drift", 2, 1);
+    return;
+  }
+
+  if (!RuntimeInterestAreasOverlap(localNodePosition, config.interestArea, playerSnapshot.nodePosition, node->interestArea))
+  {
+    AddPeerStrike(peerAddress, "player_snapshot_outside_interest_area", 1, 1);
+    return;
+  }
+
+  node->position = playerSnapshot.nodePosition;
+  node->lastSeenTick = nowMs;
+  node->acceptedPackets += 1;
   if (world == nullptr) return;
   ApplyRemotePlayerSnapshot(peerAddress, playerSnapshot, world);
 }
@@ -331,7 +525,8 @@ void RuntimeSession::RefreshConnections()
       config.realmHash,
       localNodePosition,
       config.interestArea,
-      config.maxNodeConnections);
+      config.maxNodeConnections,
+      nowMs);
   if (candidates.empty())
   {
     candidates = knownNodes.BuildClosestNodes(
@@ -339,7 +534,8 @@ void RuntimeSession::RefreshConnections()
         config.realmHash,
         localNodePosition,
         std::min((size_t)1, config.maxNodeConnections),
-        false);
+        false,
+        nowMs);
   }
 
   for (const ActiveNodeState& node : knownNodes.GetNodes())
@@ -355,6 +551,8 @@ void RuntimeSession::RefreshConnections()
     knownNodes.MarkConnected(candidate->peerAddress, true);
     SendPacketTo(candidate->peerAddress, MakeHandshakePacket(BuildLocalHandshake()));
   }
+
+  SendHandshakeToHintedPeers();
 }
 
 void RuntimeSession::BroadcastHandshake()
@@ -369,12 +567,14 @@ void RuntimeSession::BroadcastHandshake()
 void RuntimeSession::BroadcastTopology()
 {
   TopologySnapshotPacketData snapshot = {};
+  snapshot.proof = BuildLocalProof();
   snapshot.nodes.push_back(BuildLocalTopologyNode());
 
   std::vector<TopologyNodeState> knownSnapshot = knownNodes.BuildTopologySnapshot(
       config.bindAddress,
       config.realmHash,
-      config.maxKnownNodes);
+      config.maxKnownNodes,
+      nowMs);
   snapshot.nodes.insert(snapshot.nodes.end(), knownSnapshot.begin(), knownSnapshot.end());
   SendPacketToConnectedPeers(MakeTopologySnapshotPacket(snapshot));
 }
@@ -392,6 +592,8 @@ void RuntimeSession::BroadcastLocalPlayer(World* world)
   };
 
   PlayerSnapshotPacketData snapshot = {};
+  snapshot.proof = BuildLocalProof();
+  snapshot.tickMs = (uint32_t)std::min<uint64_t>(nowMs, UINT32_MAX);
   snapshot.nodePosition = localNodePosition;
   snapshot.playerPosition = localNodePosition;
   snapshot.yaw = localPlayer->yaw;
@@ -405,7 +607,10 @@ void RuntimeSession::MaybeRequestJoin()
   if (joinResolved) return;
   if (nowMs - lastJoinRequestMs < kJoinRetryIntervalMs) return;
 
+  joinRequestToken = NextJoinRequestToken();
+
   JoinRequestPacketData request = {};
+  request.proof = BuildLocalProof();
   request.targetPosition = config.joinTargetPosition;
   request.maxCandidates = config.maxJoinCandidates;
   request.maxHops = config.maxJoinHops;
@@ -419,30 +624,52 @@ void RuntimeSession::MaybeRequestJoin()
   for (const RuntimePeerAddress& peerAddress : connectedPeerAddresses)
   {
     const ActiveNodeState* node = knownNodes.FindByPeerAddress(peerAddress);
-    if (node == nullptr || !node->acceptsJoins) continue;
+    if (node == nullptr || !node->acceptsJoins || knownNodes.IsPeerIsolated(node->peerAddress, nowMs)) continue;
     SendPacketTo(node->peerAddress, packet);
+  }
+  for (const PeerHint& hint : peerHints)
+  {
+    if (IsHintExpired(nowMs, hint.lastHintMs) || !hint.node.acceptsJoins) continue;
+    if (knownNodes.FindByPeerAddress(hint.node.peerAddress) != nullptr) continue;
+    SendPacketTo(hint.node.peerAddress, MakeHandshakePacket(BuildLocalHandshake()));
+    SendPacketTo(hint.node.peerAddress, packet);
   }
   lastJoinRequestMs = nowMs;
 }
 
 void RuntimeSession::PruneStaleState(World* world)
 {
+  knownNodes.ClearExpiredIsolation(nowMs);
+
   const uint64_t staleNodeCutoff = nowMs > config.topologyBroadcastMs * kStaleNodeMultiplier
                                        ? nowMs - config.topologyBroadcastMs * kStaleNodeMultiplier
                                        : 0;
-  knownNodes.ForgetStaleNodes(staleNodeCutoff);
+  knownNodes.ForgetStaleNodes(staleNodeCutoff, nowMs);
 
   connectedPeerAddresses.erase(
       std::remove_if(connectedPeerAddresses.begin(), connectedPeerAddresses.end(), [&](const RuntimePeerAddress& peerAddress)
-                     { return knownNodes.FindByPeerAddress(peerAddress) == nullptr; }),
+                     {
+                       return knownNodes.FindByPeerAddress(peerAddress) == nullptr || knownNodes.IsPeerIsolated(peerAddress, nowMs);
+                     }),
       connectedPeerAddresses.end());
+
+  peerHints.erase(
+      std::remove_if(peerHints.begin(), peerHints.end(), [&](const PeerHint& hint)
+                     {
+                       if (IsHintExpired(nowMs, hint.lastHintMs)) return true;
+                       const ActiveNodeState* knownNode = knownNodes.FindByPeerAddress(hint.node.peerAddress);
+                       return knownNode != nullptr && knownNode->sessionId == hint.node.sessionId;
+                     }),
+      peerHints.end());
 
   const uint64_t stalePlayerCutoff = nowMs > config.playerBroadcastMs * kStalePlayerMultiplier
                                          ? nowMs - config.playerBroadcastMs * kStalePlayerMultiplier
                                          : 0;
   for (RemotePlayerReplica& replica : remotePlayers)
   {
-    if (!replica.active || replica.lastSeenMs >= stalePlayerCutoff) continue;
+    const bool peerMissing = knownNodes.FindByPeerAddress(replica.peerAddress) == nullptr;
+    const bool peerIsolated = knownNodes.IsPeerIsolated(replica.peerAddress, nowMs);
+    if (!replica.active || (!peerMissing && !peerIsolated && replica.lastSeenMs >= stalePlayerCutoff)) continue;
     if (world != nullptr)
     {
       WorldEvent event = {.type = WorldEventType::Despawn, .playerId = replica.playerId};
@@ -528,9 +755,10 @@ void RuntimeSession::DespawnRemotePlayer(const RuntimePeerAddress& peerAddress, 
   }
 }
 
-HandshakePacketData RuntimeSession::BuildLocalHandshake() const
+HandshakePacketData RuntimeSession::BuildLocalHandshake()
 {
   return {
+      .proof = BuildLocalProof(),
       .protocolVersion = kRuntimeProtocolVersion,
       .realmHash = config.realmHash,
       .position = localNodePosition,
@@ -544,6 +772,7 @@ HandshakePacketData RuntimeSession::BuildLocalHandshake() const
 TopologyNodeState RuntimeSession::BuildLocalTopologyNode() const
 {
   return {
+      .sessionId = localSessionId,
       .protocolVersion = kRuntimeProtocolVersion,
       .realmHash = config.realmHash,
       .peerAddress = client.GetBindAddress(),
@@ -554,10 +783,97 @@ TopologyNodeState RuntimeSession::BuildLocalTopologyNode() const
   };
 }
 
+PacketPeerProof RuntimeSession::BuildLocalProof()
+{
+  return {
+      .sessionId = localSessionId,
+      .sequence = nextPacketSequence++,
+  };
+}
+
+uint64_t RuntimeSession::NextJoinRequestToken()
+{
+  uint64_t token = MixU64(localSessionId ^ (uint64_t)nextPacketSequence ^ (nowMs << 1) ^ 0x517cc1b727220a95ULL);
+  return token == 0 ? 1ULL : token;
+}
+
+bool RuntimeSession::AddPeerStrike(const RuntimePeerAddress& peerAddress, const std::string& reason, uint32_t suspicionDelta, uint32_t strikeDelta)
+{
+  const uint64_t quarantineDurationMs = std::max<uint64_t>(config.topologyBroadcastMs * 4ULL, 3000ULL);
+  const ActiveNodeBucketResult result = knownNodes.AddPeerStrike(
+      peerAddress,
+      reason,
+      suspicionDelta,
+      strikeDelta,
+      nowMs,
+      quarantineDurationMs);
+  if (result.code == ActiveNodeBucketCode::UnknownPeer) return false;
+
+  connectedPeerAddresses.erase(
+      std::remove_if(connectedPeerAddresses.begin(), connectedPeerAddresses.end(), [&](const RuntimePeerAddress& candidate)
+                     { return RuntimePeerAddressEquals(candidate, peerAddress); }),
+      connectedPeerAddresses.end());
+  knownNodes.MarkConnected(peerAddress, false);
+
+  const char* action = result.code == ActiveNodeBucketCode::BannedPeer ? "banned" : result.code == ActiveNodeBucketCode::QuarantinedPeer ? "quarantined" : "flagged";
+  TraceLog(LOG_WARNING, "runtime %s peer %s: %s", action, DescribeRuntimePeerAddress(peerAddress).c_str(), reason.c_str());
+  return true;
+}
+
+bool RuntimeSession::IsPeerTrustedResponder(const RuntimePeerAddress& peerAddress) const
+{
+  if (RuntimePeerAddressEquals(peerAddress, config.jumpNode)) return true;
+  const ActiveNodeState* node = knownNodes.FindByPeerAddress(peerAddress);
+  if (node == nullptr) return false;
+  return !knownNodes.IsPeerIsolated(peerAddress, nowMs);
+}
+
+void RuntimeSession::RememberPeerHint(const TopologyNodeState& node, const RuntimePeerAddress& introducedBy)
+{
+  if (!IsValidPeerAddress(node.peerAddress) || !IsFinitePosition(node.position) || !IsFiniteInterestArea(node.interestArea)) return;
+  if (RuntimePeerAddressEquals(node.peerAddress, config.bindAddress)) return;
+  if (knownNodes.IsPeerBanned(node.peerAddress)) return;
+
+  for (PeerHint& hint : peerHints)
+  {
+    if (!RuntimePeerAddressEquals(hint.node.peerAddress, node.peerAddress)) continue;
+    if (hint.node.sessionId != 0 && hint.node.sessionId != node.sessionId) return;
+    hint.node = node;
+    hint.introducedBy = introducedBy;
+    hint.lastHintMs = nowMs;
+    return;
+  }
+
+  if (peerHints.size() >= config.maxKnownNodes)
+  {
+    std::sort(peerHints.begin(), peerHints.end(), [](const PeerHint& a, const PeerHint& b)
+              { return a.lastHintMs < b.lastHintMs; });
+    peerHints.erase(peerHints.begin());
+  }
+
+  peerHints.push_back({
+      .node = node,
+      .introducedBy = introducedBy,
+      .lastHintMs = nowMs,
+  });
+}
+
+void RuntimeSession::SendHandshakeToHintedPeers()
+{
+  for (const PeerHint& hint : peerHints)
+  {
+    if (IsHintExpired(nowMs, hint.lastHintMs)) continue;
+    const ActiveNodeState* knownNode = knownNodes.FindByPeerAddress(hint.node.peerAddress);
+    if (knownNode != nullptr && knownNode->sessionId == hint.node.sessionId) continue;
+    SendPacketTo(hint.node.peerAddress, MakeHandshakePacket(BuildLocalHandshake()));
+  }
+}
+
 void RuntimeSession::SendPacketTo(const RuntimePeerAddress& peerAddress, const Packet& packet)
 {
   if (!config.enabled) return;
   if (peerAddress.host.empty() || peerAddress.port <= 0) return;
+  if (knownNodes.IsPeerIsolated(peerAddress, nowMs)) return;
   client.SendPacket(peerAddress, SerializePacket(packet));
 }
 
@@ -567,6 +883,7 @@ void RuntimeSession::SendPacketToConnectedPeers(const Packet& packet)
   {
     const ActiveNodeState* node = knownNodes.FindByPeerAddress(peerAddress);
     if (node == nullptr) continue;
+    if (knownNodes.IsPeerIsolated(node->peerAddress, nowMs)) continue;
     SendPacketTo(node->peerAddress, packet);
   }
 }

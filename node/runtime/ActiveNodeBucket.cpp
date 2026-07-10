@@ -16,17 +16,22 @@ std::string DescribeActiveNodeBucketCode(ActiveNodeBucketCode code)
 {
   switch (code)
   {
-    case ActiveNodeBucketCode::Added:                return "added";
-    case ActiveNodeBucketCode::Refreshed:            return "refreshed";
-    case ActiveNodeBucketCode::DuplicatePeerAddress: return "duplicate_peer_address";
-    case ActiveNodeBucketCode::CapacityReached:      return "capacity_reached";
-    default:                                         return "unknown";
+    case ActiveNodeBucketCode::Added:            return "added";
+    case ActiveNodeBucketCode::Refreshed:        return "refreshed";
+    case ActiveNodeBucketCode::CapacityReached:  return "capacity_reached";
+    case ActiveNodeBucketCode::UnknownPeer:      return "unknown_peer";
+    case ActiveNodeBucketCode::InvalidSession:   return "invalid_session";
+    case ActiveNodeBucketCode::InvalidSequence:  return "invalid_sequence";
+    case ActiveNodeBucketCode::QuarantinedPeer:  return "quarantined_peer";
+    case ActiveNodeBucketCode::BannedPeer:       return "banned_peer";
+    default:                                     return "unknown";
   }
 }
 
 TopologyNodeState ToTopologyNodeState(const ActiveNodeState& node)
 {
   return {
+      .sessionId = node.sessionId,
       .protocolVersion = node.protocolVersion,
       .realmHash = node.realmHash,
       .peerAddress = node.peerAddress,
@@ -35,6 +40,39 @@ TopologyNodeState ToTopologyNodeState(const ActiveNodeState& node)
       .nodeRole = node.nodeRole,
       .acceptsJoins = (uint8_t)(node.acceptsJoins ? 1 : 0),
   };
+}
+
+uint32_t* ActiveNodeBucket::SelectSequenceSlot(ActiveNodeState* node, PacketType packetType)
+{
+  if (node == nullptr) return nullptr;
+
+  switch (packetType)
+  {
+    case PacketType::Handshake:        return &node->lastHandshakeSequence;
+    case PacketType::JoinRequest:      return &node->lastJoinRequestSequence;
+    case PacketType::JoinResponse:     return &node->lastJoinResponseSequence;
+    case PacketType::TopologySnapshot: return &node->lastTopologySequence;
+    case PacketType::PlayerSnapshot:   return &node->lastPlayerSequence;
+    default:                           return nullptr;
+  }
+}
+
+const uint32_t* ActiveNodeBucket::SelectSequenceSlot(const ActiveNodeState& node, PacketType packetType)
+{
+  switch (packetType)
+  {
+    case PacketType::Handshake:        return &node.lastHandshakeSequence;
+    case PacketType::JoinRequest:      return &node.lastJoinRequestSequence;
+    case PacketType::JoinResponse:     return &node.lastJoinResponseSequence;
+    case PacketType::TopologySnapshot: return &node.lastTopologySequence;
+    case PacketType::PlayerSnapshot:   return &node.lastPlayerSequence;
+    default:                           return nullptr;
+  }
+}
+
+bool ActiveNodeBucket::IsNodeIsolated(const ActiveNodeState& node, uint64_t tick)
+{
+  return node.security.banned || (tick != UINT64_MAX && node.security.quarantinedUntilTick > tick);
 }
 
 ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candidate, uint64_t tick)
@@ -48,6 +86,18 @@ ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candi
   {
     if (!RuntimePeerAddressEquals(node.peerAddress, candidate.peerAddress)) continue;
 
+    if (candidate.sessionId != 0 && node.sessionId != candidate.sessionId)
+    {
+      node.sessionId = candidate.sessionId;
+      node.lastHandshakeSequence = 0;
+      node.lastJoinRequestSequence = 0;
+      node.lastJoinResponseSequence = 0;
+      node.lastTopologySequence = 0;
+      node.lastPlayerSequence = 0;
+      node.security.rejectedPackets = 0;
+      node.security.lastSecurityReason.clear();
+    }
+
     node.protocolVersion = candidate.protocolVersion;
     node.realmHash = candidate.realmHash;
     node.position = candidate.position;
@@ -57,6 +107,12 @@ ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candi
     node.lastPacketChecksum = candidate.lastPacketChecksum;
     node.lastSeenTick = tick;
     node.acceptedPackets += candidate.acceptedPackets > 0 ? candidate.acceptedPackets : 1;
+    if (candidate.sessionId != 0) node.sessionId = candidate.sessionId;
+    if (candidate.lastHandshakeSequence > 0) node.lastHandshakeSequence = candidate.lastHandshakeSequence;
+    if (candidate.lastJoinRequestSequence > 0) node.lastJoinRequestSequence = candidate.lastJoinRequestSequence;
+    if (candidate.lastJoinResponseSequence > 0) node.lastJoinResponseSequence = candidate.lastJoinResponseSequence;
+    if (candidate.lastTopologySequence > 0) node.lastTopologySequence = candidate.lastTopologySequence;
+    if (candidate.lastPlayerSequence > 0) node.lastPlayerSequence = candidate.lastPlayerSequence;
     result.code = ActiveNodeBucketCode::Refreshed;
     result.accepted = true;
     result.node = node;
@@ -82,8 +138,26 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
     uint32_t packetChecksum,
     uint64_t tick)
 {
+  ActiveNodeState* existing = FindMutableByPeerAddress(peerAddress);
+  if (existing != nullptr)
+  {
+    if (existing->security.banned)
+    {
+      return {.accepted = false, .code = ActiveNodeBucketCode::BannedPeer, .node = *existing};
+    }
+    if (handshake.proof.sessionId == 0)
+    {
+      return {.accepted = false, .code = ActiveNodeBucketCode::InvalidSession, .node = *existing};
+    }
+    if (existing->sessionId == handshake.proof.sessionId && handshake.proof.sequence <= existing->lastHandshakeSequence)
+    {
+      return {.accepted = false, .code = ActiveNodeBucketCode::InvalidSequence, .node = *existing};
+    }
+  }
+
   ActiveNodeState node = {};
   node.peerAddress = peerAddress;
+  node.sessionId = handshake.proof.sessionId;
   node.protocolVersion = handshake.protocolVersion;
   node.realmHash = handshake.realmHash;
   node.position = handshake.position;
@@ -92,6 +166,7 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
   node.acceptsJoins = handshake.acceptsJoins != 0;
   node.lastPacketChecksum = packetChecksum;
   node.acceptedPackets = 1;
+  node.lastHandshakeSequence = handshake.proof.sequence;
   return UpsertNode(node, tick);
 }
 
@@ -102,6 +177,7 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterTopologyNode(
 {
   ActiveNodeState node = {};
   node.peerAddress = topologyNode.peerAddress;
+  node.sessionId = topologyNode.sessionId;
   node.protocolVersion = topologyNode.protocolVersion;
   node.realmHash = topologyNode.realmHash;
   node.position = topologyNode.position;
@@ -113,6 +189,84 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterTopologyNode(
   return UpsertNode(node, tick);
 }
 
+ActiveNodeBucketResult ActiveNodeBucket::AcceptPacketMetadata(
+    const RuntimePeerAddress& peerAddress,
+    PacketType packetType,
+    const PacketPeerProof& proof,
+    uint32_t packetChecksum,
+    uint64_t tick)
+{
+  ActiveNodeState* node = FindMutableByPeerAddress(peerAddress);
+  if (node == nullptr)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::UnknownPeer};
+  }
+  if (node->security.banned)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::BannedPeer, .node = *node};
+  }
+  if (node->security.quarantinedUntilTick > tick)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::QuarantinedPeer, .node = *node};
+  }
+  if (proof.sessionId == 0 || node->sessionId == 0 || proof.sessionId != node->sessionId)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::InvalidSession, .node = *node};
+  }
+
+  uint32_t* sequenceSlot = SelectSequenceSlot(node, packetType);
+  if (sequenceSlot == nullptr || proof.sequence == 0 || proof.sequence <= *sequenceSlot)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::InvalidSequence, .node = *node};
+  }
+
+  *sequenceSlot = proof.sequence;
+  node->lastPacketChecksum = packetChecksum;
+  return {.accepted = true, .code = ActiveNodeBucketCode::Refreshed, .node = *node};
+}
+
+ActiveNodeBucketResult ActiveNodeBucket::AddPeerStrike(
+    const RuntimePeerAddress& peerAddress,
+    const std::string& reason,
+    uint32_t suspicionDelta,
+    uint32_t strikeDelta,
+    uint64_t tick,
+    uint64_t quarantineDurationMs)
+{
+  ActiveNodeState* node = FindMutableByPeerAddress(peerAddress);
+  if (node == nullptr)
+  {
+    return {.accepted = false, .code = ActiveNodeBucketCode::UnknownPeer};
+  }
+
+  node->security.rejectedPackets += 1;
+  node->security.strikeCount += strikeDelta;
+  node->security.suspicionScore += suspicionDelta;
+  node->security.lastSecurityTick = tick;
+  node->security.lastSecurityReason = reason;
+  node->connected = false;
+
+  ActiveNodeBucketCode code = ActiveNodeBucketCode::Refreshed;
+  if (node->security.banned)
+  {
+    code = ActiveNodeBucketCode::BannedPeer;
+  }
+  else if (node->security.strikeCount >= 6 || node->security.suspicionScore >= 10)
+  {
+    node->security.banned = true;
+    node->security.quarantinedUntilTick = UINT64_MAX;
+    code = ActiveNodeBucketCode::BannedPeer;
+  }
+  else if (node->security.strikeCount >= 3 || node->security.suspicionScore >= 5)
+  {
+    const uint64_t isolateUntil = tick + std::max<uint64_t>(quarantineDurationMs, 1);
+    node->security.quarantinedUntilTick = std::max(node->security.quarantinedUntilTick, isolateUntil);
+    code = ActiveNodeBucketCode::QuarantinedPeer;
+  }
+
+  return {.accepted = false, .code = code, .node = *node};
+}
+
 void ActiveNodeBucket::MarkConnected(const RuntimePeerAddress& peerAddress, bool connected)
 {
   ActiveNodeState* node = FindMutableByPeerAddress(peerAddress);
@@ -120,12 +274,27 @@ void ActiveNodeBucket::MarkConnected(const RuntimePeerAddress& peerAddress, bool
   node->connected = connected;
 }
 
-void ActiveNodeBucket::ForgetStaleNodes(uint64_t minimumTick)
+void ActiveNodeBucket::ForgetStaleNodes(uint64_t minimumTick, uint64_t nowTick)
 {
   nodes.erase(
       std::remove_if(nodes.begin(), nodes.end(), [&](const ActiveNodeState& node)
-                     { return node.lastSeenTick < minimumTick; }),
+                     {
+                       if (node.security.banned) return false;
+                       if (node.security.quarantinedUntilTick > nowTick) return false;
+                       return node.lastSeenTick < minimumTick;
+                     }),
       nodes.end());
+}
+
+void ActiveNodeBucket::ClearExpiredIsolation(uint64_t tick)
+{
+  for (ActiveNodeState& node : nodes)
+  {
+    if (!node.security.banned && node.security.quarantinedUntilTick > 0 && node.security.quarantinedUntilTick <= tick)
+    {
+      node.security.quarantinedUntilTick = 0;
+    }
+  }
 }
 
 size_t ActiveNodeBucket::GetCount() const
@@ -156,16 +325,30 @@ ActiveNodeState* ActiveNodeBucket::FindMutableByPeerAddress(const RuntimePeerAdd
   return nullptr;
 }
 
+bool ActiveNodeBucket::IsPeerIsolated(const RuntimePeerAddress& peerAddress, uint64_t tick) const
+{
+  const ActiveNodeState* node = FindByPeerAddress(peerAddress);
+  return node != nullptr && IsNodeIsolated(*node, tick);
+}
+
+bool ActiveNodeBucket::IsPeerBanned(const RuntimePeerAddress& peerAddress) const
+{
+  const ActiveNodeState* node = FindByPeerAddress(peerAddress);
+  return node != nullptr && node->security.banned;
+}
+
 std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(
     const RuntimePeerAddress& excludedPeerAddress,
     uint64_t realmHash,
-    size_t maxCount) const
+    size_t maxCount,
+    uint64_t tick) const
 {
   std::vector<TopologyNodeState> snapshot = {};
   for (const ActiveNodeState& node : nodes)
   {
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
+    if (IsNodeIsolated(node, tick)) continue;
     snapshot.push_back(ToTopologyNodeState(node));
     if (snapshot.size() >= maxCount) break;
   }
@@ -177,7 +360,8 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
     uint64_t realmHash,
     const RuntimeWorldPosition& targetPosition,
     size_t maxCount,
-    bool requireJoinable) const
+    bool requireJoinable,
+    uint64_t tick) const
 {
   std::vector<const ActiveNodeState*> ordered = {};
   for (const ActiveNodeState& node : nodes)
@@ -185,6 +369,7 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
     if (requireJoinable && !node.acceptsJoins) continue;
+    if (IsNodeIsolated(node, tick)) continue;
     ordered.push_back(&node);
   }
 
@@ -200,13 +385,15 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildNeighborCandidates(
     uint64_t realmHash,
     const RuntimeWorldPosition& localPosition,
     const RuntimeInterestArea& localInterestArea,
-    size_t maxCount) const
+    size_t maxCount,
+    uint64_t tick) const
 {
   std::vector<const ActiveNodeState*> ordered = {};
   for (const ActiveNodeState& node : nodes)
   {
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
+    if (IsNodeIsolated(node, tick)) continue;
     if (!RuntimeInterestAreasOverlap(localPosition, localInterestArea, node.position, node.interestArea)) continue;
     ordered.push_back(&node);
   }

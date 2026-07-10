@@ -35,8 +35,15 @@ struct Packet
   std::vector<uint8_t> payload = {};
 };
 
+struct PacketPeerProof
+{
+  uint64_t sessionId = 0;
+  uint32_t sequence = 0;
+};
+
 struct HandshakePacketData
 {
+  PacketPeerProof proof = {};
   uint32_t protocolVersion = 0;
   uint64_t realmHash = 0;
   RuntimeWorldPosition position = {};
@@ -48,6 +55,7 @@ struct HandshakePacketData
 
 struct TopologyNodeState
 {
+  uint64_t sessionId = 0;
   uint32_t protocolVersion = 0;
   uint64_t realmHash = 0;
   RuntimePeerAddress peerAddress = {};
@@ -59,26 +67,31 @@ struct TopologyNodeState
 
 struct JoinRequestPacketData
 {
+  PacketPeerProof proof = {};
   RuntimeWorldPosition targetPosition = {};
   uint32_t maxCandidates = 0;
   uint32_t maxHops = 0;
-  uint32_t requestToken = 0;
+  uint64_t requestToken = 0;
 };
 
 struct JoinResponsePacketData
 {
-  uint32_t requestToken = 0;
+  PacketPeerProof proof = {};
+  uint64_t requestToken = 0;
   RuntimeWorldPosition resolvedPosition = {};
   std::vector<TopologyNodeState> candidates = {};
 };
 
 struct TopologySnapshotPacketData
 {
+  PacketPeerProof proof = {};
   std::vector<TopologyNodeState> nodes = {};
 };
 
 struct PlayerSnapshotPacketData
 {
+  PacketPeerProof proof = {};
+  uint32_t tickMs = 0;
   RuntimeWorldPosition nodePosition = {};
   RuntimeWorldPosition playerPosition = {};
   float yaw = 0.0f;

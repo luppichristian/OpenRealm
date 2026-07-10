@@ -15,6 +15,7 @@ In the current codebase it:
 - initializes a headless `World`
 - advances the world in a fixed-step loop
 - ticks the runtime session alongside the world simulation
+- applies local runtime hardening: packet-family validation, suspicious-peer scoring, in-memory quarantine/ban, and topology-hint confirmation before third-party peers become active
 - prints periodic status lines, including whether join resolution succeeded
 
 This is the binary to use when you want a non-graphical simulator that participates in the runtime network and actually owns a running world loop.

@@ -96,6 +96,23 @@ static bool TryReadString(const std::vector<uint8_t>& bytes, size_t* offset, std
   return true;
 }
 
+static void AppendPeerProof(std::vector<uint8_t>* bytes, const PacketPeerProof& proof)
+{
+  AppendU64(bytes, proof.sessionId);
+  AppendU32(bytes, proof.sequence);
+}
+
+static bool TryReadPeerProof(const std::vector<uint8_t>& bytes, size_t* offset, PacketPeerProof* proof)
+{
+  if (offset == nullptr || proof == nullptr) return false;
+  if (*offset + 12 > bytes.size()) return false;
+  proof->sessionId = ReadU64(bytes, *offset);
+  *offset += 8;
+  proof->sequence = ReadU32(bytes, *offset);
+  *offset += 4;
+  return true;
+}
+
 static void AppendWorldPosition(std::vector<uint8_t>* bytes, const RuntimeWorldPosition& position)
 {
   AppendF32(bytes, position.x);
@@ -136,6 +153,7 @@ static RuntimeInterestArea ReadInterestArea(const std::vector<uint8_t>& bytes, s
 
 static void AppendTopologyNode(std::vector<uint8_t>* bytes, const TopologyNodeState& node)
 {
+  AppendU64(bytes, node.sessionId);
   AppendU32(bytes, node.protocolVersion);
   AppendU64(bytes, node.realmHash);
   AppendU32(bytes, (uint32_t)node.peerAddress.port);
@@ -149,8 +167,10 @@ static void AppendTopologyNode(std::vector<uint8_t>* bytes, const TopologyNodeSt
 static bool TryReadTopologyNode(const std::vector<uint8_t>& bytes, size_t* offset, TopologyNodeState* node)
 {
   if (offset == nullptr || node == nullptr) return false;
-  if (*offset + 16 > bytes.size()) return false;
+  if (*offset + 24 > bytes.size()) return false;
 
+  node->sessionId = ReadU64(bytes, *offset);
+  *offset += 8;
   node->protocolVersion = ReadU32(bytes, *offset);
   *offset += 4;
   node->realmHash = ReadU64(bytes, *offset);
@@ -185,6 +205,7 @@ Packet MakeHandshakePacket(const HandshakePacketData& handshake)
 {
   Packet packet = {};
   packet.type = PacketType::Handshake;
+  AppendPeerProof(&packet.payload, handshake.proof);
   AppendU32(&packet.payload, handshake.protocolVersion);
   AppendU64(&packet.payload, handshake.realmHash);
   AppendWorldPosition(&packet.payload, handshake.position);
@@ -199,9 +220,10 @@ bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handsha
 {
   if (handshake == nullptr) return false;
   if (packet.type != PacketType::Handshake) return false;
-  if (packet.payload.size() != 40) return false;
+  if (packet.payload.size() != 52) return false;
 
   size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &handshake->proof)) return false;
   handshake->protocolVersion = ReadU32(packet.payload, offset);
   offset += 4;
   handshake->realmHash = ReadU64(packet.payload, offset);
@@ -219,10 +241,11 @@ Packet MakeJoinRequestPacket(const JoinRequestPacketData& joinRequest)
 {
   Packet packet = {};
   packet.type = PacketType::JoinRequest;
+  AppendPeerProof(&packet.payload, joinRequest.proof);
   AppendWorldPosition(&packet.payload, joinRequest.targetPosition);
   AppendU32(&packet.payload, joinRequest.maxCandidates);
   AppendU32(&packet.payload, joinRequest.maxHops);
-  AppendU32(&packet.payload, joinRequest.requestToken);
+  AppendU64(&packet.payload, joinRequest.requestToken);
   return packet;
 }
 
@@ -230,16 +253,17 @@ bool TryDecodeJoinRequestPacket(const Packet& packet, JoinRequestPacketData* joi
 {
   if (joinRequest == nullptr) return false;
   if (packet.type != PacketType::JoinRequest) return false;
-  if (packet.payload.size() != 24) return false;
+  if (packet.payload.size() != 40) return false;
 
   size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &joinRequest->proof)) return false;
   joinRequest->targetPosition = ReadWorldPosition(packet.payload, &offset);
   joinRequest->maxCandidates = ReadU32(packet.payload, offset);
   offset += 4;
   joinRequest->maxHops = ReadU32(packet.payload, offset);
   offset += 4;
-  joinRequest->requestToken = ReadU32(packet.payload, offset);
-  offset += 4;
+  joinRequest->requestToken = ReadU64(packet.payload, offset);
+  offset += 8;
   return offset == packet.payload.size();
 }
 
@@ -247,7 +271,8 @@ Packet MakeJoinResponsePacket(const JoinResponsePacketData& joinResponse)
 {
   Packet packet = {};
   packet.type = PacketType::JoinResponse;
-  AppendU32(&packet.payload, joinResponse.requestToken);
+  AppendPeerProof(&packet.payload, joinResponse.proof);
+  AppendU64(&packet.payload, joinResponse.requestToken);
   AppendWorldPosition(&packet.payload, joinResponse.resolvedPosition);
   AppendU32(&packet.payload, (uint32_t)joinResponse.candidates.size());
   for (const TopologyNodeState& candidate : joinResponse.candidates)
@@ -261,11 +286,12 @@ bool TryDecodeJoinResponsePacket(const Packet& packet, JoinResponsePacketData* j
 {
   if (joinResponse == nullptr) return false;
   if (packet.type != PacketType::JoinResponse) return false;
-  if (packet.payload.size() < 20) return false;
+  if (packet.payload.size() < 36) return false;
 
   size_t offset = 0;
-  joinResponse->requestToken = ReadU32(packet.payload, offset);
-  offset += 4;
+  if (!TryReadPeerProof(packet.payload, &offset, &joinResponse->proof)) return false;
+  joinResponse->requestToken = ReadU64(packet.payload, offset);
+  offset += 8;
   joinResponse->resolvedPosition = ReadWorldPosition(packet.payload, &offset);
   const uint32_t count = ReadU32(packet.payload, offset);
   offset += 4;
@@ -287,6 +313,7 @@ Packet MakeTopologySnapshotPacket(const TopologySnapshotPacketData& topologySnap
 {
   Packet packet = {};
   packet.type = PacketType::TopologySnapshot;
+  AppendPeerProof(&packet.payload, topologySnapshot.proof);
   AppendU32(&packet.payload, (uint32_t)topologySnapshot.nodes.size());
   for (const TopologyNodeState& node : topologySnapshot.nodes)
   {
@@ -299,9 +326,10 @@ bool TryDecodeTopologySnapshotPacket(const Packet& packet, TopologySnapshotPacke
 {
   if (topologySnapshot == nullptr) return false;
   if (packet.type != PacketType::TopologySnapshot) return false;
-  if (packet.payload.size() < 4) return false;
+  if (packet.payload.size() < 16) return false;
 
   size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &topologySnapshot->proof)) return false;
   const uint32_t count = ReadU32(packet.payload, offset);
   offset += 4;
   if (count > MAX_SNAPSHOT_NODES || count > maxNodes) return false;
@@ -322,6 +350,8 @@ Packet MakePlayerSnapshotPacket(const PlayerSnapshotPacketData& playerSnapshot)
 {
   Packet packet = {};
   packet.type = PacketType::PlayerSnapshot;
+  AppendPeerProof(&packet.payload, playerSnapshot.proof);
+  AppendU32(&packet.payload, playerSnapshot.tickMs);
   AppendWorldPosition(&packet.payload, playerSnapshot.nodePosition);
   AppendWorldPosition(&packet.payload, playerSnapshot.playerPosition);
   AppendF32(&packet.payload, playerSnapshot.yaw);
@@ -334,9 +364,12 @@ bool TryDecodePlayerSnapshotPacket(const Packet& packet, PlayerSnapshotPacketDat
 {
   if (playerSnapshot == nullptr) return false;
   if (packet.type != PacketType::PlayerSnapshot) return false;
-  if (packet.payload.size() != 33) return false;
+  if (packet.payload.size() != 49) return false;
 
   size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &playerSnapshot->proof)) return false;
+  playerSnapshot->tickMs = ReadU32(packet.payload, offset);
+  offset += 4;
   playerSnapshot->nodePosition = ReadWorldPosition(packet.payload, &offset);
   playerSnapshot->playerPosition = ReadWorldPosition(packet.payload, &offset);
   playerSnapshot->yaw = ReadF32(packet.payload, offset);

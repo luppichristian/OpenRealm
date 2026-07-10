@@ -38,10 +38,11 @@ Current source count in the repo:
 ## Protocol/versioning
 
 Current hardcoded versions:
-- runtime protocol version: `2`
-- packet header/wire version: `2`
+- runtime protocol version: `3`
+- packet header/wire version: `3`
 
 These come from `node/runtime/ProtocolVersion.h`.
+The bump reflects incompatible runtime hardening in both topology/join semantics and packet framing.
 
 ## Packet model
 
@@ -53,7 +54,7 @@ Current packet types from `Packet.h`:
 - `PlayerSnapshot`
 
 Current packet payloads carry:
-- node id
+- sender session id + monotonic per-sender sequence metadata
 - realm hash
 - world position
 - interest area
@@ -62,6 +63,26 @@ Current packet payloads carry:
 - player position + yaw/pitch activity snapshot
 
 The runtime is real, but still narrow. Do not describe it as a complete replicated-world or consensus protocol.
+
+## Runtime security model
+
+The runtime is now compatibility-checked and locally hardened, but it is still not a trustless network.
+
+What is enforced in the current code:
+- packet parsing requires runtime packet magic, wire version, payload-length consistency, supported packet type, and checksum match
+- every packet family is validated semantically in `PacketValidator.cpp`, not just handshakes
+- peers are tracked by runtime session id plus per-packet-family monotonic sequence windows in `ActiveNodeBucket`
+- suspicious peers accumulate suspicion/strike state and can be quarantined or banned in-memory for the current session
+- quarantined/banned peers are excluded from neighbor refresh, topology snapshots, join responses, and normal send paths
+- topology gossip is treated as hints; third-party nodes from join/topology packets require direct handshake confirmation before they become active peers
+- player snapshots are checked for impossible movement, excessive player-vs-node drift, and interest-area contradictions before they affect world state
+
+What is still not enforced:
+- cryptographic node identity
+- signed packets or challenge-response handshakes
+- Byzantine-safe consensus or authoritative anti-spoofing guarantees
+
+Treat the current runtime as a hardened gossip/bootstrap layer with local containment, not as a cryptographically authenticated trustless protocol.
 
 ## Node roles and current behavior
 
@@ -108,10 +129,12 @@ They are not:
 
 Current `RuntimeSession` behavior includes:
 - `joinResolved` becomes true immediately when runtime is disabled or when no valid jump node is configured
-- otherwise the node periodically issues join requests toward the configured jump node
+- otherwise the node periodically issues join requests toward the configured jump node and any directly confirmed join-capable peers
+- join requests use per-request entropy and join responses are only accepted inside a bounded request window
 - topology refresh and topology broadcast are periodic timers
 - player snapshot broadcast is periodic when a `World*` is present
 - remote players are spawned/despawned into the headless/playable world via `WorldEvent`
+- direct topology/join advertisements for third parties are stored as provenance-carrying hints until a direct handshake confirms the peer
 
 This is an explicit-position join flow, not generic random matchmaking.
 
@@ -120,15 +143,13 @@ This is an explicit-position join flow, not generic random matchmaking.
 Current launch paths build a runtime realm hash from:
 - runtime protocol version
 - blockchain config loaded from the selected realm
-- a chain-id surrogate
+- a chain-id value that prefers the richer runtime realm state when RPC truth is available and otherwise falls back to file-based startup data
 
 Important nuance:
-- file-launched client/simulator/relay code currently uses the realm directory string as the chain-id surrogate when constructing the local runtime hash
-- `BuildRuntimeRealmState(...)` in `RealmConfigFiles.cpp` can also build a richer state using live RPC `eth_chainId` plus fetched `GlobalParams`
+- headless relay/simulator startup now tries the richer `BuildRuntimeRealmState(...)` path when RPC configuration is present, including live `eth_chainId` and fetched `GlobalParams`
+- when RPC truth is unavailable at startup, the current fallback still uses the realm directory string as a chain-id surrogate so file-based local boot remains possible
 
-So the repo contains both:
-- a file/config-based current startup path
-- a more blockchain-aware helper path for deeper integration
+So the repo now has a preferred richer startup path with a compatibility fallback, not two equally strong security boundaries.
 
 ## Config schema that the runtime actually reads
 

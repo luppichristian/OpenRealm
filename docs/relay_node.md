@@ -14,6 +14,7 @@ In the current codebase it:
 - starts a runtime session with role `Relay`
 - optionally uses a jump node from `jump_nodes.json` for bootstrap/discovery
 - runs the runtime tick loop without owning a gameplay `World`
+- applies local runtime hardening: packet-family validation, suspicious-peer scoring, in-memory quarantine/ban, and topology-hint confirmation before third-party peers become active
 - prints periodic status lines such as bind address, known nodes, connected nodes, and local position
 
 This is the right binary when you want a non-graphical runtime node that other nodes can discover or join through.

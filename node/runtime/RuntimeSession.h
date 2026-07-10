@@ -73,6 +73,13 @@ class RuntimeSession
     bool active = false;
   };
 
+  struct PeerHint
+  {
+    TopologyNodeState node = {};
+    RuntimePeerAddress introducedBy = {};
+    uint64_t lastHintMs = 0;
+  };
+
   void PumpIncomingPackets(World* world);
   void HandleParsedPacket(const Packet& packet, const RuntimePeerAddress& peerAddress, World* world);
   void HandleJoinRequest(const JoinRequestPacketData& joinRequest, const RuntimePeerAddress& peerAddress);
@@ -88,8 +95,15 @@ class RuntimeSession
   void ApplyRemotePlayerSnapshot(const RuntimePeerAddress& peerAddress, const PlayerSnapshotPacketData& playerSnapshot, World* world);
   int AcquireRemotePlayerId(const RuntimePeerAddress& peerAddress);
   void DespawnRemotePlayer(const RuntimePeerAddress& peerAddress, World* world);
-  HandshakePacketData BuildLocalHandshake() const;
+  HandshakePacketData BuildLocalHandshake();
   TopologyNodeState BuildLocalTopologyNode() const;
+  PacketPeerProof BuildLocalProof();
+  uint64_t NextJoinRequestToken();
+  bool AddPeerStrike(const RuntimePeerAddress& peerAddress, const std::string& reason, uint32_t suspicionDelta, uint32_t strikeDelta);
+  bool IsPeerTrustedResponder(const RuntimePeerAddress& peerAddress) const;
+  void RememberPeerHint(const TopologyNodeState& node, const RuntimePeerAddress& introducedBy);
+  void SendHandshakeToHintedPeers();
+
   void SendPacketTo(const RuntimePeerAddress& peerAddress, const Packet& packet);
   void SendPacketToConnectedPeers(const Packet& packet);
 
@@ -98,14 +112,17 @@ class RuntimeSession
   ActiveNodeBucket knownNodes = ActiveNodeBucket(1);
   std::vector<RuntimePeerAddress> connectedPeerAddresses = {};
   std::vector<RemotePlayerReplica> remotePlayers = {};
+  std::vector<PeerHint> peerHints = {};
   RuntimeWorldPosition localNodePosition = {};
   RuntimeWorldPosition resolvedSpawnPosition = {};
   uint64_t nowMs = 0;
+  uint64_t localSessionId = 0;
   uint64_t lastNeighborRefreshMs = 0;
   uint64_t lastTopologyBroadcastMs = 0;
   uint64_t lastPlayerBroadcastMs = 0;
   uint64_t lastJoinRequestMs = 0;
-  uint32_t joinRequestToken = 0;
+  uint64_t joinRequestToken = 0;
+  uint32_t nextPacketSequence = 1;
   bool joinResolved = false;
   bool running = false;
 };
