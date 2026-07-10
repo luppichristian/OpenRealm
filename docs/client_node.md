@@ -41,13 +41,28 @@ Gameplay controls visible in code:
 
 ## Command line arguments
 
-The current client entrypoint does not parse command line arguments.
-- No `--help`
-- No `--config`
-- No `--realm-dir`
-- Realm and jump-node selection happen through the GUI, not through CLI flags
+The current client entrypoint accepts both normal interactive launches and launcher-driven overrides.
 
-If you pass extra command line arguments today, the current client entrypoint does not consume them.
+Supported flags:
+- `--config <path>`
+  - Config file to load
+  - Default: `config.json`
+- `--realm-dir <path>`
+  - Overrides the startup realm selection
+- `--jump-node-index <index>`
+  - Overrides the startup jump-node selection
+  - Default: `0`
+- `--join-target-x <value>`
+- `--join-target-y <value>`
+- `--join-target-z <value>`
+  - Override the startup join target position
+  - Defaults: `0 0 0`
+- `--auto-play`
+  - Starts gameplay immediately with the selected startup options
+- `--help`
+  - Prints usage text
+
+Without these flags, realm and jump-node selection still happen through the GUI as usual.
 
 ## Config fields that matter most
 

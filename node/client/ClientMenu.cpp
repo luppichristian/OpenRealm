@@ -192,6 +192,22 @@ void ClientMenu::Initialize(const std::string& configPath)
   ApplyAudioSettings();
 }
 
+void ClientMenu::ApplyLaunchArgs(const ClientLaunchArgs& launchArgs)
+{
+  config.configPath = launchArgs.configPath;
+  if (!launchArgs.realmDirectory.empty()) config.selectedRealm = launchArgs.realmDirectory;
+  config.jumpNodeIndex = ClampInt(launchArgs.jumpNodeIndex, 0, launchArgs.jumpNodeIndex < 0 ? 0 : launchArgs.jumpNodeIndex);
+  config.joinTargetPosition = launchArgs.joinTargetPosition;
+  LoadAvailableRealms();
+  RefreshSelectedRealm();
+}
+
+void ClientMenu::CloseMenus()
+{
+  previousMode = mode;
+  mode = ClientMenuMode::None;
+}
+
 void ClientMenu::OpenMainMenu()
 {
   previousMode = mode;

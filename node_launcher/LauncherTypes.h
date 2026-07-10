@@ -18,8 +18,10 @@ struct LaunchOptions
   std::string realmArgument = {};
   int relayCount = 1;
   int simulatorCount = 0;
+  int clientCount = 0;
   int relayBasePort = 46001;
   int simulatorBasePort = 46101;
+  int clientBasePort = 46201;
   int relayTicks = 0;
   int simulatorFrames = 0;
   int simulatorSleepMs = 16;

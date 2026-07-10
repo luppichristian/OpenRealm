@@ -84,6 +84,7 @@ targets(
       node/blockchain/*.cpp
       node/world/*.cpp
       node/client/*.cpp
+      node/client/ClientLaunchArgs.cpp
       node/targets/Client.cpp
     )
   )

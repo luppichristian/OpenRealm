@@ -15,8 +15,8 @@ In the current codebase it:
 - creates a timestamped session directory under `build/node_launcher/`
 - clones the selected realm into a session-local realm directory
 - rewrites `jump_nodes.json` to point at the launcher-created local relay ports
-- generates one config file per relay and simulator
-- launches `openrealm-relay` and `openrealm-simulator` child processes
+- generates one config file per relay, simulator, and client
+- launches `openrealm-relay`, `openrealm-simulator`, and `openrealm-client` child processes
 - prints launch lines, periodic status, final status, and the session log directory
 - stops all launched children on Ctrl+C or when `--run-seconds` expires
 
@@ -48,12 +48,18 @@ Optional:
 - `--config <path>`
   - Base config file to clone before per-node edits
   - Default: `config.json`
+- `--clients <count>`
+  - Client nodes to launch
+  - Default: `0`
 - `--relay-base-port <port>`
   - First relay UDP port
   - Default: `46001`
 - `--sim-base-port <port>`
   - First simulator UDP port
   - Default: `46101`
+- `--client-base-port <port>`
+  - First client UDP port
+  - Default: `46201`
 - `--relay-ticks <count>`
   - Relay tick budget for generated relay configs
   - `0` means infinite
@@ -81,7 +87,7 @@ Optional:
 
 Validation rules currently enforced by the launcher:
 - `--realm` is required
-- at least one of `--relays` or `--simulators` must be greater than zero
+- at least one of `--relays`, `--simulators`, or `--clients` must be greater than zero
 - node counts cannot be negative
 - base ports must be between `1` and `65535`
 - launch delay and runtime cannot be negative
@@ -108,8 +114,10 @@ build/node_launcher/<timestamp>/
 Inside it, the launcher writes:
 - `relay-<n>.json`
 - `simulator-<n>.json`
+- `client-<n>.json`
 - `relay-<n>.log`
 - `simulator-<n>.log`
+- `client-<n>.log`
 - `realm/realm.json`
 - `realm/jump_nodes.json`
 
@@ -142,6 +150,12 @@ Launch one relay only and keep it running until Ctrl+C:
 
 ```bash
 ./build/default-windows-x86_64/bin/Debug/openrealm-node-launcher.exe --realm test --relays 1 --simulators 0
+```
+
+Launch one relay and two clients for a short smoke run:
+
+```bash
+./build/default-windows-x86_64/bin/Debug/openrealm-node-launcher.exe --realm test --relays 1 --clients 2 --run-seconds 5
 ```
 
 Launch one relay and two simulators for a short smoke run:

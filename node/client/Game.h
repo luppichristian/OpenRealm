@@ -2,6 +2,7 @@
 
 #include "../TaskManager.h"
 #include "../runtime/RuntimeSession.h"
+#include "ClientLaunchArgs.h"
 #include "ClientMenu.h"
 #include "ClientWorld.h"
 #include "ColorMenu.h"
@@ -9,13 +10,13 @@
 class Game
 {
  public:
-  int Run(TaskManager& taskManager);
+  int Run(TaskManager& taskManager, const ClientLaunchArgs& launchArgs);
 
  private:
   static constexpr int kScreenWidth = 1280;
   static constexpr int kScreenHeight = 720;
 
-  void Initialize(TaskManager& taskManager);
+  void Initialize(TaskManager& taskManager, const ClientLaunchArgs& launchArgs);
   void Shutdown(TaskManager& taskManager);
   void StartGameplay(TaskManager& taskManager);
   void StopGameplay();

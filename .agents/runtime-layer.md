@@ -90,6 +90,7 @@ Treat the current runtime as a hardened gossip/bootstrap layer with local contai
 Current client behavior is implemented in `node/client/Game.cpp`:
 - starts a local `World`
 - loads client config and selected realm
+- accepts optional launcher-driven overrides for config path, realm directory, jump-node index, join target, and auto-play
 - attempts to start a `RuntimeSession` with role `Client`
 - falls back to local-only play if the runtime session fails to start
 - applies a resolved runtime spawn later if join resolution succeeds after startup

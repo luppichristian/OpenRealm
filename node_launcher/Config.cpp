@@ -262,3 +262,26 @@ bool BuildSimulatorConfig(
 
   return SaveJsonFile(outputPath, config, errorMessage);
 }
+
+bool BuildClientConfig(
+    const nlohmann::json& baseConfig,
+    const LaunchOptions& options,
+    const std::filesystem::path& realmDir,
+    int clientIndex,
+    const std::filesystem::path& outputPath,
+    std::string* errorMessage)
+{
+  (void)realmDir;
+
+  nlohmann::json config = baseConfig;
+  NormalizeConfigSchema(&config);
+
+  const int bindPort = options.clientBasePort + clientIndex;
+
+  nlohmann::json& bindAddress = EnsureBindAddressObject(config);
+  bindAddress["host"] = "127.0.0.1";
+  bindAddress["port"] = bindPort;
+  config["enabled"] = true;
+
+  return SaveJsonFile(outputPath, config, errorMessage);
+}

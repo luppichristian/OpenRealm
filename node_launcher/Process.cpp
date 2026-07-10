@@ -24,6 +24,8 @@ bool LaunchChildProcess(
     const std::filesystem::path& configPath,
     const std::filesystem::path& realmDir,
     int jumpNodeIndex,
+    const std::vector<std::string>& extraArguments,
+    bool disableCli,
     ChildProcess* child,
     std::string* errorMessage)
 {
@@ -45,7 +47,11 @@ bool LaunchChildProcess(
     arguments.push_back("--jump-node-index");
     arguments.push_back(std::to_string(jumpNodeIndex));
   }
-  arguments.push_back("--no-cli");
+  for (const std::string& argument : extraArguments)
+  {
+    arguments.push_back(argument);
+  }
+  if (disableCli) arguments.push_back("--no-cli");
 
   return LaunchPlatformChildProcess(repoRoot, arguments, child, errorMessage);
 }

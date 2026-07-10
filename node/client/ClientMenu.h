@@ -2,6 +2,7 @@
 
 #include "../Base.h"
 #include "ClientConfigFiles.h"
+#include "ClientLaunchArgs.h"
 
 #include <string>
 #include <vector>
@@ -29,6 +30,8 @@ class ClientMenu
 {
  public:
   void Initialize(const std::string& configPath);
+  void ApplyLaunchArgs(const ClientLaunchArgs& launchArgs);
+  void CloseMenus();
   void OpenMainMenu();
   void OpenPauseMenu();
   void SetPlaying(bool playingNow);

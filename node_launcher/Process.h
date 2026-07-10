@@ -15,6 +15,8 @@ bool LaunchChildProcess(
     const std::filesystem::path& configPath,
     const std::filesystem::path& realmDir,
     int jumpNodeIndex,
+    const std::vector<std::string>& extraArguments,
+    bool disableCli,
     ChildProcess* child,
     std::string* errorMessage);
 bool PollChildProcess(ChildProcess* child);

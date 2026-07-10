@@ -99,7 +99,8 @@ Use when touching bootstrap/join/topology relay behavior.
 
 Notes:
 - the wildcard already covers `App.cpp`; the explicit extra listing is present in `project.bbs` today and should be preserved unless the build file is intentionally cleaned up
-- the launcher binary exposes the `--realm`, `--relays`, `--simulators`, `--config`, `--relay-base-port`, `--sim-base-port`, `--relay-base-node-id`, `--sim-base-node-id`, `--relay-ticks`, `--sim-frames`, `--sim-sleep-ms`, `--sim-frame-time`, `--launch-delay-ms`, `--run-seconds`, and `--emit-place-event` flags
+- the launcher binary exposes the `--realm`, `--relays`, `--simulators`, `--clients`, `--config`, `--relay-base-port`, `--sim-base-port`, `--client-base-port`, `--relay-ticks`, `--sim-frames`, `--sim-sleep-ms`, `--sim-frame-time`, `--launch-delay-ms`, `--run-seconds`, and `--emit-place-event` flags
+- the client binary now exposes `--config`, `--realm-dir`, `--jump-node-index`, `--join-target-x`, `--join-target-y`, `--join-target-z`, `--auto-play`, and `--help`, which the launcher uses for per-client overrides
 
 ## Important build conventions
 

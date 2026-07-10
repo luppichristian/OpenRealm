@@ -31,9 +31,11 @@ void PrintUsage()
   std::cout << "Options:\n";
   std::cout << "  --relays <count>               Relay nodes to launch (default: 1)\n";
   std::cout << "  --simulators <count>           Simulator nodes to launch (default: 0)\n";
+  std::cout << "  --clients <count>              Client nodes to launch (default: 0)\n";
   std::cout << "  --config <path>                Base config.json to clone (default: config.json)\n";
   std::cout << "  --relay-base-port <port>       First relay UDP port (default: 46001)\n";
   std::cout << "  --sim-base-port <port>         First simulator UDP port (default: 46101)\n";
+  std::cout << "  --client-base-port <port>      First client UDP port (default: 46201)\n";
   std::cout << "  --relay-ticks <count>          Relay service ticks, 0 = infinite (default: 0)\n";
   std::cout << "  --sim-frames <count>           Simulator frames, 0 = infinite (default: 0)\n";
   std::cout << "  --sim-sleep-ms <ms>            Simulator frame sleep (default: 16)\n";
@@ -107,6 +109,16 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
       continue;
     }
 
+    if (argument == "--clients")
+    {
+      if (!requireValue("--clients", &value) || !ParseInt(value, &options->clientCount))
+      {
+        if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--clients must be an integer";
+        return false;
+      }
+      continue;
+    }
+
     if (argument == "--relay-base-port")
     {
       if (!requireValue("--relay-base-port", &value) || !ParseInt(value, &options->relayBasePort))
@@ -122,6 +134,16 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
       if (!requireValue("--sim-base-port", &value) || !ParseInt(value, &options->simulatorBasePort))
       {
         if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--sim-base-port must be an integer";
+        return false;
+      }
+      continue;
+    }
+
+    if (argument == "--client-base-port")
+    {
+      if (!requireValue("--client-base-port", &value) || !ParseInt(value, &options->clientBasePort))
+      {
+        if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "--client-base-port must be an integer";
         return false;
       }
       continue;
@@ -203,19 +225,19 @@ bool ParseArguments(int argc, char** argv, LaunchOptions* options, std::string* 
     return false;
   }
 
-  if (options->relayCount < 0 || options->simulatorCount < 0)
+  if (options->relayCount < 0 || options->simulatorCount < 0 || options->clientCount < 0)
   {
     if (errorMessage != nullptr) *errorMessage = "node counts cannot be negative";
     return false;
   }
 
-  if (options->relayCount == 0 && options->simulatorCount == 0)
+  if (options->relayCount == 0 && options->simulatorCount == 0 && options->clientCount == 0)
   {
-    if (errorMessage != nullptr) *errorMessage = "at least one relay or simulator must be launched";
+    if (errorMessage != nullptr) *errorMessage = "at least one relay, simulator, or client must be launched";
     return false;
   }
 
-  if (options->relayBasePort < 1 || options->relayBasePort > 65535 || options->simulatorBasePort < 1 || options->simulatorBasePort > 65535)
+  if (options->relayBasePort < 1 || options->relayBasePort > 65535 || options->simulatorBasePort < 1 || options->simulatorBasePort > 65535 || options->clientBasePort < 1 || options->clientBasePort > 65535)
   {
     if (errorMessage != nullptr) *errorMessage = "base ports must be between 1 and 65535";
     return false;

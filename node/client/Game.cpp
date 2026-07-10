@@ -12,7 +12,31 @@ static RuntimeWorldPosition BuildFallbackSpawnPosition(const ClientFilesConfig& 
   return clientConfig.joinTargetPosition;
 }
 
-void Game::Initialize(TaskManager& taskManager)
+static uint64_t BuildRealmHash(const RealmConfigFiles& realmFiles, const Wallet& wallet)
+{
+  RuntimeRealmState runtimeRealmState = {};
+  runtimeRealmState.runtimeProtocolVersion = kRuntimeProtocolVersion;
+  runtimeRealmState.chainId = realmFiles.directory;
+  runtimeRealmState.blockchainConfig = realmFiles.blockchainConfig;
+
+  if (!realmFiles.blockchainConfig.rpcUrl.empty())
+  {
+    Blockchain blockchain(realmFiles.blockchainConfig, wallet);
+    const RuntimeRealmState enrichedState = BuildRuntimeRealmState(blockchain, realmFiles.blockchainConfig);
+    if (!enrichedState.chainId.empty() && enrichedState.chainId != "unavailable")
+    {
+      runtimeRealmState = enrichedState;
+    }
+    else
+    {
+      runtimeRealmState.globalParams = enrichedState.globalParams;
+    }
+  }
+
+  return ComputeRuntimeRealmHash(runtimeRealmState);
+}
+
+void Game::Initialize(TaskManager& taskManager, const ClientLaunchArgs& launchArgs)
 {
   if (initialized) return;
 
@@ -26,8 +50,16 @@ void Game::Initialize(TaskManager& taskManager)
     TraceLog(LOG_WARNING, "Failed to start global task manager; background tasks will be disabled.");
   }
 
-  clientMenu.Initialize("config.json");
-  clientMenu.OpenMainMenu();
+  clientMenu.Initialize(launchArgs.configPath);
+  clientMenu.ApplyLaunchArgs(launchArgs);
+  if (launchArgs.autoPlay)
+  {
+    clientMenu.CloseMenus();
+  }
+  else
+  {
+    clientMenu.OpenMainMenu();
+  }
   cursorCaptured = true;
   UpdateCursorState();
   initialized = true;
@@ -85,11 +117,7 @@ void Game::StartGameplay(TaskManager& taskManager)
         jumpNode.port = selectedRealm.jumpNodes[(size_t)clientConfig.jumpNodeIndex].port;
       }
 
-      RuntimeRealmState runtimeRealmState = {};
-      runtimeRealmState.runtimeProtocolVersion = kRuntimeProtocolVersion;
-      runtimeRealmState.chainId = realmFiles.directory;
-      runtimeRealmState.blockchainConfig = realmFiles.blockchainConfig;
-      const uint64_t realmHash = ComputeRuntimeRealmHash(runtimeRealmState);
+      const uint64_t realmHash = BuildRealmHash(realmFiles, nodeConfig.wallet);
 
       RuntimeSessionConfig sessionConfig = {};
       sessionConfig.role = RuntimeNodeRole::Client;
@@ -205,9 +233,13 @@ void Game::ApplyResolvedRuntimeSpawn()
   runtimeSpawnApplied = true;
 }
 
-int Game::Run(TaskManager& taskManager)
+int Game::Run(TaskManager& taskManager, const ClientLaunchArgs& launchArgs)
 {
-  Initialize(taskManager);
+  Initialize(taskManager, launchArgs);
+  if (launchArgs.autoPlay)
+  {
+    StartGameplay(taskManager);
+  }
 
   while (!WindowShouldClose())
   {

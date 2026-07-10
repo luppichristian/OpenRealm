@@ -13,6 +13,20 @@
 #include "LauncherUtilities.h"
 #include "Process.h"
 
+static std::vector<std::string> BuildClientLaunchArguments(int clientIndex)
+{
+  const float joinTargetX = (float)(clientIndex * 4);
+  return {
+      "--join-target-x",
+      std::to_string(joinTargetX),
+      "--join-target-y",
+      "0",
+      "--join-target-z",
+      "0",
+      "--auto-play",
+  };
+}
+
 int RunApp(int argc, char** argv)
 {
   LaunchOptions options = {};
@@ -46,6 +60,7 @@ int RunApp(int argc, char** argv)
   const std::filesystem::path executableDir = GetExecutableDirectory(argv[0]);
   const std::filesystem::path relayExecutable = AppendExecutableSuffix(executableDir / "openrealm-relay");
   const std::filesystem::path simulatorExecutable = AppendExecutableSuffix(executableDir / "openrealm-simulator");
+  const std::filesystem::path clientExecutable = AppendExecutableSuffix(executableDir / "openrealm-client");
 
   if (options.relayCount > 0 && !std::filesystem::exists(relayExecutable))
   {
@@ -56,6 +71,12 @@ int RunApp(int argc, char** argv)
   if (options.simulatorCount > 0 && !std::filesystem::exists(simulatorExecutable))
   {
     std::cout << "OpenRealm node launcher\n- error: simulator executable not found: " << FormatPath(simulatorExecutable) << "\n";
+    return 1;
+  }
+
+  if (options.clientCount > 0 && !std::filesystem::exists(clientExecutable))
+  {
+    std::cout << "OpenRealm node launcher\n- error: client executable not found: " << FormatPath(clientExecutable) << "\n";
     return 1;
   }
 
@@ -75,7 +96,7 @@ int RunApp(int argc, char** argv)
   }
 
   std::vector<ChildProcess> children = {};
-  children.reserve((size_t)(options.relayCount + options.simulatorCount));
+  children.reserve((size_t)(options.relayCount + options.simulatorCount + options.clientCount));
 
   for (int i = 0; i < options.relayCount; ++i)
   {
@@ -96,7 +117,7 @@ int RunApp(int argc, char** argv)
       return 1;
     }
 
-    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, &child, &error))
+    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, {}, true, &child, &error))
     {
       std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
       StopAndCloseChildren(&children);
@@ -127,7 +148,47 @@ int RunApp(int argc, char** argv)
       return 1;
     }
 
-    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, &child, &error))
+    if (!LaunchChildProcess(options.repoRoot, child.executablePath, child.configPath, child.realmDir, child.jumpNodeIndex, {}, true, &child, &error))
+    {
+      std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
+      StopAndCloseChildren(&children);
+      return 1;
+    }
+
+    children.push_back(child);
+    PrintLaunchLine(children.back());
+    if (options.launchDelayMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(options.launchDelayMs));
+  }
+
+  for (int i = 0; i < options.clientCount; ++i)
+  {
+    ChildProcess child = {};
+    child.role = "client";
+    child.index = i + 1;
+    child.executablePath = clientExecutable;
+    child.configPath = sessionPaths.sessionDir / ("client-" + std::to_string(i + 1) + ".json");
+    child.logPath = sessionPaths.sessionDir / ("client-" + std::to_string(i + 1) + ".log");
+    child.realmDir = sessionPaths.realmDir;
+    child.bindPort = options.clientBasePort + i;
+    child.jumpNodeIndex = options.relayCount > 0 ? (i % options.relayCount) : 0;
+
+    if (!BuildClientConfig(baseConfig, options, sessionPaths.realmDir, i, child.configPath, &error))
+    {
+      std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
+      StopAndCloseChildren(&children);
+      return 1;
+    }
+
+    if (!LaunchChildProcess(
+            options.repoRoot,
+            child.executablePath,
+            child.configPath,
+            child.realmDir,
+            child.jumpNodeIndex,
+            BuildClientLaunchArguments(i),
+            false,
+            &child,
+            &error))
     {
       std::cout << "OpenRealm node launcher\n- error: " << error << "\n";
       StopAndCloseChildren(&children);
@@ -147,6 +208,7 @@ int RunApp(int argc, char** argv)
   std::cout << "- session realm: " << FormatPath(sessionPaths.realmDir) << "\n";
   std::cout << "- relays requested: " << options.relayCount << "\n";
   std::cout << "- simulators requested: " << options.simulatorCount << "\n";
+  std::cout << "- clients requested: " << options.clientCount << "\n";
   std::cout << "- auto stop seconds: " << options.runSeconds << "\n";
   std::cout << "- stop hint: press Ctrl+C to stop every launched node\n";
 

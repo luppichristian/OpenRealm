@@ -33,3 +33,10 @@ bool BuildSimulatorConfig(
     int launchedRelayCount,
     const std::filesystem::path& outputPath,
     std::string* errorMessage);
+bool BuildClientConfig(
+    const nlohmann::json& baseConfig,
+    const LaunchOptions& options,
+    const std::filesystem::path& realmDir,
+    int clientIndex,
+    const std::filesystem::path& outputPath,
+    std::string* errorMessage);
