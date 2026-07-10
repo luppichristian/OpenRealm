@@ -29,6 +29,7 @@ struct ActiveNodeState
   uint8_t nodeRole = 0;
   bool acceptsJoins = false;
   bool connected = false;
+  bool authenticated = false;
   uint32_t lastPacketChecksum = 0;
   uint32_t acceptedPackets = 0;
   uint64_t lastSeenTick = 0;
@@ -37,6 +38,12 @@ struct ActiveNodeState
   uint32_t lastJoinResponseSequence = 0;
   uint32_t lastTopologySequence = 0;
   uint32_t lastPlayerSequence = 0;
+  uint32_t lastChallengeRequestSequence = 0;
+  uint32_t lastChallengeResponseSequence = 0;
+  uint64_t advertisedChallengeNonce = 0;
+  uint64_t pendingAuthChallengeNonce = 0;
+  uint64_t pendingAuthChallengeTick = 0;
+  std::string signerAddress = {};
   ActiveNodeSecurityState security = {};
 };
 
@@ -103,6 +110,7 @@ class ActiveNodeBucket
   ActiveNodeState* FindMutableByPeerAddress(const RuntimePeerAddress& peerAddress);
   bool IsPeerIsolated(const RuntimePeerAddress& peerAddress, uint64_t tick) const;
   bool IsPeerBanned(const RuntimePeerAddress& peerAddress) const;
+  bool IsPeerAuthenticated(const RuntimePeerAddress& peerAddress) const;
   std::vector<TopologyNodeState> BuildTopologySnapshot(const RuntimePeerAddress& excludedPeerAddress, uint64_t realmHash, size_t maxCount = SIZE_MAX, uint64_t tick = UINT64_MAX) const;
   std::vector<const ActiveNodeState*> BuildClosestNodes(
       const RuntimePeerAddress& excludedPeerAddress,

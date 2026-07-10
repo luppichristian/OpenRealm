@@ -4,6 +4,7 @@
 #include "PacketValidator.h"
 #include "RuntimeClient.h"
 
+#include "../blockchain/Wallet.h"
 #include "../world/World.h"
 
 #include <cstdint>
@@ -22,6 +23,7 @@ struct RuntimeSessionConfig
   RuntimeNodeRole role = RuntimeNodeRole::Client;
   RuntimePeerAddress bindAddress = {"127.0.0.1", 46010};
   RuntimePeerAddress jumpNode = {};
+  Wallet wallet = {};
   uint64_t realmHash = 0;
   RuntimeWorldPosition initialNodePosition = {};
   RuntimeInterestArea interestArea = {};
@@ -82,6 +84,9 @@ class RuntimeSession
 
   void PumpIncomingPackets(World* world);
   void HandleParsedPacket(const Packet& packet, const RuntimePeerAddress& peerAddress, World* world);
+  void HandleHandshake(const HandshakePacketData& handshake, const RuntimePeerAddress& peerAddress);
+  void HandleChallengeRequest(const ChallengeRequestPacketData& challengeRequest, const RuntimePeerAddress& peerAddress);
+  void HandleChallengeResponse(const ChallengeResponsePacketData& challengeResponse, const RuntimePeerAddress& peerAddress);
   void HandleJoinRequest(const JoinRequestPacketData& joinRequest, const RuntimePeerAddress& peerAddress);
   void HandleJoinResponse(const JoinResponsePacketData& joinResponse, const RuntimePeerAddress& peerAddress);
   void HandleTopologySnapshot(const TopologySnapshotPacketData& topologySnapshot, const RuntimePeerAddress& peerAddress);
@@ -95,14 +100,26 @@ class RuntimeSession
   void ApplyRemotePlayerSnapshot(const RuntimePeerAddress& peerAddress, const PlayerSnapshotPacketData& playerSnapshot, World* world);
   int AcquireRemotePlayerId(const RuntimePeerAddress& peerAddress);
   void DespawnRemotePlayer(const RuntimePeerAddress& peerAddress, World* world);
+
+  bool SignHandshakePacket(HandshakePacketData* handshake);
+  bool SignJoinRequestPacket(JoinRequestPacketData* joinRequest);
+  bool SignJoinResponsePacket(JoinResponsePacketData* joinResponse);
+  bool SignTopologySnapshotPacket(TopologySnapshotPacketData* topologySnapshot);
+  bool SignPlayerSnapshotPacket(PlayerSnapshotPacketData* playerSnapshot);
+  bool SignChallengeRequestPacket(ChallengeRequestPacketData* challengeRequest);
+  bool SignChallengeResponsePacket(ChallengeResponsePacketData* challengeResponse);
+
   HandshakePacketData BuildLocalHandshake();
   TopologyNodeState BuildLocalTopologyNode() const;
   PacketPeerProof BuildLocalProof();
   uint64_t NextJoinRequestToken();
+  uint64_t NextChallengeNonce(const RuntimePeerAddress& peerAddress) const;
   bool AddPeerStrike(const RuntimePeerAddress& peerAddress, const std::string& reason, uint32_t suspicionDelta, uint32_t strikeDelta);
   bool IsPeerTrustedResponder(const RuntimePeerAddress& peerAddress) const;
   void RememberPeerHint(const TopologyNodeState& node, const RuntimePeerAddress& introducedBy);
   void SendHandshakeToHintedPeers();
+  void MaybeSendChallengeRequest(const RuntimePeerAddress& peerAddress);
+  bool IsAuthReady() const;
 
   void SendPacketTo(const RuntimePeerAddress& peerAddress, const Packet& packet);
   void SendPacketToConnectedPeers(const Packet& packet);
@@ -115,6 +132,8 @@ class RuntimeSession
   std::vector<PeerHint> peerHints = {};
   RuntimeWorldPosition localNodePosition = {};
   RuntimeWorldPosition resolvedSpawnPosition = {};
+  std::string localSignerAddress = {};
+  uint64_t localChallengeNonce = 0;
   uint64_t nowMs = 0;
   uint64_t localSessionId = 0;
   uint64_t lastNeighborRefreshMs = 0;

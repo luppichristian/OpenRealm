@@ -48,12 +48,14 @@ uint32_t* ActiveNodeBucket::SelectSequenceSlot(ActiveNodeState* node, PacketType
 
   switch (packetType)
   {
-    case PacketType::Handshake:        return &node->lastHandshakeSequence;
-    case PacketType::JoinRequest:      return &node->lastJoinRequestSequence;
-    case PacketType::JoinResponse:     return &node->lastJoinResponseSequence;
-    case PacketType::TopologySnapshot: return &node->lastTopologySequence;
-    case PacketType::PlayerSnapshot:   return &node->lastPlayerSequence;
-    default:                           return nullptr;
+    case PacketType::Handshake:         return &node->lastHandshakeSequence;
+    case PacketType::JoinRequest:       return &node->lastJoinRequestSequence;
+    case PacketType::JoinResponse:      return &node->lastJoinResponseSequence;
+    case PacketType::TopologySnapshot:  return &node->lastTopologySequence;
+    case PacketType::PlayerSnapshot:    return &node->lastPlayerSequence;
+    case PacketType::ChallengeRequest:  return &node->lastChallengeRequestSequence;
+    case PacketType::ChallengeResponse: return &node->lastChallengeResponseSequence;
+    default:                            return nullptr;
   }
 }
 
@@ -61,12 +63,14 @@ const uint32_t* ActiveNodeBucket::SelectSequenceSlot(const ActiveNodeState& node
 {
   switch (packetType)
   {
-    case PacketType::Handshake:        return &node.lastHandshakeSequence;
-    case PacketType::JoinRequest:      return &node.lastJoinRequestSequence;
-    case PacketType::JoinResponse:     return &node.lastJoinResponseSequence;
-    case PacketType::TopologySnapshot: return &node.lastTopologySequence;
-    case PacketType::PlayerSnapshot:   return &node.lastPlayerSequence;
-    default:                           return nullptr;
+    case PacketType::Handshake:         return &node.lastHandshakeSequence;
+    case PacketType::JoinRequest:       return &node.lastJoinRequestSequence;
+    case PacketType::JoinResponse:      return &node.lastJoinResponseSequence;
+    case PacketType::TopologySnapshot:  return &node.lastTopologySequence;
+    case PacketType::PlayerSnapshot:    return &node.lastPlayerSequence;
+    case PacketType::ChallengeRequest:  return &node.lastChallengeRequestSequence;
+    case PacketType::ChallengeResponse: return &node.lastChallengeResponseSequence;
+    default:                            return nullptr;
   }
 }
 
@@ -94,8 +98,13 @@ ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candi
       node.lastJoinResponseSequence = 0;
       node.lastTopologySequence = 0;
       node.lastPlayerSequence = 0;
+      node.lastChallengeRequestSequence = 0;
+      node.lastChallengeResponseSequence = 0;
       node.security.rejectedPackets = 0;
       node.security.lastSecurityReason.clear();
+      node.authenticated = false;
+      node.pendingAuthChallengeNonce = 0;
+      node.pendingAuthChallengeTick = 0;
     }
 
     node.protocolVersion = candidate.protocolVersion;
@@ -108,11 +117,15 @@ ActiveNodeBucketResult ActiveNodeBucket::UpsertNode(const ActiveNodeState& candi
     node.lastSeenTick = tick;
     node.acceptedPackets += candidate.acceptedPackets > 0 ? candidate.acceptedPackets : 1;
     if (candidate.sessionId != 0) node.sessionId = candidate.sessionId;
+    if (!candidate.signerAddress.empty()) node.signerAddress = candidate.signerAddress;
+    if (candidate.advertisedChallengeNonce != 0) node.advertisedChallengeNonce = candidate.advertisedChallengeNonce;
     if (candidate.lastHandshakeSequence > 0) node.lastHandshakeSequence = candidate.lastHandshakeSequence;
     if (candidate.lastJoinRequestSequence > 0) node.lastJoinRequestSequence = candidate.lastJoinRequestSequence;
     if (candidate.lastJoinResponseSequence > 0) node.lastJoinResponseSequence = candidate.lastJoinResponseSequence;
     if (candidate.lastTopologySequence > 0) node.lastTopologySequence = candidate.lastTopologySequence;
     if (candidate.lastPlayerSequence > 0) node.lastPlayerSequence = candidate.lastPlayerSequence;
+    if (candidate.lastChallengeRequestSequence > 0) node.lastChallengeRequestSequence = candidate.lastChallengeRequestSequence;
+    if (candidate.lastChallengeResponseSequence > 0) node.lastChallengeResponseSequence = candidate.lastChallengeResponseSequence;
     result.code = ActiveNodeBucketCode::Refreshed;
     result.accepted = true;
     result.node = node;
@@ -167,6 +180,8 @@ ActiveNodeBucketResult ActiveNodeBucket::RegisterHandshake(
   node.lastPacketChecksum = packetChecksum;
   node.acceptedPackets = 1;
   node.lastHandshakeSequence = handshake.proof.sequence;
+  node.advertisedChallengeNonce = handshake.challengeNonce;
+  node.signerAddress = handshake.signerAddress;
   return UpsertNode(node, tick);
 }
 
@@ -222,6 +237,8 @@ ActiveNodeBucketResult ActiveNodeBucket::AcceptPacketMetadata(
 
   *sequenceSlot = proof.sequence;
   node->lastPacketChecksum = packetChecksum;
+  node->lastSeenTick = tick;
+  node->acceptedPackets += 1;
   return {.accepted = true, .code = ActiveNodeBucketCode::Refreshed, .node = *node};
 }
 
@@ -245,6 +262,7 @@ ActiveNodeBucketResult ActiveNodeBucket::AddPeerStrike(
   node->security.lastSecurityTick = tick;
   node->security.lastSecurityReason = reason;
   node->connected = false;
+  node->authenticated = false;
 
   ActiveNodeBucketCode code = ActiveNodeBucketCode::Refreshed;
   if (node->security.banned)
@@ -337,6 +355,12 @@ bool ActiveNodeBucket::IsPeerBanned(const RuntimePeerAddress& peerAddress) const
   return node != nullptr && node->security.banned;
 }
 
+bool ActiveNodeBucket::IsPeerAuthenticated(const RuntimePeerAddress& peerAddress) const
+{
+  const ActiveNodeState* node = FindByPeerAddress(peerAddress);
+  return node != nullptr && node->authenticated && !node->signerAddress.empty();
+}
+
 std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(
     const RuntimePeerAddress& excludedPeerAddress,
     uint64_t realmHash,
@@ -348,7 +372,7 @@ std::vector<TopologyNodeState> ActiveNodeBucket::BuildTopologySnapshot(
   {
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
-    if (IsNodeIsolated(node, tick)) continue;
+    if (IsNodeIsolated(node, tick) || !node.authenticated) continue;
     snapshot.push_back(ToTopologyNodeState(node));
     if (snapshot.size() >= maxCount) break;
   }
@@ -369,7 +393,7 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildClosestNodes(
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
     if (requireJoinable && !node.acceptsJoins) continue;
-    if (IsNodeIsolated(node, tick)) continue;
+    if (IsNodeIsolated(node, tick) || !node.authenticated) continue;
     ordered.push_back(&node);
   }
 
@@ -393,7 +417,7 @@ std::vector<const ActiveNodeState*> ActiveNodeBucket::BuildNeighborCandidates(
   {
     if (RuntimePeerAddressEquals(node.peerAddress, excludedPeerAddress)) continue;
     if (node.realmHash != realmHash) continue;
-    if (IsNodeIsolated(node, tick)) continue;
+    if (IsNodeIsolated(node, tick) || !node.authenticated) continue;
     if (!RuntimeInterestAreasOverlap(localPosition, localInterestArea, node.position, node.interestArea)) continue;
     ordered.push_back(&node);
   }

@@ -3,42 +3,26 @@
 #include "RuntimeClient.h"
 #include "RuntimeWorldPosition.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 enum class PacketType : uint8_t
 {
-  Invalid = 0,
   Handshake = 1,
   JoinRequest = 2,
   JoinResponse = 3,
   TopologySnapshot = 4,
   PlayerSnapshot = 5,
-};
-
-struct PacketHeader
-{
-  uint32_t magic = 0;
-  uint8_t version = 1;
-  uint8_t type = 0;
-  uint16_t reserved = 0;
-  uint32_t payloadSize = 0;
-  uint32_t checksum = 0;
-};
-
-struct Packet
-{
-  PacketType type = PacketType::Invalid;
-  uint32_t checksum = 0;
-  std::vector<uint8_t> payload = {};
+  ChallengeRequest = 6,
+  ChallengeResponse = 7,
 };
 
 struct PacketPeerProof
 {
   uint64_t sessionId = 0;
   uint32_t sequence = 0;
+  std::string signatureHex = {};
 };
 
 struct HandshakePacketData
@@ -51,6 +35,29 @@ struct HandshakePacketData
   uint8_t nodeRole = 0;
   uint8_t acceptsJoins = 0;
   uint16_t reserved = 0;
+  uint64_t challengeNonce = 0;
+  std::string signerAddress = {};
+};
+
+struct JoinRequestPacketData
+{
+  PacketPeerProof proof = {};
+  RuntimeWorldPosition targetPosition = {};
+  uint32_t maxCandidates = 0;
+  uint32_t maxHops = 0;
+  uint64_t requestToken = 0;
+};
+
+struct ChallengeRequestPacketData
+{
+  PacketPeerProof proof = {};
+  uint64_t challengeNonce = 0;
+};
+
+struct ChallengeResponsePacketData
+{
+  PacketPeerProof proof = {};
+  uint64_t challengeNonce = 0;
 };
 
 struct TopologyNodeState
@@ -63,15 +70,6 @@ struct TopologyNodeState
   RuntimeInterestArea interestArea = {};
   uint8_t nodeRole = 0;
   uint8_t acceptsJoins = 0;
-};
-
-struct JoinRequestPacketData
-{
-  PacketPeerProof proof = {};
-  RuntimeWorldPosition targetPosition = {};
-  uint32_t maxCandidates = 0;
-  uint32_t maxHops = 0;
-  uint64_t requestToken = 0;
 };
 
 struct JoinResponsePacketData
@@ -99,19 +97,39 @@ struct PlayerSnapshotPacketData
   uint8_t active = 0;
 };
 
-Packet MakeHandshakePacket(const HandshakePacketData& handshake);
-bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake);
-Packet MakeJoinRequestPacket(const JoinRequestPacketData& joinRequest);
-bool TryDecodeJoinRequestPacket(const Packet& packet, JoinRequestPacketData* joinRequest);
-Packet MakeJoinResponsePacket(const JoinResponsePacketData& joinResponse);
-bool TryDecodeJoinResponsePacket(const Packet& packet, JoinResponsePacketData* joinResponse, size_t maxCandidates = 64);
-Packet MakeTopologySnapshotPacket(const TopologySnapshotPacketData& topologySnapshot);
-bool TryDecodeTopologySnapshotPacket(const Packet& packet, TopologySnapshotPacketData* topologySnapshot, size_t maxNodes = 128);
-Packet MakePlayerSnapshotPacket(const PlayerSnapshotPacketData& playerSnapshot);
-bool TryDecodePlayerSnapshotPacket(const Packet& packet, PlayerSnapshotPacketData* playerSnapshot);
+struct Packet
+{
+  PacketType type = PacketType::Handshake;
+  uint8_t version = 0;
+  uint32_t checksum = 0;
+  std::vector<uint8_t> payload = {};
+};
 
 std::vector<uint8_t> SerializePacket(const Packet& packet);
 bool TryParsePacket(const std::vector<uint8_t>& bytes, Packet* packet);
-uint32_t ComputePacketChecksum(const PacketHeader& header, const std::vector<uint8_t>& payload);
-bool IsPacketTypeSupported(PacketType type);
+
+Packet MakeHandshakePacket(const HandshakePacketData& handshake);
+Packet MakeJoinRequestPacket(const JoinRequestPacketData& joinRequest);
+Packet MakeJoinResponsePacket(const JoinResponsePacketData& joinResponse);
+Packet MakeTopologySnapshotPacket(const TopologySnapshotPacketData& topologySnapshot);
+Packet MakePlayerSnapshotPacket(const PlayerSnapshotPacketData& playerSnapshot);
+Packet MakeChallengeRequestPacket(const ChallengeRequestPacketData& challengeRequest);
+Packet MakeChallengeResponsePacket(const ChallengeResponsePacketData& challengeResponse);
+
+bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake);
+bool TryDecodeJoinRequestPacket(const Packet& packet, JoinRequestPacketData* joinRequest);
+bool TryDecodeJoinResponsePacket(const Packet& packet, JoinResponsePacketData* joinResponse, size_t maxCandidates = SIZE_MAX);
+bool TryDecodeTopologySnapshotPacket(const Packet& packet, TopologySnapshotPacketData* topologySnapshot, size_t maxNodes = SIZE_MAX);
+bool TryDecodePlayerSnapshotPacket(const Packet& packet, PlayerSnapshotPacketData* playerSnapshot);
+bool TryDecodeChallengeRequestPacket(const Packet& packet, ChallengeRequestPacketData* challengeRequest);
+bool TryDecodeChallengeResponsePacket(const Packet& packet, ChallengeResponsePacketData* challengeResponse);
+
+bool BuildHandshakeSigningMessage(const HandshakePacketData& handshake, std::vector<uint8_t>* messageBytes);
+bool BuildJoinRequestSigningMessage(const JoinRequestPacketData& joinRequest, std::vector<uint8_t>* messageBytes);
+bool BuildJoinResponseSigningMessage(const JoinResponsePacketData& joinResponse, std::vector<uint8_t>* messageBytes);
+bool BuildTopologySnapshotSigningMessage(const TopologySnapshotPacketData& topologySnapshot, std::vector<uint8_t>* messageBytes);
+bool BuildPlayerSnapshotSigningMessage(const PlayerSnapshotPacketData& playerSnapshot, std::vector<uint8_t>* messageBytes);
+bool BuildChallengeRequestSigningMessage(const ChallengeRequestPacketData& challengeRequest, std::vector<uint8_t>* messageBytes);
+bool BuildChallengeResponseSigningMessage(const ChallengeResponsePacketData& challengeResponse, std::vector<uint8_t>* messageBytes);
+
 std::string DescribePacketType(PacketType type);

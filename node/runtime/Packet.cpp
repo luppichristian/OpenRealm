@@ -1,464 +1,599 @@
 #include "Packet.h"
+
 #include "ProtocolVersion.h"
 
-#include <enet/enet.h>
-
+#include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <limits>
 
-static constexpr uint32_t RUNTIME_PACKET_MAGIC = 0x4f524c4d;
-static constexpr size_t PACKET_HEADER_SIZE = 16;
-static constexpr size_t MAX_HOST_BYTES = 255;
-static constexpr size_t MAX_SNAPSHOT_NODES = 512;
-
-static void AppendU8(std::vector<uint8_t>* bytes, uint8_t value)
+namespace
 {
-  if (bytes == nullptr) return;
-  bytes->push_back(value);
+static constexpr uint32_t kPacketMagic = 0x4f52544d; // ORTM
+static constexpr uint8_t kMaxHostBytes = 255;
+static constexpr uint8_t kMaxAddressBytes = 127;
+static constexpr uint16_t kMaxSignatureBytes = 255;
+static constexpr uint32_t kRuntimeAuthDomainVersion = 1;
+
+void AppendBytes(std::vector<uint8_t>* bytes, const void* data, size_t size)
+{
+  if (bytes == nullptr || data == nullptr || size == 0) return;
+  const uint8_t* begin = static_cast<const uint8_t*>(data);
+  bytes->insert(bytes->end(), begin, begin + size);
 }
 
-static void AppendU16(std::vector<uint8_t>* bytes, uint16_t value)
+template<typename T>
+void AppendValue(std::vector<uint8_t>* bytes, const T& value)
 {
-  if (bytes == nullptr) return;
-  bytes->push_back((uint8_t)(value & 0xff));
-  bytes->push_back((uint8_t)((value >> 8) & 0xff));
+  AppendBytes(bytes, &value, sizeof(T));
 }
 
-static void AppendU32(std::vector<uint8_t>* bytes, uint32_t value)
+void AppendString(std::vector<uint8_t>* bytes, const std::string& value, uint16_t maxBytes)
 {
-  if (bytes == nullptr) return;
-  bytes->push_back((uint8_t)(value & 0xff));
-  bytes->push_back((uint8_t)((value >> 8) & 0xff));
-  bytes->push_back((uint8_t)((value >> 16) & 0xff));
-  bytes->push_back((uint8_t)((value >> 24) & 0xff));
-}
-
-static void AppendU64(std::vector<uint8_t>* bytes, uint64_t value)
-{
-  if (bytes == nullptr) return;
-  for (int shift = 0; shift < 64; shift += 8)
+  const size_t cappedSize = std::min(value.size(), (size_t)maxBytes);
+  const uint16_t encodedSize = (uint16_t)cappedSize;
+  AppendValue(bytes, encodedSize);
+  if (encodedSize > 0)
   {
-    bytes->push_back((uint8_t)((value >> shift) & 0xff));
+    AppendBytes(bytes, value.data(), encodedSize);
   }
 }
 
-static void AppendF32(std::vector<uint8_t>* bytes, float value)
+bool TryReadBytes(const std::vector<uint8_t>& bytes, size_t* offset, void* data, size_t size)
 {
-  uint32_t rawValue = 0;
-  memcpy(&rawValue, &value, sizeof(rawValue));
-  AppendU32(bytes, rawValue);
-}
-
-static void AppendString(std::vector<uint8_t>* bytes, const std::string& value)
-{
-  if (bytes == nullptr) return;
-  const size_t size = value.size() > MAX_HOST_BYTES ? MAX_HOST_BYTES : value.size();
-  AppendU8(bytes, (uint8_t)size);
-  bytes->insert(bytes->end(), value.begin(), value.begin() + size);
-}
-
-static uint16_t ReadU16(const std::vector<uint8_t>& bytes, size_t offset)
-{
-  return (uint16_t)(bytes[offset] | (bytes[offset + 1] << 8));
-}
-
-static uint32_t ReadU32(const std::vector<uint8_t>& bytes, size_t offset)
-{
-  return (uint32_t)bytes[offset] | ((uint32_t)bytes[offset + 1] << 8) | ((uint32_t)bytes[offset + 2] << 16) | ((uint32_t)bytes[offset + 3] << 24);
-}
-
-static uint64_t ReadU64(const std::vector<uint8_t>& bytes, size_t offset)
-{
-  uint64_t value = 0;
-  for (int shift = 0; shift < 64; shift += 8)
-  {
-    value |= ((uint64_t)bytes[offset + (shift / 8)]) << shift;
-  }
-  return value;
-}
-
-static float ReadF32(const std::vector<uint8_t>& bytes, size_t offset)
-{
-  const uint32_t rawValue = ReadU32(bytes, offset);
-  float value = 0.0f;
-  memcpy(&value, &rawValue, sizeof(value));
-  return value;
-}
-
-static bool TryReadString(const std::vector<uint8_t>& bytes, size_t* offset, std::string* value)
-{
-  if (offset == nullptr || value == nullptr) return false;
-  if (*offset >= bytes.size()) return false;
-  const size_t size = bytes[*offset];
-  *offset += 1;
-  if (*offset + size > bytes.size()) return false;
-  value->assign((const char*)&bytes[*offset], size);
+  if (offset == nullptr || data == nullptr || *offset + size > bytes.size()) return false;
+  std::memcpy(data, bytes.data() + *offset, size);
   *offset += size;
   return true;
 }
 
-static void AppendPeerProof(std::vector<uint8_t>* bytes, const PacketPeerProof& proof)
+template<typename T>
+bool TryReadValue(const std::vector<uint8_t>& bytes, size_t* offset, T* value)
 {
-  AppendU64(bytes, proof.sessionId);
-  AppendU32(bytes, proof.sequence);
+  return TryReadBytes(bytes, offset, value, sizeof(T));
 }
 
-static bool TryReadPeerProof(const std::vector<uint8_t>& bytes, size_t* offset, PacketPeerProof* proof)
+bool TryReadString(const std::vector<uint8_t>& bytes, size_t* offset, std::string* value, uint16_t maxBytes)
 {
-  if (offset == nullptr || proof == nullptr) return false;
-  if (*offset + 12 > bytes.size()) return false;
-  proof->sessionId = ReadU64(bytes, *offset);
-  *offset += 8;
-  proof->sequence = ReadU32(bytes, *offset);
-  *offset += 4;
+  if (value == nullptr) return false;
+  uint16_t encodedSize = 0;
+  if (!TryReadValue(bytes, offset, &encodedSize)) return false;
+  if (encodedSize > maxBytes || *offset + encodedSize > bytes.size()) return false;
+  value->assign(reinterpret_cast<const char*>(bytes.data() + *offset), encodedSize);
+  *offset += encodedSize;
   return true;
 }
 
-static void AppendWorldPosition(std::vector<uint8_t>* bytes, const RuntimeWorldPosition& position)
+uint32_t ComputeChecksum(PacketType type, uint8_t version, const std::vector<uint8_t>& payload)
 {
-  AppendF32(bytes, position.x);
-  AppendF32(bytes, position.y);
-  AppendF32(bytes, position.z);
+  uint32_t checksum = 2166136261u;
+  const uint8_t typeByte = (uint8_t)type;
+  checksum = (checksum ^ typeByte) * 16777619u;
+  checksum = (checksum ^ version) * 16777619u;
+  for (uint8_t byte : payload)
+  {
+    checksum = (checksum ^ byte) * 16777619u;
+  }
+  return checksum;
 }
 
-static RuntimeWorldPosition ReadWorldPosition(const std::vector<uint8_t>& bytes, size_t* offset)
+void AppendPeerAddress(std::vector<uint8_t>* bytes, const RuntimePeerAddress& peerAddress)
 {
-  RuntimeWorldPosition position = {};
-  position.x = ReadF32(bytes, *offset);
-  *offset += 4;
-  position.y = ReadF32(bytes, *offset);
-  *offset += 4;
-  position.z = ReadF32(bytes, *offset);
-  *offset += 4;
-  return position;
+  AppendString(bytes, peerAddress.host, kMaxHostBytes);
+  uint16_t port = 0;
+  if (peerAddress.port > 0)
+  {
+    const int boundedPort = peerAddress.port > 65535 ? 65535 : peerAddress.port;
+    port = (uint16_t)boundedPort;
+  }
+  AppendValue(bytes, port);
 }
 
-static void AppendInterestArea(std::vector<uint8_t>* bytes, const RuntimeInterestArea& area)
+bool TryReadPeerAddress(const std::vector<uint8_t>& bytes, size_t* offset, RuntimePeerAddress* peerAddress)
 {
-  AppendF32(bytes, area.radiusX);
-  AppendF32(bytes, area.radiusY);
-  AppendF32(bytes, area.radiusZ);
+  if (peerAddress == nullptr) return false;
+  uint16_t port = 0;
+  if (!TryReadString(bytes, offset, &peerAddress->host, kMaxHostBytes)) return false;
+  if (!TryReadValue(bytes, offset, &port)) return false;
+  peerAddress->port = (int)port;
+  return true;
 }
 
-static RuntimeInterestArea ReadInterestArea(const std::vector<uint8_t>& bytes, size_t* offset)
+void AppendWorldPosition(std::vector<uint8_t>* bytes, const RuntimeWorldPosition& position)
 {
-  RuntimeInterestArea area = {};
-  area.radiusX = ReadF32(bytes, *offset);
-  *offset += 4;
-  area.radiusY = ReadF32(bytes, *offset);
-  *offset += 4;
-  area.radiusZ = ReadF32(bytes, *offset);
-  *offset += 4;
-  return area;
+  AppendValue(bytes, position.x);
+  AppendValue(bytes, position.y);
+  AppendValue(bytes, position.z);
 }
 
-static void AppendTopologyNode(std::vector<uint8_t>* bytes, const TopologyNodeState& node)
+bool TryReadWorldPosition(const std::vector<uint8_t>& bytes, size_t* offset, RuntimeWorldPosition* position)
 {
-  AppendU64(bytes, node.sessionId);
-  AppendU32(bytes, node.protocolVersion);
-  AppendU64(bytes, node.realmHash);
-  AppendU32(bytes, (uint32_t)node.peerAddress.port);
-  AppendString(bytes, node.peerAddress.host);
+  return position != nullptr
+      && TryReadValue(bytes, offset, &position->x)
+      && TryReadValue(bytes, offset, &position->y)
+      && TryReadValue(bytes, offset, &position->z);
+}
+
+void AppendInterestArea(std::vector<uint8_t>* bytes, const RuntimeInterestArea& area)
+{
+  AppendValue(bytes, area.radiusX);
+  AppendValue(bytes, area.radiusY);
+  AppendValue(bytes, area.radiusZ);
+}
+
+bool TryReadInterestArea(const std::vector<uint8_t>& bytes, size_t* offset, RuntimeInterestArea* area)
+{
+  return area != nullptr
+      && TryReadValue(bytes, offset, &area->radiusX)
+      && TryReadValue(bytes, offset, &area->radiusY)
+      && TryReadValue(bytes, offset, &area->radiusZ);
+}
+
+void AppendPeerProof(std::vector<uint8_t>* bytes, const PacketPeerProof& proof)
+{
+  AppendValue(bytes, proof.sessionId);
+  AppendValue(bytes, proof.sequence);
+  AppendString(bytes, proof.signatureHex, kMaxSignatureBytes);
+}
+
+bool TryReadPeerProof(const std::vector<uint8_t>& bytes, size_t* offset, PacketPeerProof* proof)
+{
+  return proof != nullptr
+      && TryReadValue(bytes, offset, &proof->sessionId)
+      && TryReadValue(bytes, offset, &proof->sequence)
+      && TryReadString(bytes, offset, &proof->signatureHex, kMaxSignatureBytes);
+}
+
+void AppendUnsignedPeerProof(std::vector<uint8_t>* bytes, const PacketPeerProof& proof)
+{
+  AppendValue(bytes, proof.sessionId);
+  AppendValue(bytes, proof.sequence);
+}
+
+void AppendTopologyNode(std::vector<uint8_t>* bytes, const TopologyNodeState& node)
+{
+  AppendValue(bytes, node.sessionId);
+  AppendValue(bytes, node.protocolVersion);
+  AppendValue(bytes, node.realmHash);
+  AppendPeerAddress(bytes, node.peerAddress);
   AppendWorldPosition(bytes, node.position);
   AppendInterestArea(bytes, node.interestArea);
-  AppendU8(bytes, node.nodeRole);
-  AppendU8(bytes, node.acceptsJoins);
+  AppendValue(bytes, node.nodeRole);
+  AppendValue(bytes, node.acceptsJoins);
 }
 
-static bool TryReadTopologyNode(const std::vector<uint8_t>& bytes, size_t* offset, TopologyNodeState* node)
+bool TryReadTopologyNode(const std::vector<uint8_t>& bytes, size_t* offset, TopologyNodeState* node)
 {
-  if (offset == nullptr || node == nullptr) return false;
-  if (*offset + 24 > bytes.size()) return false;
+  return node != nullptr
+      && TryReadValue(bytes, offset, &node->sessionId)
+      && TryReadValue(bytes, offset, &node->protocolVersion)
+      && TryReadValue(bytes, offset, &node->realmHash)
+      && TryReadPeerAddress(bytes, offset, &node->peerAddress)
+      && TryReadWorldPosition(bytes, offset, &node->position)
+      && TryReadInterestArea(bytes, offset, &node->interestArea)
+      && TryReadValue(bytes, offset, &node->nodeRole)
+      && TryReadValue(bytes, offset, &node->acceptsJoins);
+}
 
-  node->sessionId = ReadU64(bytes, *offset);
-  *offset += 8;
-  node->protocolVersion = ReadU32(bytes, *offset);
-  *offset += 4;
-  node->realmHash = ReadU64(bytes, *offset);
-  *offset += 8;
-  node->peerAddress.port = (int)ReadU32(bytes, *offset);
-  *offset += 4;
-  if (!TryReadString(bytes, offset, &node->peerAddress.host)) return false;
-  if (*offset + 26 > bytes.size()) return false;
-  node->position = ReadWorldPosition(bytes, offset);
-  node->interestArea = ReadInterestArea(bytes, offset);
-  node->nodeRole = bytes[*offset];
-  *offset += 1;
-  node->acceptsJoins = bytes[*offset];
-  *offset += 1;
+bool BuildSigningMessage(PacketType type, const std::vector<uint8_t>& payload, std::vector<uint8_t>* messageBytes)
+{
+  if (messageBytes == nullptr) return false;
+  messageBytes->clear();
+  static constexpr char kDomain[] = "openrealm-runtime-auth";
+  AppendBytes(messageBytes, kDomain, sizeof(kDomain) - 1);
+  AppendValue(messageBytes, kRuntimeAuthDomainVersion);
+  const uint8_t typeByte = (uint8_t)type;
+  AppendValue(messageBytes, typeByte);
+  if (!payload.empty())
+  {
+    AppendBytes(messageBytes, payload.data(), payload.size());
+  }
   return true;
 }
 
-bool IsPacketTypeSupported(PacketType type)
+bool BuildHandshakeUnsignedPayload(const HandshakePacketData& handshake, std::vector<uint8_t>* payload)
 {
-  switch (type)
-  {
-    case PacketType::Handshake:
-    case PacketType::JoinRequest:
-    case PacketType::JoinResponse:
-    case PacketType::TopologySnapshot:
-    case PacketType::PlayerSnapshot:   return true;
-    default:                           return false;
-  }
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, handshake.proof);
+  AppendValue(payload, handshake.protocolVersion);
+  AppendValue(payload, handshake.realmHash);
+  AppendWorldPosition(payload, handshake.position);
+  AppendInterestArea(payload, handshake.interestArea);
+  AppendValue(payload, handshake.nodeRole);
+  AppendValue(payload, handshake.acceptsJoins);
+  AppendValue(payload, handshake.reserved);
+  AppendValue(payload, handshake.challengeNonce);
+  AppendString(payload, handshake.signerAddress, kMaxAddressBytes);
+  return true;
 }
 
-Packet MakeHandshakePacket(const HandshakePacketData& handshake)
+bool BuildJoinRequestUnsignedPayload(const JoinRequestPacketData& joinRequest, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, joinRequest.proof);
+  AppendWorldPosition(payload, joinRequest.targetPosition);
+  AppendValue(payload, joinRequest.maxCandidates);
+  AppendValue(payload, joinRequest.maxHops);
+  AppendValue(payload, joinRequest.requestToken);
+  return true;
+}
+
+bool BuildJoinResponseUnsignedPayload(const JoinResponsePacketData& joinResponse, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, joinResponse.proof);
+  AppendValue(payload, joinResponse.requestToken);
+  AppendWorldPosition(payload, joinResponse.resolvedPosition);
+  const uint16_t count = (uint16_t)std::min(joinResponse.candidates.size(), (size_t)std::numeric_limits<uint16_t>::max());
+  AppendValue(payload, count);
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    AppendTopologyNode(payload, joinResponse.candidates[i]);
+  }
+  return true;
+}
+
+bool BuildTopologySnapshotUnsignedPayload(const TopologySnapshotPacketData& topologySnapshot, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, topologySnapshot.proof);
+  const uint16_t count = (uint16_t)std::min(topologySnapshot.nodes.size(), (size_t)std::numeric_limits<uint16_t>::max());
+  AppendValue(payload, count);
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    AppendTopologyNode(payload, topologySnapshot.nodes[i]);
+  }
+  return true;
+}
+
+bool BuildPlayerSnapshotUnsignedPayload(const PlayerSnapshotPacketData& playerSnapshot, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, playerSnapshot.proof);
+  AppendValue(payload, playerSnapshot.tickMs);
+  AppendWorldPosition(payload, playerSnapshot.nodePosition);
+  AppendWorldPosition(payload, playerSnapshot.playerPosition);
+  AppendValue(payload, playerSnapshot.yaw);
+  AppendValue(payload, playerSnapshot.pitch);
+  AppendValue(payload, playerSnapshot.active);
+  return true;
+}
+
+bool BuildChallengeRequestUnsignedPayload(const ChallengeRequestPacketData& challengeRequest, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, challengeRequest.proof);
+  AppendValue(payload, challengeRequest.challengeNonce);
+  return true;
+}
+
+bool BuildChallengeResponseUnsignedPayload(const ChallengeResponsePacketData& challengeResponse, std::vector<uint8_t>* payload)
+{
+  if (payload == nullptr) return false;
+  payload->clear();
+  AppendUnsignedPeerProof(payload, challengeResponse.proof);
+  AppendValue(payload, challengeResponse.challengeNonce);
+  return true;
+}
+
+Packet BuildPacket(PacketType type, const std::vector<uint8_t>& payload)
 {
   Packet packet = {};
-  packet.type = PacketType::Handshake;
-  AppendPeerProof(&packet.payload, handshake.proof);
-  AppendU32(&packet.payload, handshake.protocolVersion);
-  AppendU64(&packet.payload, handshake.realmHash);
-  AppendWorldPosition(&packet.payload, handshake.position);
-  AppendInterestArea(&packet.payload, handshake.interestArea);
-  AppendU8(&packet.payload, handshake.nodeRole);
-  AppendU8(&packet.payload, handshake.acceptsJoins);
-  AppendU16(&packet.payload, handshake.reserved);
+  packet.type = type;
+  packet.version = kRuntimePacketVersion;
+  packet.payload = payload;
+  packet.checksum = ComputeChecksum(packet.type, packet.version, packet.payload);
   return packet;
 }
-
-bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake)
-{
-  if (handshake == nullptr) return false;
-  if (packet.type != PacketType::Handshake) return false;
-  if (packet.payload.size() != 52) return false;
-
-  size_t offset = 0;
-  if (!TryReadPeerProof(packet.payload, &offset, &handshake->proof)) return false;
-  handshake->protocolVersion = ReadU32(packet.payload, offset);
-  offset += 4;
-  handshake->realmHash = ReadU64(packet.payload, offset);
-  offset += 8;
-  handshake->position = ReadWorldPosition(packet.payload, &offset);
-  handshake->interestArea = ReadInterestArea(packet.payload, &offset);
-  handshake->nodeRole = packet.payload[offset++];
-  handshake->acceptsJoins = packet.payload[offset++];
-  handshake->reserved = ReadU16(packet.payload, offset);
-  offset += 2;
-  return offset == packet.payload.size();
-}
-
-Packet MakeJoinRequestPacket(const JoinRequestPacketData& joinRequest)
-{
-  Packet packet = {};
-  packet.type = PacketType::JoinRequest;
-  AppendPeerProof(&packet.payload, joinRequest.proof);
-  AppendWorldPosition(&packet.payload, joinRequest.targetPosition);
-  AppendU32(&packet.payload, joinRequest.maxCandidates);
-  AppendU32(&packet.payload, joinRequest.maxHops);
-  AppendU64(&packet.payload, joinRequest.requestToken);
-  return packet;
-}
-
-bool TryDecodeJoinRequestPacket(const Packet& packet, JoinRequestPacketData* joinRequest)
-{
-  if (joinRequest == nullptr) return false;
-  if (packet.type != PacketType::JoinRequest) return false;
-  if (packet.payload.size() != 40) return false;
-
-  size_t offset = 0;
-  if (!TryReadPeerProof(packet.payload, &offset, &joinRequest->proof)) return false;
-  joinRequest->targetPosition = ReadWorldPosition(packet.payload, &offset);
-  joinRequest->maxCandidates = ReadU32(packet.payload, offset);
-  offset += 4;
-  joinRequest->maxHops = ReadU32(packet.payload, offset);
-  offset += 4;
-  joinRequest->requestToken = ReadU64(packet.payload, offset);
-  offset += 8;
-  return offset == packet.payload.size();
-}
-
-Packet MakeJoinResponsePacket(const JoinResponsePacketData& joinResponse)
-{
-  Packet packet = {};
-  packet.type = PacketType::JoinResponse;
-  AppendPeerProof(&packet.payload, joinResponse.proof);
-  AppendU64(&packet.payload, joinResponse.requestToken);
-  AppendWorldPosition(&packet.payload, joinResponse.resolvedPosition);
-  AppendU32(&packet.payload, (uint32_t)joinResponse.candidates.size());
-  for (const TopologyNodeState& candidate : joinResponse.candidates)
-  {
-    AppendTopologyNode(&packet.payload, candidate);
-  }
-  return packet;
-}
-
-bool TryDecodeJoinResponsePacket(const Packet& packet, JoinResponsePacketData* joinResponse, size_t maxCandidates)
-{
-  if (joinResponse == nullptr) return false;
-  if (packet.type != PacketType::JoinResponse) return false;
-  if (packet.payload.size() < 36) return false;
-
-  size_t offset = 0;
-  if (!TryReadPeerProof(packet.payload, &offset, &joinResponse->proof)) return false;
-  joinResponse->requestToken = ReadU64(packet.payload, offset);
-  offset += 8;
-  joinResponse->resolvedPosition = ReadWorldPosition(packet.payload, &offset);
-  const uint32_t count = ReadU32(packet.payload, offset);
-  offset += 4;
-  if (count > MAX_SNAPSHOT_NODES || count > maxCandidates) return false;
-
-  joinResponse->candidates.clear();
-  joinResponse->candidates.reserve(count);
-  for (uint32_t i = 0; i < count; ++i)
-  {
-    TopologyNodeState node = {};
-    if (!TryReadTopologyNode(packet.payload, &offset, &node)) return false;
-    joinResponse->candidates.push_back(node);
-  }
-
-  return offset == packet.payload.size();
-}
-
-Packet MakeTopologySnapshotPacket(const TopologySnapshotPacketData& topologySnapshot)
-{
-  Packet packet = {};
-  packet.type = PacketType::TopologySnapshot;
-  AppendPeerProof(&packet.payload, topologySnapshot.proof);
-  AppendU32(&packet.payload, (uint32_t)topologySnapshot.nodes.size());
-  for (const TopologyNodeState& node : topologySnapshot.nodes)
-  {
-    AppendTopologyNode(&packet.payload, node);
-  }
-  return packet;
-}
-
-bool TryDecodeTopologySnapshotPacket(const Packet& packet, TopologySnapshotPacketData* topologySnapshot, size_t maxNodes)
-{
-  if (topologySnapshot == nullptr) return false;
-  if (packet.type != PacketType::TopologySnapshot) return false;
-  if (packet.payload.size() < 16) return false;
-
-  size_t offset = 0;
-  if (!TryReadPeerProof(packet.payload, &offset, &topologySnapshot->proof)) return false;
-  const uint32_t count = ReadU32(packet.payload, offset);
-  offset += 4;
-  if (count > MAX_SNAPSHOT_NODES || count > maxNodes) return false;
-
-  topologySnapshot->nodes.clear();
-  topologySnapshot->nodes.reserve(count);
-  for (uint32_t i = 0; i < count; ++i)
-  {
-    TopologyNodeState node = {};
-    if (!TryReadTopologyNode(packet.payload, &offset, &node)) return false;
-    topologySnapshot->nodes.push_back(node);
-  }
-
-  return offset == packet.payload.size();
-}
-
-Packet MakePlayerSnapshotPacket(const PlayerSnapshotPacketData& playerSnapshot)
-{
-  Packet packet = {};
-  packet.type = PacketType::PlayerSnapshot;
-  AppendPeerProof(&packet.payload, playerSnapshot.proof);
-  AppendU32(&packet.payload, playerSnapshot.tickMs);
-  AppendWorldPosition(&packet.payload, playerSnapshot.nodePosition);
-  AppendWorldPosition(&packet.payload, playerSnapshot.playerPosition);
-  AppendF32(&packet.payload, playerSnapshot.yaw);
-  AppendF32(&packet.payload, playerSnapshot.pitch);
-  AppendU8(&packet.payload, playerSnapshot.active);
-  return packet;
-}
-
-bool TryDecodePlayerSnapshotPacket(const Packet& packet, PlayerSnapshotPacketData* playerSnapshot)
-{
-  if (playerSnapshot == nullptr) return false;
-  if (packet.type != PacketType::PlayerSnapshot) return false;
-  if (packet.payload.size() != 49) return false;
-
-  size_t offset = 0;
-  if (!TryReadPeerProof(packet.payload, &offset, &playerSnapshot->proof)) return false;
-  playerSnapshot->tickMs = ReadU32(packet.payload, offset);
-  offset += 4;
-  playerSnapshot->nodePosition = ReadWorldPosition(packet.payload, &offset);
-  playerSnapshot->playerPosition = ReadWorldPosition(packet.payload, &offset);
-  playerSnapshot->yaw = ReadF32(packet.payload, offset);
-  offset += 4;
-  playerSnapshot->pitch = ReadF32(packet.payload, offset);
-  offset += 4;
-  playerSnapshot->active = packet.payload[offset++];
-  return offset == packet.payload.size();
-}
-
-uint32_t ComputePacketChecksum(const PacketHeader& header, const std::vector<uint8_t>& payload)
-{
-  std::vector<uint8_t> checksumHeader = {};
-  checksumHeader.reserve(PACKET_HEADER_SIZE);
-  AppendU32(&checksumHeader, header.magic);
-  AppendU8(&checksumHeader, header.version);
-  AppendU8(&checksumHeader, header.type);
-  AppendU16(&checksumHeader, header.reserved);
-  AppendU32(&checksumHeader, header.payloadSize);
-  AppendU32(&checksumHeader, 0);
-
-  ENetBuffer buffers[2] = {};
-  buffers[0].data = checksumHeader.data();
-  buffers[0].dataLength = checksumHeader.size();
-  buffers[1].data = payload.empty() ? nullptr : (void*)payload.data();
-  buffers[1].dataLength = payload.size();
-  return enet_crc32(buffers, payload.empty() ? 1 : 2);
-}
+} // namespace
 
 std::vector<uint8_t> SerializePacket(const Packet& packet)
 {
-  PacketHeader header = {};
-  header.magic = RUNTIME_PACKET_MAGIC;
-  header.version = kRuntimePacketVersion;
-  header.type = (uint8_t)packet.type;
-  header.payloadSize = (uint32_t)packet.payload.size();
-  header.checksum = ComputePacketChecksum(header, packet.payload);
-
   std::vector<uint8_t> bytes = {};
-  bytes.reserve(PACKET_HEADER_SIZE + packet.payload.size());
-  AppendU32(&bytes, header.magic);
-  AppendU8(&bytes, header.version);
-  AppendU8(&bytes, header.type);
-  AppendU16(&bytes, header.reserved);
-  AppendU32(&bytes, header.payloadSize);
-  AppendU32(&bytes, header.checksum);
-  bytes.insert(bytes.end(), packet.payload.begin(), packet.payload.end());
+  AppendValue(&bytes, kPacketMagic);
+  AppendValue(&bytes, packet.version);
+  const uint8_t typeByte = (uint8_t)packet.type;
+  AppendValue(&bytes, typeByte);
+  const uint32_t payloadSize = (uint32_t)packet.payload.size();
+  AppendValue(&bytes, payloadSize);
+  AppendValue(&bytes, packet.checksum);
+  if (!packet.payload.empty())
+  {
+    AppendBytes(&bytes, packet.payload.data(), packet.payload.size());
+  }
   return bytes;
 }
 
 bool TryParsePacket(const std::vector<uint8_t>& bytes, Packet* packet)
 {
   if (packet == nullptr) return false;
-  if (bytes.size() < PACKET_HEADER_SIZE) return false;
 
-  PacketHeader header = {};
-  header.magic = ReadU32(bytes, 0);
-  header.version = bytes[4];
-  header.type = bytes[5];
-  header.reserved = ReadU16(bytes, 6);
-  header.payloadSize = ReadU32(bytes, 8);
-  header.checksum = ReadU32(bytes, 12);
+  size_t offset = 0;
+  uint32_t packetMagic = 0;
+  uint8_t packetVersion = 0;
+  uint8_t packetType = 0;
+  uint32_t payloadSize = 0;
+  uint32_t packetChecksum = 0;
+  if (!TryReadValue(bytes, &offset, &packetMagic)
+      || !TryReadValue(bytes, &offset, &packetVersion)
+      || !TryReadValue(bytes, &offset, &packetType)
+      || !TryReadValue(bytes, &offset, &payloadSize)
+      || !TryReadValue(bytes, &offset, &packetChecksum))
+  {
+    return false;
+  }
+  if (packetMagic != kPacketMagic || packetVersion != kRuntimePacketVersion || offset + payloadSize != bytes.size()) return false;
 
-  if (header.magic != RUNTIME_PACKET_MAGIC) return false;
-  if (header.version != kRuntimePacketVersion) return false;
-  if (bytes.size() != (size_t)(PACKET_HEADER_SIZE + header.payloadSize)) return false;
+  packet->type = (PacketType)packetType;
+  packet->version = packetVersion;
+  packet->checksum = packetChecksum;
+  packet->payload.assign(bytes.begin() + (long long)offset, bytes.end());
+  return ComputeChecksum(packet->type, packet->version, packet->payload) == packet->checksum;
+}
 
-  const PacketType type = (PacketType)header.type;
-  if (!IsPacketTypeSupported(type)) return false;
-
+Packet MakeHandshakePacket(const HandshakePacketData& handshake)
+{
   std::vector<uint8_t> payload = {};
-  payload.assign(bytes.begin() + PACKET_HEADER_SIZE, bytes.end());
-  if (ComputePacketChecksum(header, payload) != header.checksum) return false;
+  AppendPeerProof(&payload, handshake.proof);
+  AppendValue(&payload, handshake.protocolVersion);
+  AppendValue(&payload, handshake.realmHash);
+  AppendWorldPosition(&payload, handshake.position);
+  AppendInterestArea(&payload, handshake.interestArea);
+  AppendValue(&payload, handshake.nodeRole);
+  AppendValue(&payload, handshake.acceptsJoins);
+  AppendValue(&payload, handshake.reserved);
+  AppendValue(&payload, handshake.challengeNonce);
+  AppendString(&payload, handshake.signerAddress, kMaxAddressBytes);
+  return BuildPacket(PacketType::Handshake, payload);
+}
 
-  packet->type = type;
-  packet->checksum = header.checksum;
-  packet->payload = std::move(payload);
-  return true;
+Packet MakeJoinRequestPacket(const JoinRequestPacketData& joinRequest)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, joinRequest.proof);
+  AppendWorldPosition(&payload, joinRequest.targetPosition);
+  AppendValue(&payload, joinRequest.maxCandidates);
+  AppendValue(&payload, joinRequest.maxHops);
+  AppendValue(&payload, joinRequest.requestToken);
+  return BuildPacket(PacketType::JoinRequest, payload);
+}
+
+Packet MakeJoinResponsePacket(const JoinResponsePacketData& joinResponse)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, joinResponse.proof);
+  AppendValue(&payload, joinResponse.requestToken);
+  AppendWorldPosition(&payload, joinResponse.resolvedPosition);
+  const uint16_t count = (uint16_t)std::min(joinResponse.candidates.size(), (size_t)std::numeric_limits<uint16_t>::max());
+  AppendValue(&payload, count);
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    AppendTopologyNode(&payload, joinResponse.candidates[i]);
+  }
+  return BuildPacket(PacketType::JoinResponse, payload);
+}
+
+Packet MakeTopologySnapshotPacket(const TopologySnapshotPacketData& topologySnapshot)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, topologySnapshot.proof);
+  const uint16_t count = (uint16_t)std::min(topologySnapshot.nodes.size(), (size_t)std::numeric_limits<uint16_t>::max());
+  AppendValue(&payload, count);
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    AppendTopologyNode(&payload, topologySnapshot.nodes[i]);
+  }
+  return BuildPacket(PacketType::TopologySnapshot, payload);
+}
+
+Packet MakePlayerSnapshotPacket(const PlayerSnapshotPacketData& playerSnapshot)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, playerSnapshot.proof);
+  AppendValue(&payload, playerSnapshot.tickMs);
+  AppendWorldPosition(&payload, playerSnapshot.nodePosition);
+  AppendWorldPosition(&payload, playerSnapshot.playerPosition);
+  AppendValue(&payload, playerSnapshot.yaw);
+  AppendValue(&payload, playerSnapshot.pitch);
+  AppendValue(&payload, playerSnapshot.active);
+  return BuildPacket(PacketType::PlayerSnapshot, payload);
+}
+
+Packet MakeChallengeRequestPacket(const ChallengeRequestPacketData& challengeRequest)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, challengeRequest.proof);
+  AppendValue(&payload, challengeRequest.challengeNonce);
+  return BuildPacket(PacketType::ChallengeRequest, payload);
+}
+
+Packet MakeChallengeResponsePacket(const ChallengeResponsePacketData& challengeResponse)
+{
+  std::vector<uint8_t> payload = {};
+  AppendPeerProof(&payload, challengeResponse.proof);
+  AppendValue(&payload, challengeResponse.challengeNonce);
+  return BuildPacket(PacketType::ChallengeResponse, payload);
+}
+
+bool TryDecodeHandshakePacket(const Packet& packet, HandshakePacketData* handshake)
+{
+  if (packet.type != PacketType::Handshake || handshake == nullptr) return false;
+  size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &handshake->proof)
+      || !TryReadValue(packet.payload, &offset, &handshake->protocolVersion)
+      || !TryReadValue(packet.payload, &offset, &handshake->realmHash)
+      || !TryReadWorldPosition(packet.payload, &offset, &handshake->position)
+      || !TryReadInterestArea(packet.payload, &offset, &handshake->interestArea)
+      || !TryReadValue(packet.payload, &offset, &handshake->nodeRole)
+      || !TryReadValue(packet.payload, &offset, &handshake->acceptsJoins)
+      || !TryReadValue(packet.payload, &offset, &handshake->reserved)
+      || !TryReadValue(packet.payload, &offset, &handshake->challengeNonce)
+      || !TryReadString(packet.payload, &offset, &handshake->signerAddress, kMaxAddressBytes))
+  {
+    return false;
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodeJoinRequestPacket(const Packet& packet, JoinRequestPacketData* joinRequest)
+{
+  if (packet.type != PacketType::JoinRequest || joinRequest == nullptr) return false;
+  size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &joinRequest->proof)
+      || !TryReadWorldPosition(packet.payload, &offset, &joinRequest->targetPosition)
+      || !TryReadValue(packet.payload, &offset, &joinRequest->maxCandidates)
+      || !TryReadValue(packet.payload, &offset, &joinRequest->maxHops)
+      || !TryReadValue(packet.payload, &offset, &joinRequest->requestToken))
+  {
+    return false;
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodeJoinResponsePacket(const Packet& packet, JoinResponsePacketData* joinResponse, size_t maxCandidates)
+{
+  if (packet.type != PacketType::JoinResponse || joinResponse == nullptr) return false;
+  size_t offset = 0;
+  uint16_t count = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &joinResponse->proof)
+      || !TryReadValue(packet.payload, &offset, &joinResponse->requestToken)
+      || !TryReadWorldPosition(packet.payload, &offset, &joinResponse->resolvedPosition)
+      || !TryReadValue(packet.payload, &offset, &count)
+      || count > maxCandidates)
+  {
+    return false;
+  }
+  joinResponse->candidates.clear();
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    TopologyNodeState node = {};
+    if (!TryReadTopologyNode(packet.payload, &offset, &node)) return false;
+    joinResponse->candidates.push_back(node);
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodeTopologySnapshotPacket(const Packet& packet, TopologySnapshotPacketData* topologySnapshot, size_t maxNodes)
+{
+  if (packet.type != PacketType::TopologySnapshot || topologySnapshot == nullptr) return false;
+  size_t offset = 0;
+  uint16_t count = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &topologySnapshot->proof)
+      || !TryReadValue(packet.payload, &offset, &count)
+      || count > maxNodes)
+  {
+    return false;
+  }
+  topologySnapshot->nodes.clear();
+  for (uint16_t i = 0; i < count; ++i)
+  {
+    TopologyNodeState node = {};
+    if (!TryReadTopologyNode(packet.payload, &offset, &node)) return false;
+    topologySnapshot->nodes.push_back(node);
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodePlayerSnapshotPacket(const Packet& packet, PlayerSnapshotPacketData* playerSnapshot)
+{
+  if (packet.type != PacketType::PlayerSnapshot || playerSnapshot == nullptr) return false;
+  size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &playerSnapshot->proof)
+      || !TryReadValue(packet.payload, &offset, &playerSnapshot->tickMs)
+      || !TryReadWorldPosition(packet.payload, &offset, &playerSnapshot->nodePosition)
+      || !TryReadWorldPosition(packet.payload, &offset, &playerSnapshot->playerPosition)
+      || !TryReadValue(packet.payload, &offset, &playerSnapshot->yaw)
+      || !TryReadValue(packet.payload, &offset, &playerSnapshot->pitch)
+      || !TryReadValue(packet.payload, &offset, &playerSnapshot->active))
+  {
+    return false;
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodeChallengeRequestPacket(const Packet& packet, ChallengeRequestPacketData* challengeRequest)
+{
+  if (packet.type != PacketType::ChallengeRequest || challengeRequest == nullptr) return false;
+  size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &challengeRequest->proof)
+      || !TryReadValue(packet.payload, &offset, &challengeRequest->challengeNonce))
+  {
+    return false;
+  }
+  return offset == packet.payload.size();
+}
+
+bool TryDecodeChallengeResponsePacket(const Packet& packet, ChallengeResponsePacketData* challengeResponse)
+{
+  if (packet.type != PacketType::ChallengeResponse || challengeResponse == nullptr) return false;
+  size_t offset = 0;
+  if (!TryReadPeerProof(packet.payload, &offset, &challengeResponse->proof)
+      || !TryReadValue(packet.payload, &offset, &challengeResponse->challengeNonce))
+  {
+    return false;
+  }
+  return offset == packet.payload.size();
+}
+
+bool BuildHandshakeSigningMessage(const HandshakePacketData& handshake, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildHandshakeUnsignedPayload(handshake, &payload) && BuildSigningMessage(PacketType::Handshake, payload, messageBytes);
+}
+
+bool BuildJoinRequestSigningMessage(const JoinRequestPacketData& joinRequest, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildJoinRequestUnsignedPayload(joinRequest, &payload) && BuildSigningMessage(PacketType::JoinRequest, payload, messageBytes);
+}
+
+bool BuildJoinResponseSigningMessage(const JoinResponsePacketData& joinResponse, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildJoinResponseUnsignedPayload(joinResponse, &payload) && BuildSigningMessage(PacketType::JoinResponse, payload, messageBytes);
+}
+
+bool BuildTopologySnapshotSigningMessage(const TopologySnapshotPacketData& topologySnapshot, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildTopologySnapshotUnsignedPayload(topologySnapshot, &payload) && BuildSigningMessage(PacketType::TopologySnapshot, payload, messageBytes);
+}
+
+bool BuildPlayerSnapshotSigningMessage(const PlayerSnapshotPacketData& playerSnapshot, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildPlayerSnapshotUnsignedPayload(playerSnapshot, &payload) && BuildSigningMessage(PacketType::PlayerSnapshot, payload, messageBytes);
+}
+
+bool BuildChallengeRequestSigningMessage(const ChallengeRequestPacketData& challengeRequest, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildChallengeRequestUnsignedPayload(challengeRequest, &payload) && BuildSigningMessage(PacketType::ChallengeRequest, payload, messageBytes);
+}
+
+bool BuildChallengeResponseSigningMessage(const ChallengeResponsePacketData& challengeResponse, std::vector<uint8_t>* messageBytes)
+{
+  std::vector<uint8_t> payload = {};
+  return BuildChallengeResponseUnsignedPayload(challengeResponse, &payload) && BuildSigningMessage(PacketType::ChallengeResponse, payload, messageBytes);
 }
 
 std::string DescribePacketType(PacketType type)
 {
   switch (type)
   {
-    case PacketType::Handshake:        return "handshake";
-    case PacketType::JoinRequest:      return "join_request";
-    case PacketType::JoinResponse:     return "join_response";
-    case PacketType::TopologySnapshot: return "topology_snapshot";
-    case PacketType::PlayerSnapshot:   return "player_snapshot";
-    default:                           return "invalid";
+    case PacketType::Handshake:         return "handshake";
+    case PacketType::JoinRequest:       return "join_request";
+    case PacketType::JoinResponse:      return "join_response";
+    case PacketType::TopologySnapshot:  return "topology_snapshot";
+    case PacketType::PlayerSnapshot:    return "player_snapshot";
+    case PacketType::ChallengeRequest:  return "challenge_request";
+    case PacketType::ChallengeResponse: return "challenge_response";
+    default:                            return "unknown";
   }
 }

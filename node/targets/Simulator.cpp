@@ -63,10 +63,12 @@ int main(int argc, char** argv)
   runtimeConfig.role = RuntimeNodeRole::Simulator;
   runtimeConfig.bindAddress = nodeFiles.runtimeBindAddress;
   runtimeConfig.jumpNode = jumpNode;
+  runtimeConfig.wallet = nodeFiles.wallet;
   runtimeConfig.realmHash = BuildRealmHash(realmFiles, nodeFiles.wallet);
   runtimeConfig.initialNodePosition = nodeFiles.runtimePosition;
   runtimeConfig.interestArea = nodeFiles.runtimeInterestArea;
   runtimeConfig.joinTargetPosition = nodeFiles.runtimePosition;
+
   runtimeConfig.receiveTimeoutMs = nodeFiles.runtimeReceiveTimeoutMs;
   runtimeConfig.maxNodeConnections = nodeFiles.runtimeMaxNodeConnections;
   runtimeConfig.maxKnownNodes = nodeFiles.runtimeMaxKnownNodes;

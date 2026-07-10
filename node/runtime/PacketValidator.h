@@ -39,6 +39,11 @@ enum class PacketValidationCode : uint8_t
   InvalidJoinResponsePayload = 14,
   InvalidTopologySnapshotPayload = 15,
   InvalidPlayerSnapshotPayload = 16,
+  InvalidChallengeRequestPayload = 17,
+  InvalidChallengeResponsePayload = 18,
+  InvalidSignature = 19,
+  MissingSignerAddress = 20,
+  UnauthenticatedPeer = 21,
 };
 
 struct PacketValidationResult
