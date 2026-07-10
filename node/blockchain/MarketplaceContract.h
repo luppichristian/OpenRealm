@@ -78,12 +78,14 @@ class MarketplaceContract : public SmartContract
   std::string GetChunkClaimsAddress() const;
   std::string GetGlobalParamsAddress() const;
   uint64_t GetFeeBps() const;
+  std::string GetAccruedProtocolFees() const;
   uint64_t GetNextListingId() const;
   uint64_t GetNextAuctionId() const;
   ListingState GetListing(const std::string& listingId) const;
   AuctionState GetAuction(const std::string& auctionId) const;
   std::string GetActiveListingByTokenId(const std::string& tokenId) const;
   std::string GetActiveAuctionByTokenId(const std::string& tokenId) const;
+  std::string GetWithdrawableBalance(const std::string& account) const;
   BlockchainTransactionReceipt SetFeeBps(uint64_t newFeeBps) const;
   MarketplaceListingTransaction CreateListing(int32_t x, int32_t y, const std::string& price) const;
   BlockchainTransactionReceipt CancelListing(const std::string& listingId) const;
@@ -101,6 +103,7 @@ class MarketplaceContract : public SmartContract
   BlockchainTransactionReceipt SettleAuction(const std::string& auctionId) const;
   SaleState GetSaleStateForChunk(int32_t x, int32_t y) const;
   SaleState GetSaleStateForToken(const std::string& tokenId) const;
+  BlockchainTransactionReceipt WithdrawBalance(const std::string& recipient) const;
   BlockchainTransactionReceipt WithdrawFees(const std::string& recipient) const;
 
  protected:

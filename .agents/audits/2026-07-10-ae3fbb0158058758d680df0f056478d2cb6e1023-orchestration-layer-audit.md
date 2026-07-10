@@ -2,6 +2,23 @@
 
 Production date: 2026-07-10
 Commit hash: ae3fbb0158058758d680df0f056478d2cb6e1023
+Status: completed
+Completed date: 2026-07-10
+
+## Completion note
+
+This audit has been completed by the follow-up remediation work in the current repository state.
+
+Implemented resolution summary:
+- `Marketplace.sol` now uses pull-based accounting for seller proceeds, outbid refunds, and protocol fee withdrawal.
+- `PlayerRegistry.sol` now normalizes handles before hashing for case-insensitive uniqueness.
+- Adversarial receiver coverage was added in `blockchain/test/orchestration.test.js` with `blockchain/contracts/test/RevertingReceiver.sol`.
+- Native blockchain writes now have a signed transaction path via `blockchain/scripts/nativeSendTransaction.js` and the updated `node/blockchain/` wallet/RPC wrapper layer.
+
+Verification summary for the remediation:
+- ad-hoc verifier reran `npm test` in `blockchain/` with 12 passing tests
+- ad-hoc verifier exercised `nativeSendTransaction.js` against local Ganache and confirmed a mined receipt with `status: 1`
+- native build verification succeeded for `bbs build -t openrealm_relay`
 
 ## Scope
 

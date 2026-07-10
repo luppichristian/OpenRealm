@@ -3,13 +3,27 @@
 #include "BlockchainAbi.h"
 
 #include <chrono>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <thread>
 #include <utility>
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
-static std::string StripHttpScheme(const std::string& url)
+#ifdef _WIN32
+#define OPENREALM_POPEN _popen
+#define OPENREALM_PCLOSE _pclose
+#else
+#define OPENREALM_POPEN popen
+#define OPENREALM_PCLOSE pclose
+#endif
+
+namespace
+{
+std::string StripHttpScheme(const std::string& url)
 {
   const std::string prefix = "http://";
   if (url.rfind(prefix, 0) == 0)
@@ -19,7 +33,7 @@ static std::string StripHttpScheme(const std::string& url)
   return url;
 }
 
-static bool PostJsonRpc(const BlockchainConfig& config, const nlohmann::json& payload, nlohmann::json* result)
+bool PostJsonRpc(const BlockchainConfig& config, const nlohmann::json& payload, nlohmann::json* result)
 {
   if (result == nullptr || config.rpcUrl.empty())
   {
@@ -43,6 +57,154 @@ static bool PostJsonRpc(const BlockchainConfig& config, const nlohmann::json& pa
     return false;
   }
   return true;
+}
+
+std::filesystem::path FindNativeSendScript()
+{
+  std::filesystem::path current = std::filesystem::current_path();
+  while (true)
+  {
+    const std::filesystem::path candidate = current / "blockchain" / "scripts" / "nativeSendTransaction.js";
+    if (std::filesystem::exists(candidate))
+    {
+      return candidate;
+    }
+
+    if (!current.has_parent_path() || current.parent_path() == current)
+    {
+      break;
+    }
+    current = current.parent_path();
+  }
+
+  return {};
+}
+
+std::filesystem::path WriteNativeSignerPayload(const nlohmann::json& payload)
+{
+  const auto uniqueId = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  const std::filesystem::path payloadPath =
+      std::filesystem::temp_directory_path() / ("openrealm-native-send-" + std::to_string(uniqueId) + ".json");
+  std::ofstream stream(payloadPath, std::ios::out | std::ios::trunc);
+  if (!stream.is_open())
+  {
+    return {};
+  }
+
+  stream << payload.dump();
+  stream.close();
+  return payloadPath;
+}
+
+std::string QuoteShellPath(const std::filesystem::path& path)
+{
+  return "\"" + path.generic_string() + "\"";
+}
+
+bool RunNativeSendScript(
+    const BlockchainConfig& config,
+    const Wallet& wallet,
+    const std::string& contractAddress,
+    const std::string& callData,
+    const std::string& valueHex,
+    std::string* transactionHash)
+{
+  if (transactionHash == nullptr || !wallet.HasPrivateKey() || IsZeroBlockchainAddress(contractAddress) || callData.empty())
+  {
+    return false;
+  }
+
+  const std::filesystem::path scriptPath = FindNativeSendScript();
+  if (scriptPath.empty())
+  {
+    return false;
+  }
+
+  nlohmann::json payload = {
+      {    "rpcUrl",                                    config.rpcUrl},
+      {"privateKey",                              wallet.GetPrivateKey()},
+      {        "to", NormalizeBlockchainAddress(contractAddress)},
+      {      "data",                                     callData}
+  };
+  if (!valueHex.empty())
+  {
+    payload["value"] = NormalizeBlockchainUintHex(valueHex);
+  }
+
+  const std::filesystem::path payloadPath = WriteNativeSignerPayload(payload);
+  if (payloadPath.empty())
+  {
+    return false;
+  }
+
+  const std::string command =
+      "node " + QuoteShellPath(scriptPath) + " " + QuoteShellPath(payloadPath) + " 2>&1";
+
+  std::string output = {};
+  FILE* pipe = OPENREALM_POPEN(command.c_str(), "r");
+  if (pipe == nullptr)
+  {
+    std::error_code removeError = {};
+    std::filesystem::remove(payloadPath, removeError);
+    return false;
+  }
+
+  char buffer[512] = {};
+  while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+  {
+    output += buffer;
+  }
+  const int exitCode = OPENREALM_PCLOSE(pipe);
+
+  std::error_code removeError = {};
+  std::filesystem::remove(payloadPath, removeError);
+  if (exitCode != 0)
+  {
+    return false;
+  }
+
+  const nlohmann::json response = nlohmann::json::parse(output, nullptr, false);
+  if (response.is_discarded() || !response.value("ok", false))
+  {
+    return false;
+  }
+
+  *transactionHash = response.value("hash", std::string {});
+  return !transactionHash->empty();
+}
+
+void ParseReceiptLogs(const nlohmann::json& receiptJson, BlockchainTransactionReceipt* receipt)
+{
+  receipt->logs.clear();
+  if (!receiptJson.contains("logs") || !receiptJson["logs"].is_array())
+  {
+    return;
+  }
+
+  for (const nlohmann::json& entry : receiptJson["logs"])
+  {
+    if (!entry.is_object())
+    {
+      continue;
+    }
+
+    BlockchainTransactionLog log = {};
+    log.address = entry.value("address", std::string {});
+    log.data = entry.value("data", std::string {});
+    if (entry.contains("topics") && entry["topics"].is_array())
+    {
+      for (const nlohmann::json& topic : entry["topics"])
+      {
+        if (topic.is_string())
+        {
+          log.topics.push_back(topic.get<std::string>());
+        }
+      }
+    }
+
+    receipt->logs.push_back(std::move(log));
+  }
+}
 }
 
 BlockchainRpcClient::BlockchainRpcClient(BlockchainConfig blockchainConfig)
@@ -178,6 +340,25 @@ bool BlockchainRpcClient::EthSendTransaction(
   return !transactionHash->empty();
 }
 
+bool BlockchainRpcClient::EthSendTransaction(
+    const Wallet& wallet,
+    const std::string& contractAddress,
+    const std::string& callData,
+    std::string* transactionHash,
+    const std::string& valueHex) const
+{
+  if (wallet.HasPrivateKey())
+  {
+    return RunNativeSendScript(config, wallet, contractAddress, callData, valueHex, transactionHash);
+  }
+  if (!wallet.HasAccountAddress())
+  {
+    return false;
+  }
+
+  return EthSendTransaction(wallet.GetAccountAddress(), contractAddress, callData, transactionHash, valueHex);
+}
+
 bool BlockchainRpcClient::EthGetTransactionReceipt(const std::string& transactionHash, BlockchainTransactionReceipt* receipt) const
 {
   if (receipt == nullptr || transactionHash.empty())
@@ -219,6 +400,7 @@ bool BlockchainRpcClient::EthGetTransactionReceipt(const std::string& transactio
   receipt->status = result.value("status", std::string {});
   receipt->contractAddress = result.value("contractAddress", std::string {});
   receipt->success = NormalizeBlockchainUintHex(receipt->status) == "0x1";
+  ParseReceiptLogs(result, receipt);
   return true;
 }
 

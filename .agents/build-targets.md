@@ -110,6 +110,16 @@ Notes:
 - Relay/simulator/client targets rely on the ENet include path from `$DEP(enet.package.resolved_dir)/include`.
 - Do not hardcode machine-local package cache paths into `project.bbs`.
 
+## User-facing target docs
+
+The repository now keeps human-readable binary usage docs under `docs/`:
+- `docs/client_node.md`
+- `docs/relay_node.md`
+- `docs/simulator_node.md`
+- `docs/node_launcher.md`
+
+When a target's purpose, interface style, command-line arguments, generated outputs, or expected run behavior changes, agents should update these docs in the same change.
+
 ## Build/run examples
 
 Build all native targets:

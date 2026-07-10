@@ -1,8 +1,17 @@
 #pragma once
 
 #include "BlockchainConfig.h"
+#include "Wallet.h"
 
 #include <string>
+#include <vector>
+
+struct BlockchainTransactionLog
+{
+  std::string address = {};
+  std::vector<std::string> topics = {};
+  std::string data = {};
+};
 
 struct BlockchainTransactionReceipt
 {
@@ -13,6 +22,7 @@ struct BlockchainTransactionReceipt
   std::string gasUsed = {};
   std::string status = {};
   std::string contractAddress = {};
+  std::vector<BlockchainTransactionLog> logs = {};
 };
 
 class BlockchainRpcClient
@@ -32,6 +42,12 @@ class BlockchainRpcClient
       const std::string& valueHex = {}) const;
   bool EthSendTransaction(
       const std::string& fromAddress,
+      const std::string& contractAddress,
+      const std::string& callData,
+      std::string* transactionHash,
+      const std::string& valueHex = {}) const;
+  bool EthSendTransaction(
+      const Wallet& wallet,
       const std::string& contractAddress,
       const std::string& callData,
       std::string* transactionHash,

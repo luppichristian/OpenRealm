@@ -65,6 +65,8 @@ static constexpr const char* SELECTOR_TRANSFER_FROM = "0x23b872dd";
 static constexpr const char* SIGNATURE_TOKEN_URI = "tokenURI(uint256)";
 static constexpr const char* SELECTOR_TOKEN_URI = "0xc87b56dd";
 
+static constexpr const char* TOPIC_CHUNK_CLAIMED = "0xeb24357428deba7d16a52ed3875e9e19e5a29795b0711d6278abf867c5948b1b";
+
 static std::string DecodeStringResult(const std::vector<std::string>& words)
 {
   return words.empty() ? std::string {} : DecodeBlockchainStringAt(words, 0);
@@ -84,6 +86,25 @@ static ChunkClaimState DecodeChunkClaim(const std::vector<std::string>& words)
   claim.y = DecodeBlockchainWordAsInt32(words[2]);
   claim.claimedAt = DecodeBlockchainWordAsUint64(words[3]);
   return claim;
+}
+
+static std::string DecodeIndexedUint256Topic(const std::string& topic)
+{
+  const std::string normalized = NormalizeBlockchainBytes32(topic);
+  return normalized.size() > 2 ? DecodeBlockchainWordAsUintHex(normalized.substr(2)) : std::string {};
+}
+
+static std::string FindClaimedTokenId(const BlockchainTransactionReceipt& receipt)
+{
+  for (const BlockchainTransactionLog& log : receipt.logs)
+  {
+    if (log.topics.size() > 2 && NormalizeBlockchainBytes32(log.topics[0]) == NormalizeBlockchainBytes32(TOPIC_CHUNK_CLAIMED))
+    {
+      return DecodeIndexedUint256Topic(log.topics[2]);
+    }
+  }
+
+  return {};
 }
 
 const char* ChunkClaimsContract::GetContractName() const
@@ -162,13 +183,11 @@ ChunkClaimTransaction ChunkClaimsContract::ClaimChunk(int32_t x, int32_t y, cons
       SELECTOR_CLAIM_CHUNK,
       {EncodeBlockchainInt32Argument(x), EncodeBlockchainInt32Argument(y)});
 
-  std::vector<std::string> previewWords = {};
-  if (CallWords(callData, &previewWords, GetWalletTransactionSender(), paymentValue) && !previewWords.empty())
+  if (SendTransaction(callData, &result.receipt, paymentValue) && result.receipt.success)
   {
-    result.tokenId = DecodeBlockchainWordAsUintHex(previewWords[0]);
+    result.tokenId = FindClaimedTokenId(result.receipt);
   }
 
-  SendTransaction(callData, &result.receipt, paymentValue);
   return result;
 }
 

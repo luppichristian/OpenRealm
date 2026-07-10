@@ -152,7 +152,9 @@ bool LoadNodeFilesConfig(const std::string& configPath, NodeFilesConfig* config,
   config->configPath = configPath;
 
   const nlohmann::json& walletJson = ReadObjectOrEmpty(root, "wallet");
-  config->wallet.Connect(ReadStringValue(root, "accountAddress", ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress())));
+  config->wallet.Connect(
+      ReadStringValue(root, "accountAddress", ReadStringValue(walletJson, "accountAddress", config->wallet.GetAccountAddress())),
+      ReadStringValue(root, "privateKey", ReadStringValue(walletJson, "privateKey", config->wallet.GetPrivateKey())));
 
   const nlohmann::json& runtimeJson = ReadObjectOrEmpty(root, "runtime");
   const nlohmann::json& joinJson = ReadObjectOrEmpty(root, "join");

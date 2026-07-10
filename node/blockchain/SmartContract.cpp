@@ -76,14 +76,23 @@ bool SmartContract::SendTransaction(
     return false;
   }
 
-  std::string sender = fromAddress.empty() ? GetWalletTransactionSender() : fromAddress;
-  if (IsZeroBlockchainAddress(sender))
-  {
-    return false;
-  }
-
   std::string transactionHash = {};
-  if (!rpc->EthSendTransaction(sender, contractAddress, callData, &transactionHash, valueHex))
+  if (!fromAddress.empty())
+  {
+    if (IsZeroBlockchainAddress(fromAddress) ||
+        !rpc->EthSendTransaction(fromAddress, contractAddress, callData, &transactionHash, valueHex))
+    {
+      return false;
+    }
+  }
+  else if (wallet != nullptr)
+  {
+    if (!rpc->EthSendTransaction(*wallet, contractAddress, callData, &transactionHash, valueHex))
+    {
+      return false;
+    }
+  }
+  else
   {
     return false;
   }

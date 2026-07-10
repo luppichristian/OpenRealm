@@ -34,7 +34,7 @@ contract PlayerRegistry is Ownable
   uint256 public nextPlayerId = 1;
 
   mapping(address => PlayerProfile) private profiles;
-  // Handle lookups use the keccak256 hash so uniqueness checks stay cheap.
+  // Handle lookups use a normalized keccak256 hash so uniqueness checks stay cheap.
   mapping(bytes32 => address) private handleOwners;
   // Runtime session key -> wallet account that authorized it.
   mapping(address => RuntimeSession) private runtimeSessions;
@@ -202,6 +202,11 @@ contract PlayerRegistry is Ownable
     return handleOwners[_handleHash(handle)];
   }
 
+  function NormalizedHandleHash(string calldata handle) external pure returns (bytes32)
+  {
+    return _handleHash(handle);
+  }
+
   function HandleHashAvailable(bytes32 handleHash) external view returns (bool)
   {
     return handleOwners[handleHash] == address(0);
@@ -247,6 +252,16 @@ contract PlayerRegistry is Ownable
 
   function _handleHash(string memory handle) private pure returns (bytes32)
   {
-    return keccak256(bytes(handle));
+    bytes memory normalized = bytes(handle);
+    for (uint256 index = 0; index < normalized.length; index += 1)
+    {
+      bytes1 character = normalized[index];
+      if (character >= 0x41 && character <= 0x5A)
+      {
+        normalized[index] = bytes1(uint8(character) + 32);
+      }
+    }
+
+    return keccak256(normalized);
   }
 }

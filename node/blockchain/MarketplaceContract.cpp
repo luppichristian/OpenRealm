@@ -18,6 +18,8 @@ static constexpr const char* SIGNATURE_GLOBAL_PARAMS = "globalParams()";
 static constexpr const char* SELECTOR_GLOBAL_PARAMS = "0x3acf597c";
 static constexpr const char* SIGNATURE_FEE_BPS = "feeBps()";
 static constexpr const char* SELECTOR_FEE_BPS = "0x24a9d853";
+static constexpr const char* SIGNATURE_ACCRUED_PROTOCOL_FEES = "accruedProtocolFees()";
+static constexpr const char* SELECTOR_ACCRUED_PROTOCOL_FEES = "0x0cd1a5b6";
 static constexpr const char* SIGNATURE_NEXT_LISTING_ID = "nextListingId()";
 static constexpr const char* SELECTOR_NEXT_LISTING_ID = "0xaaccf1ec";
 static constexpr const char* SIGNATURE_NEXT_AUCTION_ID = "nextAuctionId()";
@@ -30,6 +32,8 @@ static constexpr const char* SIGNATURE_ACTIVE_LISTING_BY_TOKEN_ID = "activeListi
 static constexpr const char* SELECTOR_ACTIVE_LISTING_BY_TOKEN_ID = "0x6cb0577f";
 static constexpr const char* SIGNATURE_ACTIVE_AUCTION_BY_TOKEN_ID = "activeAuctionByTokenId(uint256)";
 static constexpr const char* SELECTOR_ACTIVE_AUCTION_BY_TOKEN_ID = "0xffed6016";
+static constexpr const char* SIGNATURE_WITHDRAWABLE_BALANCES = "withdrawableBalances(address)";
+static constexpr const char* SELECTOR_WITHDRAWABLE_BALANCES = "0x2b576f4e";
 static constexpr const char* SIGNATURE_SET_FEE_BPS = "SetFeeBps(uint96)";
 static constexpr const char* SELECTOR_SET_FEE_BPS = "0x5ae401c7";
 static constexpr const char* SIGNATURE_CREATE_LISTING = "CreateListing(int32,int32,uint256)";
@@ -56,6 +60,9 @@ static constexpr const char* SIGNATURE_GET_SALE_STATE_FOR_TOKEN = "GetSaleStateF
 static constexpr const char* SELECTOR_GET_SALE_STATE_FOR_TOKEN = "0x43fbccfc";
 static constexpr const char* SIGNATURE_WITHDRAW_FEES = "WithdrawFees(address)";
 static constexpr const char* SELECTOR_WITHDRAW_FEES = "0xd3719f04";
+
+static constexpr const char* TOPIC_LISTING_CREATED = "0x9fb54254a70cf1dd7e04a2ad46e69408e71e510e604774a7a51df8e812559043";
+static constexpr const char* TOPIC_AUCTION_CREATED = "0xd2b0337f5759a21e230ea2a87c5a282f14dc30f29941741d0d2731a1c0da75f0";
 
 static ListingState DecodeListing(const std::vector<std::string>& words)
 {
@@ -130,6 +137,25 @@ static SaleState DecodeSaleState(const std::vector<std::string>& words)
     state.highestBid = DecodeBlockchainWordAsUintHex(words[13]);
   }
   return state;
+}
+
+static std::string DecodeIndexedUint256Topic(const std::string& topic)
+{
+  const std::string normalized = NormalizeBlockchainBytes32(topic);
+  return normalized.size() > 2 ? DecodeBlockchainWordAsUintHex(normalized.substr(2)) : std::string {};
+}
+
+static std::string FindCreatedSaleId(const BlockchainTransactionReceipt& receipt, const std::string& eventTopic)
+{
+  for (const BlockchainTransactionLog& log : receipt.logs)
+  {
+    if (log.topics.size() > 1 && NormalizeBlockchainBytes32(log.topics[0]) == NormalizeBlockchainBytes32(eventTopic))
+    {
+      return DecodeIndexedUint256Topic(log.topics[1]);
+    }
+  }
+
+  return {};
 }
 
 const char* MarketplaceContract::GetContractName() const
@@ -290,13 +316,11 @@ MarketplaceListingTransaction MarketplaceContract::CreateListing(int32_t x, int3
       SELECTOR_CREATE_LISTING,
       {EncodeBlockchainInt32Argument(x), EncodeBlockchainInt32Argument(y), EncodeBlockchainUint256Argument(price)});
 
-  std::vector<std::string> previewWords = {};
-  if (CallWords(callData, &previewWords, GetWalletTransactionSender()) && !previewWords.empty())
+  if (SendTransaction(callData, &result.receipt) && result.receipt.success)
   {
-    result.listingId = DecodeBlockchainWordAsUintHex(previewWords[0]);
+    result.listingId = FindCreatedSaleId(result.receipt, TOPIC_LISTING_CREATED);
   }
 
-  SendTransaction(callData, &result.receipt);
   return result;
 }
 
@@ -342,13 +366,11 @@ MarketplaceAuctionTransaction MarketplaceContract::CreateAuction(
           EncodeBlockchainUint64Argument(durationSeconds),
       });
 
-  std::vector<std::string> previewWords = {};
-  if (CallWords(callData, &previewWords, GetWalletTransactionSender()) && !previewWords.empty())
+  if (SendTransaction(callData, &result.receipt) && result.receipt.success)
   {
-    result.auctionId = DecodeBlockchainWordAsUintHex(previewWords[0]);
+    result.auctionId = FindCreatedSaleId(result.receipt, TOPIC_AUCTION_CREATED);
   }
 
-  SendTransaction(callData, &result.receipt);
   return result;
 }
 

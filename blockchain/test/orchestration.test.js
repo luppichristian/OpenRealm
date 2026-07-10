@@ -16,9 +16,9 @@ describe('OpenRealm orchestration layer', function ()
   const MAX_FEE_BPS = 2500;
   const MIN_AUCTION_DURATION = 60;
 
-  async function deploy(contractName, signer, args = [])
+  async function deploy(contractName, signer, args = [], sourceName = `${contractName}.sol`)
   {
-    const artifact = getContractArtifact(compiledContracts, `${contractName}.sol`, contractName);
+    const artifact = getContractArtifact(compiledContracts, sourceName, contractName);
     const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer);
     const contract = await factory.deploy(...args);
     await contract.waitForDeployment();
@@ -91,6 +91,20 @@ describe('OpenRealm orchestration layer', function ()
     return { provider, owner, alice, bob, carol, dave, registry, globalParams, claims, marketplace };
   }
 
+  async function deployRevertingReceiver(fixture, deployer)
+  {
+    return deploy(
+      'RevertingReceiver',
+      deployer,
+      [
+        await fixture.registry.getAddress(),
+        await fixture.claims.getAddress(),
+        await fixture.marketplace.getAddress()
+      ],
+      'test/RevertingReceiver.sol'
+    );
+  }
+
   async function registerPlayers(registry, players)
   {
     for (const [handle, signer] of players)
@@ -127,15 +141,17 @@ describe('OpenRealm orchestration layer', function ()
     assert.equal(deploymentRecord.protocolVersion, ORCHESTRATION_PROTOCOL_VERSION);
   });
 
-  it('registers players, enforces unique handles, and frees handles after unregistering', async function ()
+  it('registers players, treats handles case-insensitively, and frees handles after unregistering', async function ()
   {
     const { alice, bob, registry } = await deployFixture();
 
-    await (await registry.connect(alice).Register('alice', 'ipfs://alice')).wait();
+    await (await registry.connect(alice).Register('Alice', 'ipfs://alice')).wait();
 
     assert.equal(await registry.IsRegistered(alice.address), true);
     assert.equal(await registry.AccountForHandle('alice'), alice.address);
+    assert.equal(await registry.AccountForHandle('ALICE'), alice.address);
     assert.equal(await registry.PlayerIdOf(alice.address), 1n);
+    assert.equal(await registry.NormalizedHandleHash('Alice'), await registry.NormalizedHandleHash('aLiCe'));
 
     await expectRevert(
       () => registry.connect(bob).Register('alice', 'ipfs://bob')
@@ -143,12 +159,12 @@ describe('OpenRealm orchestration layer', function ()
 
     await (await registry.connect(alice).UpdateHandle('alice-prime')).wait();
     assert.equal(await registry.AccountForHandle('alice'), ethers.ZeroAddress);
-    assert.equal(await registry.AccountForHandle('alice-prime'), alice.address);
+    assert.equal(await registry.AccountForHandle('ALICE-PRIME'), alice.address);
 
     await (await registry.connect(alice).Unregister()).wait();
     assert.equal(await registry.IsRegistered(alice.address), false);
 
-    await (await registry.connect(bob).Register('alice-prime', 'ipfs://bob')).wait();
+    await (await registry.connect(bob).Register('ALICE-PRIME', 'ipfs://bob')).wait();
     assert.equal(await registry.AccountForHandle('alice-prime'), bob.address);
     assert.equal(await registry.PlayerIdOf(bob.address), 2n);
   });
@@ -233,7 +249,7 @@ describe('OpenRealm orchestration layer', function ()
     );
   });
 
-  it('supports fixed-price sales above the minimum chunk price, fee retention, and sale-state queries', async function ()
+  it('supports fixed-price sales with pull-based seller proceeds and fee withdrawal accounting', async function ()
   {
     const { owner, alice, bob, registry, claims, marketplace, provider } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
@@ -263,18 +279,33 @@ describe('OpenRealm orchestration layer', function ()
 
     assert.equal(await claims.OwnerOf(5, -8), bob.address);
     assert.equal((await marketplace.listings(1)).active, false);
-    assert.equal(await provider.getBalance(await marketplace.getAddress()), ethers.parseEther('0.05'));
+    assert.equal(await getLatestBalance(provider, await marketplace.getAddress()), ethers.parseEther('1'));
+    assert.equal(await marketplace.accruedProtocolFees(), ethers.parseEther('0.05'));
+    assert.equal(await marketplace.withdrawableBalances(alice.address), ethers.parseEther('0.95'));
 
     const clearedSaleState = await marketplace.GetSaleStateForToken(tokenId);
     assert.equal(clearedSaleState.saleKind, 0n);
     assert.equal(clearedSaleState.active, false);
 
+    await expectRevert(
+      () => marketplace.connect(alice).WithdrawBalance(ethers.ZeroAddress)
+    );
+    await expectRevert(
+      () => marketplace.connect(owner).WithdrawFees(ethers.ZeroAddress)
+    );
+
+    await (await marketplace.connect(alice).WithdrawBalance(alice.address)).wait();
+    assert.equal(await marketplace.withdrawableBalances(alice.address), 0n);
+    assert.equal(await getLatestBalance(provider, await marketplace.getAddress()), ethers.parseEther('0.05'));
+
     await (await marketplace.connect(owner).WithdrawFees(owner.address)).wait();
+    assert.equal(await marketplace.accruedProtocolFees(), 0n);
+    assert.equal(await getLatestBalance(provider, await marketplace.getAddress()), 0n);
   });
 
-  it('supports English auctions above the minimum chunk price, refunds losing bids, settles to the winner, and exposes auction sale-state', async function ()
+  it('supports English auctions with credited refunds, pull-based seller proceeds, and sale-state reads', async function ()
   {
-    const { provider, alice, bob, carol, registry, claims, marketplace } = await deployFixture();
+    const { provider, owner, alice, bob, carol, registry, claims, marketplace } = await deployFixture();
     await registerPlayers(registry, [['alice', alice], ['bob', bob], ['carol', carol]]);
 
     await (await claims.connect(alice).ClaimChunk(2, 3, { value: MIN_CHUNK_PRICE })).wait();
@@ -302,7 +333,8 @@ describe('OpenRealm orchestration layer', function ()
     auction = await marketplace.auctions(1);
     assert.equal(auction.highestBidder, carol.address);
     assert.equal(auction.highestBid, ethers.parseEther('1.2'));
-    assert.equal(await provider.getBalance(await marketplace.getAddress()), ethers.parseEther('1.2'));
+    assert.equal(await marketplace.withdrawableBalances(bob.address), ethers.parseEther('1'));
+    assert.equal(await getLatestBalance(provider, await marketplace.getAddress()), ethers.parseEther('2.2'));
 
     saleState = await marketplace.GetSaleStateForChunk(2, 3);
     assert.equal(saleState.highestBidder, carol.address);
@@ -317,6 +349,110 @@ describe('OpenRealm orchestration layer', function ()
     assert.equal(auction.active, false);
     assert.equal(auction.settled, true);
     assert.equal(await claims.OwnerOf(2, 3), carol.address);
+    assert.equal(await marketplace.accruedProtocolFees(), ethers.parseEther('0.06'));
+    assert.equal(await marketplace.withdrawableBalances(alice.address), ethers.parseEther('1.14'));
+
+    await (await marketplace.connect(bob).WithdrawBalance(bob.address)).wait();
+    await (await marketplace.connect(alice).WithdrawBalance(alice.address)).wait();
+    await (await marketplace.connect(owner).WithdrawFees(owner.address)).wait();
+    assert.equal(await getLatestBalance(provider, await marketplace.getAddress()), 0n);
+  });
+
+  it('lets buyers purchase listings even when the seller contract refuses ETH and preserves seller withdrawals', async function ()
+  {
+    const fixture = await deployFixture();
+    const { provider, owner, bob, registry, claims, marketplace } = fixture;
+    await registerPlayers(registry, [['bob', bob]]);
+
+    const seller = await deployRevertingReceiver(fixture, owner);
+    await (await seller.connect(owner).Register('seller-contract', 'ipfs://seller-contract')).wait();
+    await (await seller.connect(owner).ClaimChunk(7, 7, { value: MIN_CHUNK_PRICE })).wait();
+    await (await seller.connect(owner).CreateListing(7, 7, ethers.parseEther('0.5'))).wait();
+
+    await (await marketplace.connect(bob).PurchaseListing(1, { value: ethers.parseEther('0.5') })).wait();
+
+    assert.equal(await claims.OwnerOf(7, 7), bob.address);
+    assert.equal(await marketplace.withdrawableBalances(await seller.getAddress()), ethers.parseEther('0.475'));
+    assert.equal(await marketplace.accruedProtocolFees(), ethers.parseEther('0.025'));
+
+    const ownerBalanceBefore = await getLatestBalance(provider, owner.address);
+    const withdrawTx = await seller.connect(owner).WithdrawMarketplaceBalance(owner.address);
+    const withdrawReceipt = await withdrawTx.wait();
+    const ownerBalanceAfter = await getLatestBalance(provider, owner.address);
+    assert(ownerBalanceAfter > ownerBalanceBefore - withdrawReceipt.gasUsed * withdrawReceipt.gasPrice);
+  });
+
+  it('lets higher bids replace a reverting bidder and preserves a pull-based refund', async function ()
+  {
+    const fixture = await deployFixture();
+    const { provider, owner, alice, carol, registry, claims, marketplace } = fixture;
+    await registerPlayers(registry, [['alice', alice], ['carol', carol]]);
+
+    const bidder = await deployRevertingReceiver(fixture, owner);
+    await (await bidder.connect(owner).Register('refund-bidder', 'ipfs://refund-bidder')).wait();
+
+    await (await claims.connect(alice).ClaimChunk(11, 5, { value: MIN_CHUNK_PRICE })).wait();
+    await (await marketplace.connect(alice).CreateAuction(11, 5, ethers.parseEther('1'), ethers.parseEther('0.1'), 120)).wait();
+
+    await (await bidder.connect(owner).PlaceAuctionBid(1, { value: ethers.parseEther('1') })).wait();
+    await (await marketplace.connect(carol).PlaceAuctionBid(1, { value: ethers.parseEther('1.2') })).wait();
+
+    assert.equal(await marketplace.withdrawableBalances(await bidder.getAddress()), ethers.parseEther('1'));
+
+    const ownerBalanceBefore = await getLatestBalance(provider, owner.address);
+    const withdrawTx = await bidder.connect(owner).WithdrawMarketplaceBalance(owner.address);
+    const withdrawReceipt = await withdrawTx.wait();
+    const ownerBalanceAfter = await getLatestBalance(provider, owner.address);
+    assert(ownerBalanceAfter > ownerBalanceBefore - withdrawReceipt.gasUsed * withdrawReceipt.gasPrice);
+  });
+
+  it('settles auctions even when the seller contract refuses ETH and preserves pull-based proceeds', async function ()
+  {
+    const fixture = await deployFixture();
+    const { provider, owner, bob, registry, claims, marketplace } = fixture;
+    await registerPlayers(registry, [['bob', bob]]);
+
+    const seller = await deployRevertingReceiver(fixture, owner);
+    await (await seller.connect(owner).Register('auction-seller', 'ipfs://auction-seller')).wait();
+    await (await seller.connect(owner).ClaimChunk(13, -2, { value: MIN_CHUNK_PRICE })).wait();
+    await (await seller.connect(owner).CreateAuction(13, -2, ethers.parseEther('1'), ethers.parseEther('0.1'), 120)).wait();
+
+    await (await marketplace.connect(bob).PlaceAuctionBid(1, { value: ethers.parseEther('1') })).wait();
+    await provider.send('evm_increaseTime', [121]);
+    await provider.send('evm_mine', []);
+
+    await (await marketplace.SettleAuction(1)).wait();
+
+    assert.equal(await claims.OwnerOf(13, -2), bob.address);
+    assert.equal(await marketplace.withdrawableBalances(await seller.getAddress()), ethers.parseEther('0.95'));
+    assert.equal(await marketplace.accruedProtocolFees(), ethers.parseEther('0.05'));
+
+    const ownerBalanceBefore = await getLatestBalance(provider, owner.address);
+    const withdrawTx = await seller.connect(owner).WithdrawMarketplaceBalance(owner.address);
+    const withdrawReceipt = await withdrawTx.wait();
+    const ownerBalanceAfter = await getLatestBalance(provider, owner.address);
+    assert(ownerBalanceAfter > ownerBalanceBefore - withdrawReceipt.gasUsed * withdrawReceipt.gasPrice);
+  });
+
+  it('invalidates stale auctions even when the prior bidder contract refuses ETH', async function ()
+  {
+    const fixture = await deployFixture();
+    const { owner, alice, bob, registry, claims, marketplace } = fixture;
+    await registerPlayers(registry, [['alice', alice], ['bob', bob]]);
+
+    const bidder = await deployRevertingReceiver(fixture, owner);
+    await (await bidder.connect(owner).Register('stale-bidder', 'ipfs://stale-bidder')).wait();
+
+    await (await claims.connect(alice).ClaimChunk(15, 1, { value: MIN_CHUNK_PRICE })).wait();
+    const tokenId = await claims.TokenIdOfChunk(15, 1);
+    await (await marketplace.connect(alice).CreateAuction(15, 1, ethers.parseEther('1'), ethers.parseEther('0.1'), 120)).wait();
+    await (await bidder.connect(owner).PlaceAuctionBid(1, { value: ethers.parseEther('1') })).wait();
+
+    await (await claims.connect(alice).transferFrom(alice.address, bob.address, tokenId)).wait();
+    await (await marketplace.InvalidateStaleAuction(1)).wait();
+
+    assert.equal((await marketplace.auctions(1)).active, false);
+    assert.equal(await marketplace.withdrawableBalances(await bidder.getAddress()), ethers.parseEther('1'));
   });
 
   it('invalidates stale listings after direct token transfers and rejects unregistered buyers', async function ()

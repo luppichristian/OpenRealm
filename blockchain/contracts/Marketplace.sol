@@ -16,14 +16,15 @@ error NotAuctionSeller(address account, uint256 auctionId);
 error IncorrectPayment(uint256 expected, uint256 actual);
 error SellerNoLongerOwnsChunk(uint256 saleId);
 error FeeWithdrawalFailed(address recipient, uint256 amount);
-error SellerPayoutFailed(address recipient, uint256 amount);
-error BidRefundFailed(address recipient, uint256 amount);
+error WithdrawableBalanceWithdrawalFailed(address recipient, uint256 amount);
 error BidTooLow(uint256 minimumBid, uint256 actualBid);
 error AuctionAlreadyEnded(uint256 auctionId);
 error AuctionNotEnded(uint256 auctionId);
 error AuctionHasExistingBids(uint256 auctionId);
 error NotRegisteredBuyer(address account);
+error InvalidChunkClaims(address chunkClaims);
 error InvalidGlobalParams(address globalParams);
+error InvalidRecipient(address recipient);
 
 contract Marketplace is Ownable
 {
@@ -81,12 +82,14 @@ contract Marketplace is Ownable
   uint96 public feeBps;
   uint256 public nextListingId = 1;
   uint256 public nextAuctionId = 1;
+  uint256 public accruedProtocolFees;
 
   mapping(uint256 => Listing) public listings;
   mapping(uint256 => Auction) public auctions;
   // We keep direct token -> active sale ids so reads stay cheap.
   mapping(uint256 => uint256) public activeListingByTokenId;
   mapping(uint256 => uint256) public activeAuctionByTokenId;
+  mapping(address => uint256) public withdrawableBalances;
 
   event FeeBpsUpdated(uint96 feeBps);
   event ListingCreated(
@@ -141,9 +144,16 @@ contract Marketplace is Ownable
     uint256 finalBid,
     uint256 feePaid
   );
+  event WithdrawableBalanceCredited(address indexed account, uint256 amount, uint256 newBalance, string reason);
+  event WithdrawableBalanceWithdrawn(address indexed account, address indexed recipient, uint256 amount);
+  event ProtocolFeesWithdrawn(address indexed recipient, uint256 amount);
 
   constructor(address initialOwner, address chunkClaimsAddress, address globalParamsAddress, uint96 initialFeeBps) Ownable(initialOwner)
   {
+    if (chunkClaimsAddress == address(0))
+    {
+      revert InvalidChunkClaims(chunkClaimsAddress);
+    }
     if (globalParamsAddress == address(0))
     {
       revert InvalidGlobalParams(globalParamsAddress);
@@ -237,17 +247,13 @@ contract Marketplace is Ownable
     _requireSellerOwnsChunk(listing.seller, listing.x, listing.y, listingId);
     _deactivateListing(listing);
 
-    // The marketplace keeps a protocol fee and forwards the rest to the seller.
+    // The marketplace keeps protocol fees separate from user-withdrawable balances.
     uint256 feePaid = (listing.price * feeBps) / 10_000;
     uint256 sellerPayout = listing.price - feePaid;
 
     chunkClaims.MarketplaceTransferChunk(listing.x, listing.y, listing.seller, msg.sender);
-
-    (bool payoutOk, ) = payable(listing.seller).call{value: sellerPayout}("");
-    if (!payoutOk)
-    {
-      revert SellerPayoutFailed(listing.seller, sellerPayout);
-    }
+    _accrueProtocolFee(feePaid);
+    _creditBalance(listing.seller, sellerPayout, "LISTING_PROCEEDS");
 
     emit ListingPurchased(
       listingId,
@@ -336,11 +342,7 @@ contract Marketplace is Ownable
 
     if (previousBidder != address(0))
     {
-      (bool refundOk, ) = payable(previousBidder).call{value: previousBid}("");
-      if (!refundOk)
-      {
-        revert BidRefundFailed(previousBidder, previousBid);
-      }
+      _creditBalance(previousBidder, previousBid, "OUTBID_REFUND");
     }
 
     emit AuctionBidPlaced(auctionId, auction.tokenId, _chunkKey(auction.x, auction.y), msg.sender, msg.value, auction.endTime);
@@ -376,11 +378,7 @@ contract Marketplace is Ownable
 
     if (previousBidder != address(0))
     {
-      (bool refundOk, ) = payable(previousBidder).call{value: previousBid}("");
-      if (!refundOk)
-      {
-        revert BidRefundFailed(previousBidder, previousBid);
-      }
+      _creditBalance(previousBidder, previousBid, "STALE_AUCTION_REFUND");
     }
 
     emit AuctionCancelled(auctionId, auction.tokenId, _chunkKey(auction.x, auction.y), "STALE_OWNER");
@@ -408,12 +406,8 @@ contract Marketplace is Ownable
     uint256 sellerPayout = auction.highestBid - feePaid;
 
     chunkClaims.MarketplaceTransferChunk(auction.x, auction.y, auction.seller, auction.highestBidder);
-
-    (bool payoutOk, ) = payable(auction.seller).call{value: sellerPayout}("");
-    if (!payoutOk)
-    {
-      revert SellerPayoutFailed(auction.seller, sellerPayout);
-    }
+    _accrueProtocolFee(feePaid);
+    _creditBalance(auction.seller, sellerPayout, "AUCTION_PROCEEDS");
 
     emit AuctionSettled(
       auctionId,
@@ -465,14 +459,36 @@ contract Marketplace is Ownable
     });
   }
 
+  function WithdrawBalance(address payable recipient) external
+  {
+    _requireValidRecipient(recipient);
+
+    uint256 amount = withdrawableBalances[msg.sender];
+    withdrawableBalances[msg.sender] = 0;
+
+    (bool ok, ) = recipient.call{value: amount}("");
+    if (!ok)
+    {
+      revert WithdrawableBalanceWithdrawalFailed(recipient, amount);
+    }
+
+    emit WithdrawableBalanceWithdrawn(msg.sender, recipient, amount);
+  }
+
   function WithdrawFees(address payable recipient) external onlyOwner
   {
-    uint256 amount = address(this).balance;
+    _requireValidRecipient(recipient);
+
+    uint256 amount = accruedProtocolFees;
+    accruedProtocolFees = 0;
+
     (bool ok, ) = recipient.call{value: amount}("");
     if (!ok)
     {
       revert FeeWithdrawalFailed(recipient, amount);
     }
+
+    emit ProtocolFeesWithdrawn(recipient, amount);
   }
 
   function _requireActiveListing(uint256 listingId) private view returns (Listing storage listing)
@@ -521,6 +537,36 @@ contract Marketplace is Ownable
   {
     auction.active = false;
     activeAuctionByTokenId[auction.tokenId] = 0;
+  }
+
+  function _requireValidRecipient(address recipient) private pure
+  {
+    if (recipient == address(0))
+    {
+      revert InvalidRecipient(recipient);
+    }
+  }
+
+  function _accrueProtocolFee(uint256 amount) private
+  {
+    if (amount == 0)
+    {
+      return;
+    }
+
+    accruedProtocolFees += amount;
+  }
+
+  function _creditBalance(address account, uint256 amount, string memory reason) private
+  {
+    if (amount == 0)
+    {
+      return;
+    }
+
+    uint256 newBalance = withdrawableBalances[account] + amount;
+    withdrawableBalances[account] = newBalance;
+    emit WithdrawableBalanceCredited(account, amount, newBalance, reason);
   }
 
   function _isListingActive(uint256 listingId) private view returns (bool)

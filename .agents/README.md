@@ -5,6 +5,7 @@ Use this directory as the canonical repo guide.
 Maintenance rule:
 - `.agents/` is the canonical agent memory for this repository.
 - After any prompt that changes repo structure, behavior, commands, workflows, conventions, or other durable repo knowledge, update the relevant `.agents/*.md` files before finishing.
+- Agents are also responsible for keeping the user-facing binary docs under `docs/` in sync, especially `docs/relay_node.md`, `docs/client_node.md`, `docs/simulator_node.md`, and `docs/node_launcher.md` when targets, flags, interfaces, or runtime behavior change.
 - Keep `README.md` minimal: it should only help agents jump to the right file.
 
 Read only the file you need:
