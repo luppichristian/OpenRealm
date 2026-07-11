@@ -380,7 +380,7 @@ void RealmTester::MaybeSendHintedHandshakes(uint64_t nowMs)
 
   for (const PeerProbeState& peerState : peerStates)
   {
-    if (!peerState.hinted || peerState.authenticated || IsBootstrapNode(peerState.peerAddress)) continue;
+    if (!peerState.hinted || peerState.authenticated || IsBootstrapNode(peerState.peerAddress) || IsLocalPeerAddress(peerState.peerAddress)) continue;
 
     HandshakePacketData handshake = {};
     handshake.proof = BuildLocalProof();
@@ -481,6 +481,10 @@ bool RealmTester::HandleIncoming(const std::vector<uint8_t>& bytes, const Runtim
   const PacketValidationResult validation = ValidateIncomingPacket(bytes, peerAddress, validationContext);
   if (!validation.accepted)
   {
+    if (validation.code == PacketValidationCode::SelfPeerAddress)
+    {
+      return true;
+    }
     if (errorMessage != nullptr)
     {
       *errorMessage = "runtime validation failed for peer " + DescribePeer(peerAddress) + ": " + DescribePacketValidationCode(validation.code);
@@ -596,6 +600,7 @@ bool RealmTester::HandleValidatedJoinResponse(const PacketValidationResult& vali
   maxTopologyNodes = std::max(maxTopologyNodes, joinResponse.candidates.size());
   for (const TopologyNodeState& candidate : joinResponse.candidates)
   {
+    if (IsLocalPeerAddress(candidate.peerAddress)) continue;
     PeerProbeState* peerState = EnsurePeerState(candidate.peerAddress);
     if (peerState != nullptr) peerState->hinted = true;
   }
@@ -613,6 +618,7 @@ bool RealmTester::HandleValidatedTopologySnapshot(const PacketValidationResult& 
   maxTopologyNodes = std::max(maxTopologyNodes, topologySnapshot.nodes.size());
   for (const TopologyNodeState& node : topologySnapshot.nodes)
   {
+    if (IsLocalPeerAddress(node.peerAddress)) continue;
     PeerProbeState* peerState = EnsurePeerState(node.peerAddress);
     if (peerState != nullptr) peerState->hinted = true;
   }
@@ -639,6 +645,11 @@ bool RealmTester::IsBootstrapNode(const RuntimePeerAddress& peerAddress) const
   return false;
 }
 
+bool RealmTester::IsLocalPeerAddress(const RuntimePeerAddress& peerAddress) const
+{
+  return RuntimePeerAddressEquals(peerAddress, nodeFiles.runtimeBindAddress);
+}
+
 RealmTester::PeerProbeState* RealmTester::FindPeerState(const RuntimePeerAddress& peerAddress)
 {
   for (PeerProbeState& peerState : peerStates)
@@ -659,6 +670,7 @@ const RealmTester::PeerProbeState* RealmTester::FindPeerState(const RuntimePeerA
 
 RealmTester::PeerProbeState* RealmTester::EnsurePeerState(const RuntimePeerAddress& peerAddress)
 {
+  if (IsLocalPeerAddress(peerAddress)) return nullptr;
   PeerProbeState* existing = FindPeerState(peerAddress);
   if (existing != nullptr) return existing;
   peerStates.push_back({.peerAddress = peerAddress});

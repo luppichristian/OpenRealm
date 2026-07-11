@@ -74,6 +74,7 @@ class RealmTester
   bool PumpIncoming(uint64_t nowMs, std::string* errorMessage);
   bool HandleIncoming(const std::vector<uint8_t>& bytes, const RuntimePeerAddress& peerAddress, uint64_t nowMs, std::string* errorMessage);
   bool IsBootstrapNode(const RuntimePeerAddress& peerAddress) const;
+  bool IsLocalPeerAddress(const RuntimePeerAddress& peerAddress) const;
 
   bool HandleValidatedHandshake(const PacketValidationResult& validation, const RuntimePeerAddress& peerAddress, uint64_t nowMs);
   bool HandleValidatedChallengeRequest(const PacketValidationResult& validation, const RuntimePeerAddress& peerAddress, uint64_t nowMs);
