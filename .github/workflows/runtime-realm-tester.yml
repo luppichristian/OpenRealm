@@ -159,74 +159,79 @@ jobs:
           ../bbs-tool/build/bbs.exe build -t openrealm_simulator
           ../bbs-tool/build/bbs.exe build -t openrealm_realm_tester
 
-      - name: Launch local runtime mesh
+      - name: Launch local runtime mesh and run realm tester
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
           $launcher = Join-Path $PWD 'build/default-windows-x86_64/bin/Debug/openrealm-node-launcher.exe'
+          $tester = Join-Path $PWD 'build/default-windows-x86_64/bin/Debug/openrealm-realm-tester.exe'
           $launcherLog = Join-Path $PWD 'build/gha-launcher.log'
           $launcherErr = Join-Path $PWD 'build/gha-launcher.err.log'
+          $testerLog = Join-Path $PWD 'build/gha-tester.log'
           $nodeLauncherRoot = Join-Path $PWD 'build/node_launcher'
           $before = @()
           if (Test-Path $nodeLauncherRoot) {
             $before = Get-ChildItem $nodeLauncherRoot -Directory | Select-Object -ExpandProperty Name
           }
 
-          $process = Start-Process -FilePath $launcher `
-            -ArgumentList @(
-              '--realm', 'test',
-              '--config', 'build/runtime-test-config.json',
-              '--relays', '2',
-              '--simulators', '1',
-              '--relay-base-port', '51001',
-              '--sim-base-port', '51101',
-              '--run-seconds', '45'
-            ) `
-            -RedirectStandardOutput $launcherLog `
-            -RedirectStandardError $launcherErr `
-            -PassThru
-          Set-Content -Path build/gha-launcher.pid -Value $process.Id
+          $process = $null
+          try {
+            $process = Start-Process -FilePath $launcher `
+              -ArgumentList @(
+                '--realm', 'test',
+                '--config', 'build/runtime-test-config.json',
+                '--relays', '2',
+                '--simulators', '1',
+                '--relay-base-port', '51001',
+                '--sim-base-port', '51101',
+                '--run-seconds', '45'
+              ) `
+              -RedirectStandardOutput $launcherLog `
+              -RedirectStandardError $launcherErr `
+              -PassThru
+            Set-Content -Path build/gha-launcher.pid -Value $process.Id
 
-          for ($attempt = 0; $attempt -lt 40; $attempt++) {
-            $after = @()
-            if (Test-Path $nodeLauncherRoot) {
-              $after = Get-ChildItem $nodeLauncherRoot -Directory | Select-Object -ExpandProperty Name
-            }
-            $sessionDir = $after | Where-Object { $_ -notin $before } | Sort-Object | Select-Object -Last 1
-            if ($sessionDir) {
-              $jumpNodes = Join-Path $nodeLauncherRoot "$sessionDir/realm/jump_nodes.json"
-              if (Test-Path $jumpNodes) {
-                Add-Content -Path $env:GITHUB_ENV -Value "SESSION_DIR=$sessionDir"
-                Write-Host "Detected session dir: $sessionDir"
-                exit 0
+            $sessionDir = $null
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+              $after = @()
+              if (Test-Path $nodeLauncherRoot) {
+                $after = Get-ChildItem $nodeLauncherRoot -Directory | Select-Object -ExpandProperty Name
               }
+              $sessionDir = $after | Where-Object { $_ -notin $before } | Sort-Object | Select-Object -Last 1
+              if ($sessionDir) {
+                $jumpNodes = Join-Path $nodeLauncherRoot "$sessionDir/realm/jump_nodes.json"
+                if (Test-Path $jumpNodes) {
+                  Add-Content -Path $env:GITHUB_ENV -Value "SESSION_DIR=$sessionDir"
+                  Write-Host "Detected session dir: $sessionDir"
+                  break
+                }
+              }
+              Start-Sleep -Seconds 1
             }
-            Start-Sleep -Seconds 1
+
+            if (-not $sessionDir) {
+              Write-Host 'Launcher did not create a session realm in time.'
+              if (Test-Path $launcherLog) { Get-Content $launcherLog }
+              if (Test-Path $launcherErr) { Get-Content $launcherErr }
+              exit 1
+            }
+
+            & $tester `
+              --config build/runtime-test-config.json `
+              --realm-dir "build/node_launcher/$sessionDir/realm" `
+              --bind-port 51201 `
+              --run-seconds 25 `
+              --expect-topology-nodes 2 `
+              *> $testerLog
+            $testerExit = $LASTEXITCODE
+            if (Test-Path $testerLog) { Get-Content $testerLog }
+            if ($testerExit -ne 0) { exit $testerExit }
           }
-
-          Write-Host 'Launcher did not create a session realm in time.'
-          if (Test-Path $launcherLog) { Get-Content $launcherLog }
-          if (Test-Path $launcherErr) { Get-Content $launcherErr }
-          exit 1
-
-      - name: Run realm tester
-        run: |
-          ./build/default-windows-x86_64/bin/Debug/openrealm-realm-tester.exe \
-            --config build/runtime-test-config.json \
-            --realm-dir "build/node_launcher/$SESSION_DIR/realm" \
-            --bind-port 51201 \
-            --run-seconds 25 \
-            --expect-topology-nodes 2 \
-            > build/gha-tester.log 2>&1
-          cat build/gha-tester.log
-
-      - name: Stop launcher if still running
-        if: ${{ always() }}
-        run: |
-          if [ -f build/gha-launcher.pid ]; then
-            pid=$(cat build/gha-launcher.pid)
-            kill "$pid" 2>/dev/null || true
-          fi
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Upload runtime test artifacts
         if: ${{ always() }}
