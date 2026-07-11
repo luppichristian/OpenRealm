@@ -105,7 +105,8 @@ jobs:
 
       - name: Build launcher and tester
         run: |
-          ../bbs-tool/build/bbs.exe build -t openrealm_node_launcher -t openrealm_realm_tester
+          ../bbs-tool/build/bbs.exe build -t openrealm_node_launcher
+          ../bbs-tool/build/bbs.exe build -t openrealm_realm_tester
 
       - name: Launch local runtime mesh
         run: |
