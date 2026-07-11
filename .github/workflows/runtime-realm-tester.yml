@@ -61,9 +61,6 @@ jobs:
           cd ..\bbs-tool
           call build_cl.bat
 
-      - name: Add bbs to PATH
-        run: echo "/c/Users/runneradmin/work/OpenRealm/bbs-tool/build" >> "$GITHUB_PATH"
-
       - name: Install blockchain dependencies
         working-directory: blockchain
         run: npm install
@@ -108,7 +105,7 @@ jobs:
 
       - name: Build launcher and tester
         run: |
-          bbs build -t openrealm_node_launcher -t openrealm_realm_tester
+          ../bbs-tool/build/bbs.exe build -t openrealm_node_launcher -t openrealm_realm_tester
 
       - name: Launch local runtime mesh
         run: |
