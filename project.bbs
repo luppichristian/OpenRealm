@@ -138,4 +138,22 @@ targets(
       node_launcher/App.cpp
     )
   )
+
+  console(
+    id(openrealm_realm_tester)
+    name("OpenRealm Realm Tester")
+    output(openrealm-realm-tester)
+    lang(cpp)
+    stdver(c++20)
+    include_dirs(
+      "$DEP(enet.package.resolved_dir)/include"
+    )
+    dependencies(raylib tracy httplib nlohmann_json enet)
+    units(
+      node/runtime/*.cpp
+      node/blockchain/*.cpp
+      node/world/*.cpp
+      tester/*.cpp
+    )
+  )
 )

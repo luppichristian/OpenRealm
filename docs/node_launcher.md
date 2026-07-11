@@ -191,4 +191,6 @@ Use `openrealm-node-launcher` when you want:
 - session-local logs and realm copies
 - one command to start and stop several runtime nodes together
 
+Pair it with `openrealm-realm-tester` when you want a packet-level runtime verification pass against the launched realm.
+
 Use the relay/simulator binaries directly when you want to manage each node yourself.

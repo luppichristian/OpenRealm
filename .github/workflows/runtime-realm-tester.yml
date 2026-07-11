@@ -1,0 +1,175 @@
+name: Runtime Realm Tester
+
+on:
+  push:
+    paths:
+      - '.github/workflows/runtime-realm-tester.yml'
+      - 'blockchain/**'
+      - 'docs/node_launcher.md'
+      - 'docs/realm_tester.md'
+      - 'node/runtime/**'
+      - 'node_launcher/**'
+      - 'project.bbs'
+      - 'realms/test/**'
+      - 'tester/**'
+  pull_request:
+    paths:
+      - '.github/workflows/runtime-realm-tester.yml'
+      - 'blockchain/**'
+      - 'docs/node_launcher.md'
+      - 'docs/realm_tester.md'
+      - 'node/runtime/**'
+      - 'node_launcher/**'
+      - 'project.bbs'
+      - 'realms/test/**'
+      - 'tester/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-realm-tester-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-realm-tester:
+    name: Build launcher/tester and run local runtime smoke test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: blockchain/package-lock.json
+
+      - name: Build bbs
+        shell: cmd
+        run: |
+          git clone --depth 1 https://github.com/luppichristian/bbs.git ..\bbs-tool
+          cd ..\bbs-tool
+          call build_cl.bat
+
+      - name: Add bbs to PATH
+        run: echo "/c/Users/runneradmin/work/OpenRealm/bbs-tool/build" >> "$GITHUB_PATH"
+
+      - name: Install blockchain dependencies
+        working-directory: blockchain
+        run: npm install
+
+      - name: Build contract artifacts
+        working-directory: blockchain
+        run: npm run build
+
+      - name: Run contract tests
+        working-directory: blockchain
+        run: npm test
+
+      - name: Start local Ganache
+        working-directory: blockchain
+        run: |
+          npx ganache \
+            --wallet.mnemonic "test test test test test test test test test test test junk" \
+            --wallet.totalAccounts 10 \
+            --chain.chainId 31337 \
+            --server.host 127.0.0.1 \
+            --server.port 8545 \
+            > ganache.log 2>&1 &
+          echo $! > ganache.pid
+
+          for attempt in $(seq 1 30); do
+            if node -e "fetch('http://127.0.0.1:8545', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) }).then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"; then
+              echo "Ganache is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Ganache did not become ready."
+          cat ganache.log
+          exit 1
+
+      - name: Deploy test realm contracts
+        run: >-
+          node realms/test/deploy.js
+          --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+          --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
+
+      - name: Build launcher and tester
+        run: |
+          bbs build -t openrealm_node_launcher -t openrealm_realm_tester
+
+      - name: Launch local runtime mesh
+        run: |
+          mkdir -p build
+          before_file=build/node-launcher-before.txt
+          find build/node_launcher -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort > "$before_file" || true
+          ./build/default-windows-x86_64/bin/Debug/openrealm-node-launcher.exe \
+            --realm test \
+            --config build/runtime-test-config.json \
+            --relays 2 \
+            --simulators 1 \
+            --relay-base-port 51001 \
+            --sim-base-port 51101 \
+            --run-seconds 45 \
+            > build/gha-launcher.log 2>&1 &
+          echo $! > build/gha-launcher.pid
+
+          session_dir=""
+          for attempt in $(seq 1 40); do
+            current=$(find build/node_launcher -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort)
+            session_dir=$(comm -13 "$before_file" <(printf '%s\n' "$current") | tail -n 1)
+            if [ -n "$session_dir" ] && [ -f "build/node_launcher/$session_dir/realm/jump_nodes.json" ]; then
+              echo "SESSION_DIR=$session_dir" >> "$GITHUB_ENV"
+              echo "Detected session dir: $session_dir"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Launcher did not create a session realm in time."
+          cat build/gha-launcher.log
+          exit 1
+
+      - name: Run realm tester
+        run: |
+          ./build/default-windows-x86_64/bin/Debug/openrealm-realm-tester.exe \
+            --config build/runtime-test-config.json \
+            --realm-dir "build/node_launcher/$SESSION_DIR/realm" \
+            --bind-port 51201 \
+            --run-seconds 25 \
+            --expect-topology-nodes 2 \
+            > build/gha-tester.log 2>&1
+          cat build/gha-tester.log
+
+      - name: Stop launcher if still running
+        if: ${{ always() }}
+        run: |
+          if [ -f build/gha-launcher.pid ]; then
+            pid=$(cat build/gha-launcher.pid)
+            kill "$pid" 2>/dev/null || true
+          fi
+
+      - name: Upload runtime test artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-realm-tester-artifacts
+          path: |
+            build/gha-launcher.log
+            build/gha-tester.log
+            build/node_launcher/${{ env.SESSION_DIR }}
+            blockchain/ganache.log
+            blockchain/deployments/test.json
+          if-no-files-found: warn

@@ -552,6 +552,15 @@ void RuntimeSession::HandleJoinRequest(const JoinRequestPacketData& joinRequest,
   if (knownNodes.IsPeerIsolated(peerAddress, nowMs) || !knownNodes.IsPeerAuthenticated(peerAddress)) return;
   if (knownNodes.FindByPeerAddress(peerAddress) == nullptr) return;
 
+  TraceLog(
+      LOG_INFO,
+      "runtime join request from %s token=%llu target=(%.1f, %.1f, %.1f)",
+      DescribeRuntimePeerAddress(peerAddress).c_str(),
+      (unsigned long long)joinRequest.requestToken,
+      (double)joinRequest.targetPosition.x,
+      (double)joinRequest.targetPosition.y,
+      (double)joinRequest.targetPosition.z);
+
   std::vector<const ActiveNodeState*> closest = knownNodes.BuildClosestNodes(
       peerAddress,
       config.realmHash,
@@ -583,7 +592,21 @@ void RuntimeSession::HandleJoinRequest(const JoinRequestPacketData& joinRequest,
 
   if (!SignJoinResponsePacket(&response)) return;
   TouchKnownNode(&knownNodes, peerAddress, nowMs);
+  TraceLog(LOG_INFO, "runtime join response to %s candidates=%d", DescribeRuntimePeerAddress(peerAddress).c_str(), (int)response.candidates.size());
   SendPacketTo(peerAddress, MakeJoinResponsePacket(response));
+
+  TopologySnapshotPacketData snapshot = {};
+  snapshot.proof = BuildLocalProof();
+  snapshot.nodes.push_back(BuildLocalTopologyNode());
+  std::vector<TopologyNodeState> knownSnapshot = knownNodes.BuildTopologySnapshot(
+      config.bindAddress,
+      config.realmHash,
+      config.maxKnownNodes,
+      nowMs);
+  snapshot.nodes.insert(snapshot.nodes.end(), knownSnapshot.begin(), knownSnapshot.end());
+  if (!SignTopologySnapshotPacket(&snapshot)) return;
+  TraceLog(LOG_INFO, "runtime immediate topology to %s nodes=%d", DescribeRuntimePeerAddress(peerAddress).c_str(), (int)snapshot.nodes.size());
+  SendPacketTo(peerAddress, MakeTopologySnapshotPacket(snapshot));
 }
 
 void RuntimeSession::HandleJoinResponse(const JoinResponsePacketData& joinResponse, const RuntimePeerAddress& peerAddress)
