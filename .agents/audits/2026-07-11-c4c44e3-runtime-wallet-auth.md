@@ -1,7 +1,7 @@
 # Runtime wallet-auth completion audit
 
 - production date: 2026-07-11
-- commit hash: PENDING
+- commit hash: c4c44e3f945948309813025f35d5deb198cb66e0
 - scope: `blockchain/scripts/runtimeWalletAuth.js`, `node/runtime/*`, `node/client/Game.cpp`, `node/targets/Relay.cpp`, `node/targets/Simulator.cpp`
 - status: completed
 - completion date: 2026-07-11
