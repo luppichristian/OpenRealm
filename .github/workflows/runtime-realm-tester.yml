@@ -103,6 +103,55 @@ jobs:
           --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
           --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 
+      - name: Write runtime test config
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          @'
+          {
+            "accountAddress": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            "bindAddress": {
+              "host": "127.0.0.1",
+              "port": 46010
+            },
+            "enabled": false,
+            "acceptsJoins": true,
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "areaOfInterest": {
+              "radiusX": 96.0,
+              "radiusY": 96.0,
+              "radiusZ": 64.0
+            },
+            "join": {
+              "maxCandidates": 6,
+              "maxHops": 8
+            },
+            "limits": {
+              "maxNodeConnections": 8,
+              "maxKnownNodes": 64
+            },
+            "periodsMs": {
+              "neighborRefresh": 250,
+              "topologyBroadcast": 500,
+              "playerBroadcast": 50
+            },
+            "receiveTimeoutMs": 50,
+            "masterVolume": 0.5,
+            "mouseSensitivity": 1.0,
+            "invertMouseY": false,
+            "showFps": true,
+            "ticks": 0,
+            "frames": 0,
+            "frameTime": 0.016666667,
+            "sleepMs": 16,
+            "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          }
+          '@ | Set-Content -Path build/runtime-test-config.json
+
       - name: Build launcher and tester
         run: |
           ../bbs-tool/build/bbs.exe build -t openrealm_node_launcher
