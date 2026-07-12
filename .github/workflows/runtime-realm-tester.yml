@@ -103,6 +103,24 @@ jobs:
           --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
           --owner 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 
+      - name: Sync deployed addresses into test realm config
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const { parseJsonWithComments } = require('./blockchain/scripts/realmConfig');
+
+          const deploymentPath = 'blockchain/deployments/test.json';
+          const realmPath = 'realms/test/realm.json';
+          const deployment = JSON.parse(fs.readFileSync(deploymentPath, 'utf8'));
+          const realm = parseJsonWithComments(fs.readFileSync(realmPath, 'utf8'), realmPath);
+          realm.blockchain.globalParamsAddress = deployment.contracts.GlobalParams;
+          realm.blockchain.playerRegistryAddress = deployment.contracts.PlayerRegistry;
+          realm.blockchain.chunkClaimsAddress = deployment.contracts.ChunkClaims;
+          realm.blockchain.marketplaceAddress = deployment.contracts.Marketplace;
+          fs.writeFileSync(realmPath, `${JSON.stringify(realm, null, 2)}\n`);
+          console.log(`Synced deployed addresses into ${realmPath}`);
+          NODE
+
       - name: Write runtime test config
         shell: pwsh
         run: |
