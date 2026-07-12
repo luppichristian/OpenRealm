@@ -41,6 +41,9 @@ The relay currently parses only these arguments:
   - Default: `0`
 
 Notes:
+- `realms/test` is the local-development default used by the repo's Ganache-backed smoke flows.
+- For a real deployment, use `realms/main` as the canonical official example.
+- If you create your own custom realm, keep the same file shape (`realm.json` + `jump_nodes.json`) but fill it with your own real network values.
 - There is no built-in `--help` output in the current relay binary.
 - Unknown flags are ignored by the current boot-config parser instead of producing a usage error.
 
@@ -92,10 +95,16 @@ Run against the default test realm:
 ./build/default-windows-x86_64/bin/Debug/openrealm-relay.exe --config config.json --realm-dir realms/test
 ```
 
-Run against a custom realm directory:
+Run against the official main realm example:
 
 ```bash
 ./build/default-windows-x86_64/bin/Debug/openrealm-relay.exe --config config.json --realm-dir realms/main
+```
+
+Run against your own custom realm directory with the same file layout:
+
+```bash
+./build/default-windows-x86_64/bin/Debug/openrealm-relay.exe --config config.json --realm-dir path/to/your-realm
 ```
 
 Use a different bootstrap entry from `jump_nodes.json`:

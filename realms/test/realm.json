@@ -1,14 +1,39 @@
 {
+  // Human-readable realm identifier.
+  // `test` is the local development realm used with Ganache-backed smoke deployment.
   "name": "test",
+
+  // Blockchain/orchestration settings used by runtime nodes and clients when
+  // they need to resolve durable identity, ownership, marketplace, and protocol state.
   "blockchain": {
+    // Version of the orchestration-layer schema/protocol this realm expects.
+    // The runtime validates this against its compiled protocol version.
     "protocolVersion": 1,
+
+    // Local JSON-RPC endpoint used by the test realm.
+    // The included Ganache helper starts a chain at this address by default.
     "rpcUrl": "http://127.0.0.1:8545",
+
+    // Deployed GlobalParams contract address for the test realm.
+    // Stays zero until the local deploy helper writes a real deployment record and you copy it in.
     "globalParamsAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed PlayerRegistry contract address for the test realm.
     "playerRegistryAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed ChunkClaims contract address for the test realm.
     "chunkClaimsAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed Marketplace contract address for the test realm.
     "marketplaceAddress": "0x0000000000000000000000000000000000000000",
+
+    // Connection timeout, in seconds, for initial blockchain RPC connect attempts.
     "connectionTimeoutSeconds": 1,
+
+    // Read timeout, in seconds, for blockchain RPC responses.
     "readTimeoutSeconds": 1,
+
+    // Write timeout, in seconds, for blockchain RPC request submission.
     "writeTimeoutSeconds": 1
   }
 }

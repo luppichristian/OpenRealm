@@ -1,8 +1,16 @@
 {
+  // Bootstrap relay list for the local test realm.
+  // This usually points at a relay started on the same machine during smoke testing.
   "jumpNodes": [
     {
+      // Host name or IP address of the first relay clients/nodes should contact.
+      // For the local test realm this is normally loopback.
       "host": "127.0.0.1",
+
+      // UDP port exposed by the local bootstrap relay.
       "port": 46001,
+
+      // Human-readable label shown in tools/UIs when selecting a jump node.
       "label": "local-test-relay"
     }
   ]

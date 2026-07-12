@@ -1,8 +1,15 @@
 {
+  // Bootstrap relay list for the official main realm.
+  // Clients and nodes use these entries to discover and join the live runtime network.
   "jumpNodes": [
     {
+      // Public host name or IP address players/nodes should contact first.
       "host": "127.0.0.1",
+
+      // UDP port exposed by the bootstrap relay at the host above.
       "port": 46001,
+
+      // Human-readable label shown in tools/UIs when selecting a jump node.
       "label": "main-local-jump"
     }
   ]

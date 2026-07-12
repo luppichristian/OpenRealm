@@ -1,14 +1,42 @@
 {
+  // Human-readable realm identifier.
+  // `main` is the official real-deployment realm shipped with OpenRealm.
   "name": "main",
+
+  // Blockchain/orchestration settings used by runtime nodes and clients when
+  // they need to resolve durable identity, ownership, marketplace, and protocol state.
   "blockchain": {
+    // Version of the orchestration-layer schema/protocol this realm expects.
+    // The runtime validates this against its compiled protocol version.
     "protocolVersion": 1,
+
+    // Real Ethereum-compatible JSON-RPC endpoint for the official main realm.
+    // Replace the placeholder with your actual production/testnet RPC URL before deploy/use.
     "rpcUrl": "https://rpc.example.invalid",
+
+    // Deployed GlobalParams contract address for this realm.
+    // Stays zero until you deploy and copy the real address in.
     "globalParamsAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed PlayerRegistry contract address for this realm.
+    // Used for player identity and runtime-session authorization.
     "playerRegistryAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed ChunkClaims contract address for this realm.
+    // Used for chunk ownership, transfer rules, and delegated editing checks.
     "chunkClaimsAddress": "0x0000000000000000000000000000000000000000",
+
+    // Deployed Marketplace contract address for this realm.
+    // Used for listings, auctions, and marketplace fee logic.
     "marketplaceAddress": "0x0000000000000000000000000000000000000000",
+
+    // Connection timeout, in seconds, for initial blockchain RPC connect attempts.
     "connectionTimeoutSeconds": 2,
+
+    // Read timeout, in seconds, for blockchain RPC responses.
     "readTimeoutSeconds": 2,
+
+    // Write timeout, in seconds, for blockchain RPC request submission.
     "writeTimeoutSeconds": 2
   }
 }

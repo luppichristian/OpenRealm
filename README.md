@@ -64,7 +64,13 @@ OpenRealm currently ships with two realm configurations:
 - `realms/test`
 - `realms/main`
 
-The test realm includes local Ganache helpers and smoke-deploy wrappers. The main realm includes the deployment wrapper used for configured network deployments.
+`realms/main` is the canonical example for a real deployment and the official main realm layout.
+`realms/test` exists for local Ganache-backed testing and smoke deployment only.
+
+If you later create your own custom realm, use the same file shapes as `realms/main`:
+- a `realm.json` with the real RPC URL and deployed contract addresses
+- a `jump_nodes.json` with real reachable bootstrap relays
+- node `config.json` files per machine or role, configured for that node's wallet, bind address, and runtime behavior
 
 Useful commands:
 

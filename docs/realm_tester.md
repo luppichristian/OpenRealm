@@ -62,6 +62,11 @@ Optional:
 - `--help`
   - Prints usage text
 
+Notes:
+- `realms/test` is the local-development default used by the repo's Ganache-backed smoke flows.
+- For a real deployment, test `realms/main` as the canonical official example once your real relay and simulator are running.
+- If you create your own custom realm, keep the same file shape (`realm.json` + `jump_nodes.json`) but fill it with your own real network values.
+
 ## How to run it
 
 From the repository root:
@@ -82,6 +87,18 @@ Example against a launcher-created local session realm:
   --bind-port 46301 \
   --run-seconds 10 \
   --expect-topology-nodes 2
+```
+
+Example against the official main realm example:
+
+```bash
+./build/default-windows-x86_64/bin/Debug/openrealm-realm-tester.exe \
+  --config config.json \
+  --realm-dir realms/main \
+  --jump-node-index 0 \
+  --bind-port 46301 \
+  --run-seconds 10 \
+  --expect-topology-nodes 1
 ```
 
 ## Success output
