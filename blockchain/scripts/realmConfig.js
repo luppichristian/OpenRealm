@@ -2,6 +2,102 @@ const fs = require('fs');
 const path = require('path');
 const { ORCHESTRATION_PROTOCOL_VERSION } = require('./protocolVersion');
 
+function stripJsonComments(raw)
+{
+  let result = '';
+  let inString = false;
+  let stringDelimiter = '';
+  let escaping = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let index = 0; index < raw.length; index += 1)
+  {
+    const current = raw[index];
+    const next = raw[index + 1];
+
+    if (inLineComment)
+    {
+      if (current === '\n' || current === '\r')
+      {
+        inLineComment = false;
+        result += current;
+      }
+      continue;
+    }
+
+    if (inBlockComment)
+    {
+      if (current === '*' && next === '/')
+      {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (inString)
+    {
+      result += current;
+      if (escaping)
+      {
+        escaping = false;
+        continue;
+      }
+      if (current === '\\')
+      {
+        escaping = true;
+        continue;
+      }
+      if (current === stringDelimiter)
+      {
+        inString = false;
+        stringDelimiter = '';
+      }
+      continue;
+    }
+
+    if (current === '"' || current === '\'')
+    {
+      inString = true;
+      stringDelimiter = current;
+      result += current;
+      continue;
+    }
+
+    if (current === '/' && next === '/')
+    {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (current === '/' && next === '*')
+    {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    result += current;
+  }
+
+  return result;
+}
+
+function parseJsonWithComments(raw, filePath)
+{
+  try
+  {
+    return JSON.parse(stripJsonComments(raw));
+  }
+  catch (error)
+  {
+    error.message = `Failed to parse JSON config at ${filePath}: ${error.message}`;
+    throw error;
+  }
+}
+
 function resolveRealmJsonPath(realmArg)
 {
   if (!realmArg)
@@ -48,7 +144,7 @@ function loadRealmConfig(realmArg)
 {
   const realmJsonPath = resolveRealmJsonPath(realmArg);
   const realmDir = path.dirname(realmJsonPath);
-  const realmConfig = JSON.parse(fs.readFileSync(realmJsonPath, 'utf8'));
+  const realmConfig = parseJsonWithComments(fs.readFileSync(realmJsonPath, 'utf8'), realmJsonPath);
   if (!realmConfig || typeof realmConfig !== 'object')
   {
     throw new Error(`Invalid realm config payload at ${realmJsonPath}.`);
@@ -79,5 +175,7 @@ function loadRealmConfig(realmArg)
 
 module.exports = {
   loadRealmConfig,
-  resolveRealmJsonPath
+  parseJsonWithComments,
+  resolveRealmJsonPath,
+  stripJsonComments
 };

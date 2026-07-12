@@ -162,7 +162,7 @@ Current generated outputs include:
 - `scripts/deployRealm.js`
   - loads a realm first, then forwards to `deploy.js`
 - `scripts/realmConfig.js`
-  - resolves `--realm <name-or-path>` to `realm.json` and validates `protocolVersion`
+  - resolves `--realm <name-or-path>` to `realm.json`, accepts the repo's JSON-with-comments realm files, and validates `protocolVersion`
 
 ### Thin realm wrappers
 - `realms/test/deploy.js`

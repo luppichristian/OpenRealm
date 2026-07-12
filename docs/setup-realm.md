@@ -74,6 +74,8 @@ If you later build a custom realm, you must still provide the same kinds of file
 - one `jump_nodes.json` with real reachable bootstrap relays
 - one node `config.json` per machine or role, configured for that node's wallet, bind address, and runtime behavior
 
+`realm.json` in this repo is maintained as JSON-with-comments for readability. Keep the JSON structure valid, but comments are allowed in the checked-in files.
+
 Important behavior to understand:
 - `realms/main/deploy.js` is only a thin wrapper around the generic deployment flow.
 - `realms/main/realm.json` ships with placeholder values.
