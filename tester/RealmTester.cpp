@@ -1,5 +1,6 @@
 #include "RealmTester.h"
 
+#include "../node/blockchain/BlockchainAbi.h"
 #include "../node/runtime/ProtocolVersion.h"
 #include "../node/runtime/RuntimeRealm.h"
 
@@ -48,6 +49,107 @@ std::string DescribePeer(const RuntimePeerAddress& peerAddress)
 bool IsAvailableChain(const RuntimeRealmState& realmState)
 {
   return !realmState.chainId.empty() && realmState.chainId != "unavailable";
+}
+
+bool IsConfiguredContractAddress(const std::string& address)
+{
+  return !address.empty() && !IsZeroBlockchainAddress(address);
+}
+
+bool SameContractAddress(const std::string& actual, const std::string& expected)
+{
+  return IsConfiguredContractAddress(actual)
+      && IsConfiguredContractAddress(expected)
+      && NormalizeBlockchainAddress(actual) == NormalizeBlockchainAddress(expected);
+}
+
+bool ValidateBlockchainDeployment(
+    Blockchain& blockchain,
+    const BlockchainConfig& blockchainConfig,
+    RuntimeRealmState* enrichedState,
+    std::string* errorMessage)
+{
+  if (blockchainConfig.protocolVersion != kBlockchainProtocolVersion)
+  {
+    if (errorMessage != nullptr)
+    {
+      *errorMessage = "realm blockchain protocol version does not match the compiled runtime protocol";
+    }
+    return false;
+  }
+
+  if (!IsConfiguredContractAddress(blockchainConfig.globalParamsAddress)
+      || !IsConfiguredContractAddress(blockchainConfig.playerRegistryAddress)
+      || !IsConfiguredContractAddress(blockchainConfig.chunkClaimsAddress)
+      || !IsConfiguredContractAddress(blockchainConfig.marketplaceAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "realm blockchain config contains missing or zero contract addresses";
+    return false;
+  }
+
+  const RuntimeRealmState state = BuildRuntimeRealmState(blockchain, blockchainConfig);
+  if (!IsAvailableChain(state))
+  {
+    if (errorMessage != nullptr) *errorMessage = "failed to read blockchain chain id from rpc";
+    return false;
+  }
+  if (!state.globalParams.available)
+  {
+    if (errorMessage != nullptr) *errorMessage = "failed to read GlobalParams state from configured contract";
+    return false;
+  }
+
+  const std::string registryOwner = blockchain.GetPlayerRegistry().GetOwner();
+  if (!IsConfiguredContractAddress(registryOwner))
+  {
+    if (errorMessage != nullptr) *errorMessage = "failed to read PlayerRegistry owner from configured contract";
+    return false;
+  }
+
+  const std::string claimsRegistryAddress = blockchain.GetChunkClaims().GetRegistryAddress();
+  if (!SameContractAddress(claimsRegistryAddress, blockchainConfig.playerRegistryAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "ChunkClaims.registry() does not match realm PlayerRegistry address";
+    return false;
+  }
+
+  const std::string claimsGlobalParamsAddress = blockchain.GetChunkClaims().GetGlobalParamsAddress();
+  if (!SameContractAddress(claimsGlobalParamsAddress, blockchainConfig.globalParamsAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "ChunkClaims.globalParams() does not match realm GlobalParams address";
+    return false;
+  }
+
+  const std::string claimsMarketplaceAddress = blockchain.GetChunkClaims().GetMarketplaceAddress();
+  if (!SameContractAddress(claimsMarketplaceAddress, blockchainConfig.marketplaceAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "ChunkClaims.marketplace() does not match realm Marketplace address";
+    return false;
+  }
+
+  const std::string marketplaceChunkClaimsAddress = blockchain.GetMarketplace().GetChunkClaimsAddress();
+  if (!SameContractAddress(marketplaceChunkClaimsAddress, blockchainConfig.chunkClaimsAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "Marketplace.chunkClaims() does not match realm ChunkClaims address";
+    return false;
+  }
+
+  const std::string marketplaceGlobalParamsAddress = blockchain.GetMarketplace().GetGlobalParamsAddress();
+  if (!SameContractAddress(marketplaceGlobalParamsAddress, blockchainConfig.globalParamsAddress))
+  {
+    if (errorMessage != nullptr) *errorMessage = "Marketplace.globalParams() does not match realm GlobalParams address";
+    return false;
+  }
+
+  const uint64_t marketplaceFeeBps = blockchain.GetMarketplace().GetFeeBps();
+  if (marketplaceFeeBps > state.globalParams.maxFeeBps)
+  {
+    if (errorMessage != nullptr) *errorMessage = "Marketplace.feeBps() exceeds GlobalParams.MAX_FEE_BPS()";
+    return false;
+  }
+
+  if (enrichedState != nullptr) *enrichedState = state;
+  return true;
 }
 
 RuntimeNodeRole DetermineLocalRole(const RuntimePeerAddress& bindAddress, const std::vector<RealmJumpNodeState>& jumpNodes)
@@ -173,6 +275,7 @@ bool RealmTester::LoadInputs(std::string* errorMessage)
     return false;
   }
 
+  blockchainFailureReason.clear();
   realmHash = BuildRealmHash();
   return true;
 }
@@ -211,8 +314,12 @@ uint64_t RealmTester::BuildRealmHash()
   if (!realmFiles.blockchainConfig.rpcUrl.empty())
   {
     Blockchain blockchain(realmFiles.blockchainConfig, nodeFiles.wallet);
-    const RuntimeRealmState enrichedState = BuildRuntimeRealmState(blockchain, realmFiles.blockchainConfig);
-    blockchainReady = IsAvailableChain(enrichedState);
+    RuntimeRealmState enrichedState = {};
+    blockchainReady = ValidateBlockchainDeployment(
+        blockchain,
+        realmFiles.blockchainConfig,
+        &enrichedState,
+        &blockchainFailureReason);
     if (blockchainReady)
     {
       runtimeRealmState = enrichedState;
@@ -225,6 +332,7 @@ uint64_t RealmTester::BuildRealmHash()
   else
   {
     blockchainReady = false;
+    blockchainFailureReason.clear();
   }
 
   return ComputeRuntimeRealmHash(runtimeRealmState);
@@ -726,7 +834,10 @@ std::string RealmTester::BuildFailureMessage() const
   }
   if (!blockchainReady && !realmFiles.blockchainConfig.rpcUrl.empty())
   {
-    missing.push_back("reachable_test_blockchain");
+    missing.push_back(
+        blockchainFailureReason.empty()
+            ? "reachable_and_consistent_test_blockchain"
+            : "blockchain_validation:" + blockchainFailureReason);
   }
 
   std::ostringstream stream = {};

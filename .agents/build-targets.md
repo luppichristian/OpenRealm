@@ -14,6 +14,7 @@ Useful baseline commands:
 Recent direct verification:
 - `bbs info project` successfully enumerates the targets in `project.bbs`
 - `bbs build -t openrealm_node_launcher` succeeds and produces `build/default-windows-x86_64/bin/Debug/openrealm-node-launcher.exe` on this machine
+- `bbs build -t openrealm_realm_tester` succeeds and produces `build/default-windows-x86_64/bin/Debug/openrealm-realm-tester.exe` on this machine
 
 ## External dependencies declared in `project.bbs`
 
@@ -102,6 +103,21 @@ Notes:
 - the launcher binary exposes the `--realm`, `--relays`, `--simulators`, `--clients`, `--config`, `--relay-base-port`, `--sim-base-port`, `--client-base-port`, `--relay-ticks`, `--sim-frames`, `--sim-sleep-ms`, `--sim-frame-time`, `--launch-delay-ms`, `--run-seconds`, and `--emit-place-event` flags
 - the client binary now exposes `--config`, `--realm-dir`, `--jump-node-index`, `--join-target-x`, `--join-target-y`, `--join-target-z`, `--auto-play`, and `--help`, which the launcher uses for per-client overrides
 
+### `openrealm_realm_tester`
+- output: `openrealm-realm-tester`
+- language: `cpp`
+- standard: `c++20`
+- dependencies: `httplib`, `nlohmann_json`, `enet`
+- units:
+  - `node/runtime/*.cpp`
+  - `node/blockchain/*.cpp`
+  - `node/world/*.cpp`
+  - `tester/*.cpp`
+
+Use when touching packet-level runtime verification, native blockchain-backed realm compatibility checks, or the runtime probe CLI used to validate a launched realm.
+
+Current tester contract-specific blockchain checks are stricter than plain RPC reachability: when `realm.json` carries an RPC URL, the tester now rejects protocol-version mismatch, missing/zero orchestration contract addresses, unreadable `GlobalParams`/`PlayerRegistry`, mismatched `ChunkClaims`/`Marketplace` cross-links, and `Marketplace.feeBps()` values above `GlobalParams.MAX_FEE_BPS()`.
+
 ## Important build conventions
 
 - `project.bbs` is the source of truth for what actually compiles.
@@ -134,6 +150,7 @@ bbs build -t openrealm_client
 bbs build -t openrealm_simulator
 bbs build -t openrealm_relay
 bbs build -t openrealm_node_launcher
+bbs build -t openrealm_realm_tester
 ```
 
 Run the launcher help:

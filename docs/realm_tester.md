@@ -10,7 +10,11 @@ The realm tester is a headless runtime-layer probe that joins an OpenRealm realm
 
 It currently verifies:
 - runtime wallet auth can resolve a signer address from the configured wallet
+- the realm blockchain protocol version matches the compiled native orchestration protocol version
 - the realm blockchain endpoint is reachable and can contribute to the runtime realm hash when `realm.json` points at an RPC URL
+- the configured `GlobalParams`, `PlayerRegistry`, `ChunkClaims`, and `Marketplace` addresses are non-zero and readable
+- `ChunkClaims.registry()`, `ChunkClaims.globalParams()`, `ChunkClaims.marketplace()`, `Marketplace.chunkClaims()`, and `Marketplace.globalParams()` match the addresses declared in `realm.json`
+- `Marketplace.feeBps()` does not exceed `GlobalParams.MAX_FEE_BPS()`
 - handshake packets are received and signature-validated
 - challenge request and challenge response packets are received and signature-validated
 - at least one authenticated peer is established

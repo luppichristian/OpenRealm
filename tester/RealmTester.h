@@ -119,4 +119,5 @@ class RealmTester
   bool sawTopologySnapshot = false;
   bool sawPlayerSnapshot = false;
   size_t maxTopologyNodes = 0;
+  std::string blockchainFailureReason = {};
 };

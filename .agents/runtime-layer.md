@@ -148,6 +148,8 @@ Current launch paths build a runtime realm hash from:
 
 Important nuance:
 - headless relay/simulator startup now tries the richer `BuildRuntimeRealmState(...)` path when RPC configuration is present, including live `eth_chainId` and fetched `GlobalParams`
+- the native realm loader now rejects `realm.json` files whose blockchain `protocolVersion` does not match compiled `kBlockchainProtocolVersion`
+- the realm tester now treats blockchain success as a consistency check, not just RPC reachability: it requires non-zero configured orchestration contract addresses, readable `GlobalParams`/`PlayerRegistry`, matching `ChunkClaims`/`Marketplace` cross-links, and `Marketplace.feeBps()` within `GlobalParams.MAX_FEE_BPS()`
 - when RPC truth is unavailable at startup, the current fallback still uses the realm directory string as a chain-id surrogate so file-based local boot remains possible
 
 So the repo now has a preferred richer startup path with a compatibility fallback, not two equally strong security boundaries.

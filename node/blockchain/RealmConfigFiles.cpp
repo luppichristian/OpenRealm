@@ -115,6 +115,19 @@ bool LoadRealmConfigFiles(const std::string& realmDirectory, RealmConfigFiles* r
       "writeTimeoutSeconds",
       realmFiles->blockchainConfig.writeTimeoutSeconds);
 
+  if (realmFiles->blockchainConfig.protocolVersion != kBlockchainProtocolVersion)
+  {
+    if (errorMessage != nullptr)
+    {
+      *errorMessage =
+          realmDirectory + "/realm.json protocolVersion "
+          + std::to_string(realmFiles->blockchainConfig.protocolVersion)
+          + " does not match orchestration protocol version "
+          + std::to_string(kBlockchainProtocolVersion);
+    }
+    return false;
+  }
+
   realmFiles->jumpNodes.clear();
   const nlohmann::json jumpNodesArray = jumpNodesJson.value("jumpNodes", nlohmann::json::array());
   if (!jumpNodesArray.is_array())
