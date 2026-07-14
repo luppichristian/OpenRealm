@@ -1,5 +1,12 @@
 # OpenRealm
 
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue)](https://github.com/luppichristian/OpenRealm)
+[![Language](https://img.shields.io/badge/native-C%2B%2B20-00599C)](https://github.com/luppichristian/OpenRealm)
+[![Contracts](https://img.shields.io/badge/contracts-Solidity-363636)](https://github.com/luppichristian/OpenRealm/tree/master/blockchain)
+[![Build](https://img.shields.io/badge/build-bbs-orange)](https://github.com/luppichristian/bbs)
+[![Runtime Tests](https://img.shields.io/github/actions/workflow/status/luppichristian/OpenRealm/runtime-realm-tester.yml?branch=master&label=runtime%20tests)](https://github.com/luppichristian/OpenRealm/actions/workflows/runtime-realm-tester.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 OpenRealm is a local-first voxel world stack that combines a native client, runtime node network, and Ethereum-compatible orchestration layer for identity, ownership, and marketplace state.
 
 It is built for worlds that want fast native simulation, explicit ownership rules, and a cleaner boundary between live gameplay and durable economic state.
